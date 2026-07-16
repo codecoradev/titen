@@ -13,17 +13,11 @@ pub enum AccountAction {
         expires_at: String,
     },
     /// Remove an account
-    Remove {
-        id_or_username: String,
-    },
+    Remove { id_or_username: String },
     /// Refresh account token
-    Refresh {
-        id_or_username: String,
-    },
+    Refresh { id_or_username: String },
     /// Show account token status
-    Status {
-        id_or_username: String,
-    },
+    Status { id_or_username: String },
 }
 
 pub async fn run(action: AccountAction) -> Result<()> {
@@ -31,7 +25,12 @@ pub async fn run(action: AccountAction) -> Result<()> {
         AccountAction::List => {
             println!("Listing accounts... (not yet connected to DB)");
         }
-        AccountAction::Add { username, user_id, access_token, expires_at } => {
+        AccountAction::Add {
+            username,
+            user_id,
+            access_token,
+            expires_at,
+        } => {
             println!("Adding account: {} (user_id: {})", username, user_id);
             println!("  Token: {}...", &access_token[..8.min(access_token.len())]);
             println!("  Expires: {}", expires_at);

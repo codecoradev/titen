@@ -23,7 +23,13 @@ pub enum PostAction {
 
 pub async fn run(action: PostAction) -> Result<()> {
     match action {
-        PostAction::Create { account, text, media_type, image_url, attachment } => {
+        PostAction::Create {
+            account,
+            text,
+            media_type,
+            image_url,
+            attachment,
+        } => {
             println!("Creating post on account: {}", account);
             println!("  Type: {}", media_type);
             println!("  Text: {}", text);

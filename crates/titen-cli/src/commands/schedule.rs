@@ -30,10 +30,19 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
     match action {
         ScheduleAction::List { account, status } => {
             println!("Listing schedules...");
-            if let Some(a) = account { println!("  Account: {}", a); }
-            if let Some(s) = status { println!("  Status: {}", s); }
+            if let Some(a) = account {
+                println!("  Account: {}", a);
+            }
+            if let Some(s) = status {
+                println!("  Status: {}", s);
+            }
         }
-        ScheduleAction::Add { account, text, at, media_type } => {
+        ScheduleAction::Add {
+            account,
+            text,
+            at,
+            media_type,
+        } => {
             println!("Scheduling post on account: {}", account);
             println!("  At: {}", at);
             println!("  Type: {}", media_type);

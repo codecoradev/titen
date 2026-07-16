@@ -21,7 +21,11 @@ fn main() {
             Ok(v) => v,
             Err(e) => {
                 let resp = json_rpc_error(0, &format!("Parse error: {}", e));
-                let _ = writeln!(stdout, "{}", serde_json::to_string(&resp).unwrap_or_default());
+                let _ = writeln!(
+                    stdout,
+                    "{}",
+                    serde_json::to_string(&resp).unwrap_or_default()
+                );
                 let _ = stdout.flush();
                 continue;
             }
@@ -31,10 +35,7 @@ fn main() {
             .get("id")
             .cloned()
             .unwrap_or(serde_json::Value::Null);
-        let method = request
-            .get("method")
-            .and_then(|m| m.as_str())
-            .unwrap_or("");
+        let method = request.get("method").and_then(|m| m.as_str()).unwrap_or("");
         let _params = request
             .get("params")
             .cloned()
@@ -88,7 +89,11 @@ fn main() {
             "result": result
         });
 
-        let _ = writeln!(stdout, "{}", serde_json::to_string(&response).unwrap_or_default());
+        let _ = writeln!(
+            stdout,
+            "{}",
+            serde_json::to_string(&response).unwrap_or_default()
+        );
         let _ = stdout.flush();
     }
 }

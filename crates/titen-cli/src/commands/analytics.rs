@@ -21,8 +21,12 @@ pub async fn run(action: AnalyticsAction) -> Result<()> {
     match action {
         AnalyticsAction::Posts { account, from, to } => {
             println!("Analytics for account: {}", account);
-            if let Some(f) = from { println!("  From: {}", f); }
-            if let Some(t) = to { println!("  To: {}", t); }
+            if let Some(f) = from {
+                println!("  From: {}", f);
+            }
+            if let Some(t) = to {
+                println!("  To: {}", t);
+            }
         }
         AnalyticsAction::Trend { post_id } => {
             println!("Trend for post: {}", post_id);

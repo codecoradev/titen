@@ -1,31 +1,39 @@
-use axum::{
-    Json,
-    extract::Path,
-    extract::State,
-};
+use axum::{Json, extract::Path, extract::State};
 use uuid::Uuid;
 
 use crate::server::AppState;
 use titen_core::models::*;
 
-pub async fn list_comments(State(state): State<AppState>, Path(post_id): Path<String>) -> Json<serde_json::Value> {
+pub async fn list_comments(
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+) -> Json<serde_json::Value> {
     match state.store.list_comments(&post_id).await {
         Ok(comments) => Json(serde_json::json!({ "data": comments })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
 }
 
-pub async fn fetch_comments(State(state): State<AppState>, Path(post_id): Path<String>) -> Json<serde_json::Value> {
+pub async fn fetch_comments(
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+) -> Json<serde_json::Value> {
     // TODO: implement actual Threads API comment fetching
     Json(serde_json::json!({ "message": "Comment fetch not yet implemented", "post_id": post_id }))
 }
 
-pub async fn get_sentiment(State(state): State<AppState>, Path(post_id): Path<String>) -> Json<serde_json::Value> {
+pub async fn get_sentiment(
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+) -> Json<serde_json::Value> {
     // TODO: implement sentiment analysis
     match state.store.list_comments(&post_id).await {
         Ok(comments) => {
             let total = comments.len() as i64;
-            let analyzed: Vec<_> = comments.into_iter().filter(|c| c.sentiment.is_some()).collect();
+            let analyzed: Vec<_> = comments
+                .into_iter()
+                .filter(|c| c.sentiment.is_some())
+                .collect();
             Json(serde_json::json!({
                 "data": {
                     "total": total,

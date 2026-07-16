@@ -27,11 +27,9 @@ impl Store {
     // ─── Accounts ───────────────────────────────────────────
 
     pub async fn list_accounts(&self) -> Result<Vec<Account>> {
-        let rows = sqlx::query_as::<_, Account>(
-            "SELECT * FROM accounts ORDER BY created_at DESC",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query_as::<_, Account>("SELECT * FROM accounts ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
@@ -81,7 +79,10 @@ impl Store {
 
         let access_token = input.access_token.as_deref().unwrap_or(&acc.access_token);
         let expires_at = input.expires_at.as_deref().unwrap_or(&acc.expires_at);
-        let refresh_token = input.refresh_token.as_deref().unwrap_or(acc.refresh_token.as_deref().unwrap_or(""));
+        let refresh_token = input
+            .refresh_token
+            .as_deref()
+            .unwrap_or(acc.refresh_token.as_deref().unwrap_or(""));
         let is_active = input.is_active.unwrap_or(acc.is_active);
 
         sqlx::query(
@@ -194,7 +195,10 @@ impl Store {
 
     pub async fn create_schedule(&self, id: &str, input: &CreateSchedule) -> Result<Schedule> {
         let media_type = input.media_type.as_deref().unwrap_or("TEXT");
-        let media_urls = input.media_urls.as_ref().map(|urls| serde_json::to_string(urls).unwrap_or_default());
+        let media_urls = input
+            .media_urls
+            .as_ref()
+            .map(|urls| serde_json::to_string(urls).unwrap_or_default());
 
         sqlx::query(
             "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at)
@@ -221,7 +225,13 @@ impl Store {
             .map_err(|_| TitenError::ScheduleNotFound(id.to_string()))
     }
 
-    pub async fn update_schedule_status(&self, id: &str, status: &str, result_json: Option<&str>, error: Option<&str>) -> Result<()> {
+    pub async fn update_schedule_status(
+        &self,
+        id: &str,
+        status: &str,
+        result_json: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<()> {
         sqlx::query(
             "UPDATE schedules SET status = ?, result_json = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
         )
@@ -248,14 +258,23 @@ impl Store {
     // ─── Comments ───────────────────────────────────────────
 
     pub async fn list_comments(&self, post_id: &str) -> Result<Vec<Comment>> {
-        sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE post_id = ? ORDER BY fetched_at ASC")
-            .bind(post_id)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(Into::into)
+        sqlx::query_as::<_, Comment>(
+            "SELECT * FROM comments WHERE post_id = ? ORDER BY fetched_at ASC",
+        )
+        .bind(post_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
-    pub async fn insert_comment(&self, id: &str, post_id: &str, author_username: Option<&str>, author_user_id: Option<&str>, text: &str) -> Result<Comment> {
+    pub async fn insert_comment(
+        &self,
+        id: &str,
+        post_id: &str,
+        author_username: Option<&str>,
+        author_user_id: Option<&str>,
+        text: &str,
+    ) -> Result<Comment> {
         sqlx::query(
             "INSERT INTO comments (id, post_id, author_username, author_user_id, text) VALUES (?, ?, ?, ?, ?)",
         )
@@ -286,7 +305,12 @@ impl Store {
 
     // ─── Analytics ───────────────────────────────────────────
 
-    pub async fn insert_analytics_snap(&self, id: &str, post_id: &str, insights: &Insights) -> Result<AnalyticsSnap> {
+    pub async fn insert_analytics_snap(
+        &self,
+        id: &str,
+        post_id: &str,
+        insights: &Insights,
+    ) -> Result<AnalyticsSnap> {
         sqlx::query(
             "INSERT INTO analytics_snap (id, post_id, likes, replies, reposts, views, quotes)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -368,7 +392,12 @@ impl Store {
 
     // ─── Rate Limiting ──────────────────────────────────────
 
-    pub async fn check_rate_limit(&self, account_id: &str, action: &str, limit: i64) -> Result<i64> {
+    pub async fn check_rate_limit(
+        &self,
+        account_id: &str,
+        action: &str,
+        limit: i64,
+    ) -> Result<i64> {
         let count: i64 = sqlx::query_scalar(
             "SELECT COALESCE(SUM(count), 0) FROM rate_tracking WHERE account_id = ? AND action_type = ? AND timestamp > datetime('now', '-24 hours')",
         )
@@ -388,14 +417,12 @@ impl Store {
     }
 
     pub async fn track_rate(&self, account_id: &str, action: &str) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO rate_tracking (id, account_id, action_type) VALUES (?, ?, ?)",
-        )
-        .bind(uuid::Uuid::now_v7().to_string())
-        .bind(account_id)
-        .bind(action)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO rate_tracking (id, account_id, action_type) VALUES (?, ?, ?)")
+            .bind(uuid::Uuid::now_v7().to_string())
+            .bind(account_id)
+            .bind(action)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }

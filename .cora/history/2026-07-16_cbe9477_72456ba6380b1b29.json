@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-07-16T10:41:38.627244718Z",
+  "commit": "cbe9477",
+  "branch": "develop",
+  "files_reviewed": 0,
+  "lines_reviewed": null,
+  "findings": {
+    "major": 1,
+    "critical": 5
+  },
+  "categories": {
+    "other": 6
+  },
+  "quality_score": 0.0,
+  "gate_status": "disabled",
+  "duration_ms": null
+}

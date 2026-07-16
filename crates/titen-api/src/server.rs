@@ -4,8 +4,8 @@ use axum::{
     Router,
     extract::State,
     http::StatusCode,
-    routing::{get, post, put, delete},
     response::Json,
+    routing::{delete, get, post, put},
 };
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -34,7 +34,11 @@ pub struct ErrorResponse {
     pub code: String,
 }
 
-pub fn error_response(status: StatusCode, code: &str, msg: &str) -> (StatusCode, Json<ErrorResponse>) {
+pub fn error_response(
+    status: StatusCode,
+    code: &str,
+    msg: &str,
+) -> (StatusCode, Json<ErrorResponse>) {
     (
         status,
         Json(ErrorResponse {
@@ -52,7 +56,12 @@ async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
     })
 }
 
-pub async fn serve(host: &str, port: u16, db_path: &str, api_key: Option<String>) -> anyhow::Result<()> {
+pub async fn serve(
+    host: &str,
+    port: u16,
+    db_path: &str,
+    api_key: Option<String>,
+) -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -72,21 +81,63 @@ pub async fn serve(host: &str, port: u16, db_path: &str, api_key: Option<String>
 
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/accounts", get(routes::accounts::list_accounts).post(routes::accounts::create_account))
-        .route("/api/accounts/{id}", put(routes::accounts::update_account).delete(routes::accounts::delete_account))
-        .route("/api/accounts/{id}/refresh-token", post(routes::accounts::refresh_token))
-        .route("/api/posts", get(routes::posts::list_posts).post(routes::posts::create_post))
-        .route("/api/posts/{id}", get(routes::posts::get_post).delete(routes::posts::delete_post))
+        .route(
+            "/api/accounts",
+            get(routes::accounts::list_accounts).post(routes::accounts::create_account),
+        )
+        .route(
+            "/api/accounts/{id}",
+            put(routes::accounts::update_account).delete(routes::accounts::delete_account),
+        )
+        .route(
+            "/api/accounts/{id}/refresh-token",
+            post(routes::accounts::refresh_token),
+        )
+        .route(
+            "/api/posts",
+            get(routes::posts::list_posts).post(routes::posts::create_post),
+        )
+        .route(
+            "/api/posts/{id}",
+            get(routes::posts::get_post).delete(routes::posts::delete_post),
+        )
         .route("/api/posts/{id}/insights", get(routes::posts::get_insights))
-        .route("/api/schedules", get(routes::schedules::list_schedules).post(routes::schedules::create_schedule))
-        .route("/api/schedules/{id}", put(routes::schedules::update_schedule).delete(routes::schedules::delete_schedule))
-        .route("/api/schedules/upcoming", get(routes::schedules::list_upcoming))
-        .route("/api/posts/{id}/comments", get(routes::comments::list_comments))
-        .route("/api/posts/{id}/comments/fetch", post(routes::comments::fetch_comments))
-        .route("/api/posts/{id}/comments/sentiment", get(routes::comments::get_sentiment))
-        .route("/api/analytics/posts", get(routes::analytics::list_analytics))
-        .route("/api/analytics/posts/{id}/trend", get(routes::analytics::post_trend))
-        .route("/api/media", get(routes::media::list_media).post(routes::media::upload_media))
+        .route(
+            "/api/schedules",
+            get(routes::schedules::list_schedules).post(routes::schedules::create_schedule),
+        )
+        .route(
+            "/api/schedules/{id}",
+            put(routes::schedules::update_schedule).delete(routes::schedules::delete_schedule),
+        )
+        .route(
+            "/api/schedules/upcoming",
+            get(routes::schedules::list_upcoming),
+        )
+        .route(
+            "/api/posts/{id}/comments",
+            get(routes::comments::list_comments),
+        )
+        .route(
+            "/api/posts/{id}/comments/fetch",
+            post(routes::comments::fetch_comments),
+        )
+        .route(
+            "/api/posts/{id}/comments/sentiment",
+            get(routes::comments::get_sentiment),
+        )
+        .route(
+            "/api/analytics/posts",
+            get(routes::analytics::list_analytics),
+        )
+        .route(
+            "/api/analytics/posts/{id}/trend",
+            get(routes::analytics::post_trend),
+        )
+        .route(
+            "/api/media",
+            get(routes::media::list_media).post(routes::media::upload_media),
+        )
         .route("/api/media/{id}", delete(routes::media::delete_media))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

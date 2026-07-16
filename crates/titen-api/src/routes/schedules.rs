@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -14,8 +14,15 @@ pub struct ScheduleListQuery {
     pub status: Option<String>,
 }
 
-pub async fn list_schedules(State(state): State<AppState>, Query(q): Query<ScheduleListQuery>) -> Json<serde_json::Value> {
-    match state.store.list_schedules(q.account_id.as_deref(), q.status.as_deref()).await {
+pub async fn list_schedules(
+    State(state): State<AppState>,
+    Query(q): Query<ScheduleListQuery>,
+) -> Json<serde_json::Value> {
+    match state
+        .store
+        .list_schedules(q.account_id.as_deref(), q.status.as_deref())
+        .await
+    {
         Ok(schedules) => Json(serde_json::json!({ "data": schedules })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
@@ -31,10 +38,16 @@ pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Va
     }
 }
 
-pub async fn create_schedule(State(state): State<AppState>, Json(input): Json<CreateSchedule>) -> (axum::http::StatusCode, Json<serde_json::Value>) {
+pub async fn create_schedule(
+    State(state): State<AppState>,
+    Json(input): Json<CreateSchedule>,
+) -> (axum::http::StatusCode, Json<serde_json::Value>) {
     let id = Uuid::now_v7().to_string();
     match state.store.create_schedule(&id, &input).await {
-        Ok(schedule) => (axum::http::StatusCode::CREATED, Json(serde_json::json!({ "data": schedule }))),
+        Ok(schedule) => (
+            axum::http::StatusCode::CREATED,
+            Json(serde_json::json!({ "data": schedule })),
+        ),
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string(), "code": "CREATE_FAILED" })),
@@ -42,12 +55,19 @@ pub async fn create_schedule(State(state): State<AppState>, Json(input): Json<Cr
     }
 }
 
-pub async fn update_schedule(State(state): State<AppState>, Path(id): Path<String>, Json(input): Json<CreateSchedule>) -> Json<serde_json::Value> {
+pub async fn update_schedule(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<CreateSchedule>,
+) -> Json<serde_json::Value> {
     // TODO: implement schedule update
     Json(serde_json::json!({ "message": "Schedule update not yet implemented", "id": id }))
 }
 
-pub async fn delete_schedule(State(state): State<AppState>, Path(id): Path<String>) -> Json<serde_json::Value> {
+pub async fn delete_schedule(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
     match state.store.delete_schedule(&id).await {
         Ok(()) => Json(serde_json::json!({ "data": null })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),

@@ -20,9 +20,14 @@ pub async fn run(action: MediaAction) -> Result<()> {
         MediaAction::List => {
             println!("Listing media assets...");
         }
-        MediaAction::Upload { file_path, content_type } => {
+        MediaAction::Upload {
+            file_path,
+            content_type,
+        } => {
             println!("Uploading: {}", file_path);
-            if let Some(ct) = content_type { println!("  Content-Type: {}", ct); }
+            if let Some(ct) = content_type {
+                println!("  Content-Type: {}", ct);
+            }
         }
         MediaAction::Delete { id } => {
             println!("Deleting media: {}", id);

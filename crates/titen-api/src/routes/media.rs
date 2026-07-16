@@ -19,7 +19,10 @@ pub async fn upload_media(State(state): State<AppState>) -> Json<serde_json::Val
     Json(serde_json::json!({ "message": "Media upload not yet implemented" }))
 }
 
-pub async fn delete_media(State(state): State<AppState>, Path(id): Path<String>) -> Json<serde_json::Value> {
+pub async fn delete_media(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
     match state.store.delete_media(&id).await {
         Ok(()) => Json(serde_json::json!({ "data": null })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),
