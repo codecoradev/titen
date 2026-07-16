@@ -162,6 +162,17 @@ impl Store {
         self.get_post(id).await
     }
 
+    pub async fn delete_post(&self, id: &str) -> Result<()> {
+        let result = sqlx::query("DELETE FROM posts WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(TitenError::PostNotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
     // ─── Schedules ──────────────────────────────────────────
 
     pub async fn list_schedules(

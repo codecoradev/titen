@@ -12,12 +12,13 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::routes;
-use titen_core::Store;
+use titen_core::{Store, ThreadsClient};
 
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<Store>,
+    pub threads_client: Arc<ThreadsClient>,
     pub api_key: Option<String>,
 }
 
@@ -48,6 +49,49 @@ pub fn error_response(
     )
 }
 
+/// API key auth middleware — checks X-API-Key header or api_key query param
+pub async fn api_key_auth(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> Result<axum::http::Response<axum::body::Body>, (StatusCode, Json<ErrorResponse>)> {
+    // Skip auth for health endpoint
+    if req.uri().path() == "/health" {
+        return Ok(next.run(req).await);
+    }
+
+    // If no API key configured, allow all (dev mode)
+    let required_key = match &state.api_key {
+        Some(key) if !key.is_empty() => key,
+        _ => return Ok(next.run(req).await),
+    };
+
+    // Check header
+    let provided = req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let provided = provided.or_else(|| {
+        // Check query param
+        req.uri().query().and_then(|q| {
+            q.split('&')
+                .find(|p| p.starts_with("api_key="))
+                .map(|p| p.trim_start_matches("api_key=").to_string())
+        })
+    });
+
+    match provided {
+        Some(key) if key == *required_key => Ok(next.run(req).await),
+        _ => Err(error_response(
+            StatusCode::UNAUTHORIZED,
+            "UNAUTHORIZED",
+            "Invalid or missing API key",
+        )),
+    }
+}
+
 async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
@@ -74,13 +118,16 @@ pub async fn serve(
     let store = Store::new(pool.clone());
     store.migrate().await?;
 
+    let store = Arc::new(store);
+    let threads_client = Arc::new(ThreadsClient::new(store.clone()));
+
     let state = AppState {
-        store: Arc::new(store),
+        store: store.clone(),
+        threads_client,
         api_key,
     };
 
-    let app = Router::new()
-        .route("/health", get(health_check))
+    let protected_routes = Router::new()
         .route(
             "/api/accounts",
             get(routes::accounts::list_accounts).post(routes::accounts::create_account),
@@ -139,6 +186,14 @@ pub async fn serve(
             get(routes::media::list_media).post(routes::media::upload_media),
         )
         .route("/api/media/{id}", delete(routes::media::delete_media))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            api_key_auth,
+        ));
+
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .merge(protected_routes)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(state);

@@ -1,6 +1,7 @@
 use axum::{
     Json,
     extract::{Path, Query, State},
+    http::StatusCode,
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -45,35 +46,143 @@ pub async fn get_post(
 pub async fn create_post(
     State(state): State<AppState>,
     Json(input): Json<CreatePost>,
-) -> (axum::http::StatusCode, Json<serde_json::Value>) {
-    let id = Uuid::now_v7().to_string();
-    match state.store.create_post(&id, &input).await {
-        Ok(post) => (
-            axum::http::StatusCode::CREATED,
-            Json(serde_json::json!({ "data": post })),
-        ),
+) -> (StatusCode, Json<serde_json::Value>) {
+    // Get account for Threads API call
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" })),
+            );
+        }
+    };
+
+    // Check rate limit
+    if let Err(e) = state
+        .store
+        .check_rate_limit(&input.account_id, "post", 250)
+        .await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "RATE_LIMITED" })),
+        );
+    }
+
+    // Publish via Threads API
+    let caption = input.caption.as_deref().unwrap_or("");
+    let threads_post_id = match input.media_type.as_deref().unwrap_or("TEXT") {
+        "TEXT" => state.threads_client.publish_text(&account, caption).await,
+        "IMAGE" => {
+            let url = input.image_url.as_deref().unwrap_or("");
+            if url.is_empty() {
+                Err(titen_core::TitenError::InvalidRequest(
+                    "image_url is required for IMAGE posts".to_string(),
+                ))
+            } else {
+                state
+                    .threads_client
+                    .publish_image(&account, Some(caption), url, input.alt_text.as_deref())
+                    .await
+            }
+        }
+        media => Err(titen_core::TitenError::InvalidRequest(format!(
+            "Unsupported media type: {media}"
+        ))),
+    };
+
+    match threads_post_id {
+        Ok(post_id) => {
+            // Track rate
+            let _ = state.store.track_rate(&input.account_id, "post").await;
+
+            // Create post record
+            let db_id = Uuid::now_v7().to_string();
+            match state.store.create_post(&db_id, &input).await {
+                Ok(post) => (
+                    StatusCode::CREATED,
+                    Json(serde_json::json!({
+                        "data": post,
+                        "threads_post_id": post_id,
+                    })),
+                ),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": e.to_string(), "code": "CREATE_FAILED" })),
+                ),
+            }
+        }
         Err(e) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string(), "code": "CREATE_FAILED" })),
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "THREADS_API_ERROR" })),
         ),
     }
 }
 
 pub async fn delete_post(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    // TODO: implement actual Threads delete + remove from DB
-    Json(serde_json::json!({ "message": "Post delete not yet implemented", "post_id": id }))
+    let post = match state.store.get_post(&id).await {
+        Ok(p) => p,
+        Err(e) => return Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    };
+
+    if let Some(threads_post_id) = &post.threads_post_id {
+        if let Ok(account) = state.store.get_account(&post.account_id).await {
+            let _ = state
+                .threads_client
+                .delete_post(&account, threads_post_id)
+                .await;
+        }
+    }
+
+    match state.store.delete_post(&id).await {
+        Ok(()) => Json(serde_json::json!({ "data": null })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),
+    }
 }
 
 pub async fn get_insights(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    // TODO: implement Threads insights fetch
-    match state.store.get_post(&id).await {
-        Ok(post) => Json(serde_json::json!({ "data": post })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    let post = match state.store.get_post(&id).await {
+        Ok(p) => p,
+        Err(e) => return Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    };
+
+    let threads_post_id = match &post.threads_post_id {
+        Some(id) => id,
+        None => {
+            return Json(
+                serde_json::json!({ "error": "Post not yet published to Threads", "code": "NOT_PUBLISHED" }),
+            );
+        }
+    };
+
+    match state.store.get_account(&post.account_id).await {
+        Ok(account) => {
+            match state
+                .threads_client
+                .fetch_insights(&account, threads_post_id)
+                .await
+            {
+                Ok(insights) => {
+                    // Store snapshot
+                    let snap_id = Uuid::now_v7().to_string();
+                    let _ = state
+                        .store
+                        .insert_analytics_snap(&snap_id, &id, &insights)
+                        .await;
+                    Json(serde_json::json!({ "data": insights }))
+                }
+                Err(e) => {
+                    Json(serde_json::json!({ "error": e.to_string(), "code": "INSIGHTS_FAILED" }))
+                }
+            }
+        }
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" })),
     }
 }

@@ -18,3 +18,4 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 async-trait = "0.1"
+tokio-cron-scheduler = { workspace = true }

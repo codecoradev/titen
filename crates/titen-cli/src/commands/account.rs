@@ -1,5 +1,8 @@
 use anyhow::Result;
 use clap::Subcommand;
+use serde_json::json;
+
+use crate::api::{TitenApi, TitenConfig, print_data};
 
 #[derive(Subcommand)]
 pub enum AccountAction {
@@ -8,6 +11,7 @@ pub enum AccountAction {
     /// Add a new account
     Add {
         username: String,
+        #[arg(long)]
         user_id: Option<String>,
         #[arg(long)]
         access_token: String,
@@ -15,17 +19,21 @@ pub enum AccountAction {
         expires_at: Option<String>,
     },
     /// Remove an account
-    Remove { id_or_username: String },
+    Remove { id: String },
     /// Refresh account token
-    Refresh { id_or_username: String },
+    Refresh { id: String },
     /// Check token expiry
-    TokenCheck { id_or_username: String },
+    TokenCheck { id: String },
 }
 
 pub async fn run(action: AccountAction) -> Result<()> {
+    let config = TitenConfig::from_env();
+    let api = TitenApi::new(&config);
+
     match action {
         AccountAction::List => {
-            println!("Listing accounts... (not yet connected to DB)");
+            let resp = api.get("/api/accounts").await?;
+            print_data(&resp);
         }
         AccountAction::Add {
             username,
@@ -33,24 +41,84 @@ pub async fn run(action: AccountAction) -> Result<()> {
             access_token,
             expires_at,
         } => {
-            println!("Adding account: {username} (user_id: {user_id:?})");
-            println!("  Token: {}...", &access_token[..8.min(access_token.len())]);
-            println!("  Expires: {expires_at:?}");
+            let body = json!({
+                "username": username,
+                "user_id": user_id,
+                "access_token": access_token,
+                "expires_at": expires_at,
+            });
+            let resp = api.post("/api/accounts", body).await?;
+            print_data(&resp);
         }
-        AccountAction::Remove { id_or_username } => {
-            println!("Removing account: {id_or_username}");
+        AccountAction::Remove { id } => {
+            let resp = api.delete(&format!("/api/accounts/{id}")).await?;
+            print_data(&resp);
         }
-        AccountAction::Refresh { id_or_username } => {
-            println!("Refreshing token for: {id_or_username}");
+        AccountAction::Refresh { id } => {
+            let resp = api
+                .post(&format!("/api/accounts/{id}/refresh-token"), json!({}))
+                .await?;
+            print_data(&resp);
         }
-        AccountAction::TokenCheck { id_or_username } => {
-            println!("Token status for: {id_or_username}");
+        AccountAction::TokenCheck { id } => {
+            let resp = api.get(&format!("/api/accounts/{id}")).await?;
+            let data = resp.get("data").cloned().unwrap_or_default();
+            let is_active = data
+                .get("is_active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let token_status = data
+                .get("token_status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let expires = data
+                .get("expires_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("never");
+            println!("Account: {id}");
+            println!("  Active: {is_active}");
+            println!("  Token: {token_status}");
+            println!("  Expires: {expires}");
         }
     }
     Ok(())
 }
 
 pub async fn token_check() -> Result<()> {
-    println!("Checking token expiry for all accounts... (not yet connected to DB)");
+    let config = TitenConfig::from_env();
+    let api = TitenApi::new(&config);
+
+    let resp = api.get("/api/accounts").await?;
+    let accounts = resp
+        .get("data")
+        .and_then(|d| d.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if accounts.is_empty() {
+        println!("No accounts registered.");
+        return Ok(());
+    }
+
+    println!("Token Status ({len} accounts):", len = accounts.len());
+    for acct in &accounts {
+        let id = acct.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+        let username = acct.get("username").and_then(|v| v.as_str()).unwrap_or("?");
+        let status = acct
+            .get("token_status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
+        let expires = acct
+            .get("expires_at")
+            .and_then(|v| v.as_str())
+            .unwrap_or("never");
+        let icon = match status {
+            "valid" => "✓",
+            "expiring" => "⚠",
+            "expired" => "✗",
+            _ => "?",
+        };
+        println!("  {icon} {username} ({id}) — {status}, expires: {expires}");
+    }
     Ok(())
 }

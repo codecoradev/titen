@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 titen-core = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, features = ["multipart"] }
 tower-http = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

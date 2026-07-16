@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Subcommand;
 
+use crate::api::{TitenApi, TitenConfig, print_data};
+
 #[derive(Subcommand)]
 pub enum CommentAction {
     /// Fetch comments from Threads API
@@ -12,15 +14,28 @@ pub enum CommentAction {
 }
 
 pub async fn run(action: CommentAction) -> Result<()> {
+    let config = TitenConfig::from_env();
+    let api = TitenApi::new(&config);
+
     match action {
         CommentAction::Fetch { post_id } => {
-            println!("Fetching comments for post: {post_id}");
+            let resp = api
+                .post(
+                    &format!("/api/posts/{post_id}/comments/fetch"),
+                    serde_json::json!({}),
+                )
+                .await?;
+            print_data(&resp);
         }
         CommentAction::List { post_id } => {
-            println!("Listing comments for post: {post_id}");
+            let resp = api.get(&format!("/api/posts/{post_id}/comments")).await?;
+            print_data(&resp);
         }
         CommentAction::Sentiment { post_id } => {
-            println!("Analyzing sentiment for post: {post_id}");
+            let resp = api
+                .get(&format!("/api/posts/{post_id}/comments/sentiment"))
+                .await?;
+            print_data(&resp);
         }
     }
     Ok(())

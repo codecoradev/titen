@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI for titen — manage Threads accounts, posts, scheduling"
+description = "CLI client for titen — Threads management platform"
 
 [[bin]]
 name = "titen"
@@ -13,11 +13,14 @@ path = "src/main.rs"
 
 [dependencies]
 titen-core = { workspace = true }
-clap = { workspace = true }
+titen-api = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+reqwest = { workspace = true }
+anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
 chrono = { workspace = true }
-anyhow = { workspace = true }

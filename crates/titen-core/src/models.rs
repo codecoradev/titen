@@ -198,3 +198,15 @@ impl Default for RateLimits {
         }
     }
 }
+
+// ─── Comment Data (from Threads API) ───────────────────────
+
+/// Comment data fetched from the Threads API (before storage)
+#[derive(Debug, Clone)]
+pub struct CommentData {
+    pub threads_comment_id: String,
+    pub author_username: Option<String>,
+    pub author_user_id: Option<String>,
+    pub text: String,
+    pub timestamp: Option<String>,
+}

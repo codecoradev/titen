@@ -12,6 +12,7 @@ description = "Self-hosted Threads management platform"
 
 [workspace.dependencies]
 titen-core = { path = "crates/titen-core" }
+titen-api = { path = "crates/titen-api" }
 
 # HTTP
 axum = { version = "0.8", features = ["macros"] }
@@ -46,9 +47,6 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # IDs
 uuid = { version = "1", features = ["v7", "serde"] }
-
-# S3
-rust-s3 = "0.35"
 
 # Scheduler
 tokio-cron-scheduler = "0.13"

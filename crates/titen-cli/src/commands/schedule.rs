@@ -1,5 +1,8 @@
 use anyhow::Result;
 use clap::Subcommand;
+use serde_json::json;
+
+use crate::api::{TitenApi, TitenConfig, print_data};
 
 #[derive(Subcommand)]
 pub enum ScheduleAction {
@@ -27,15 +30,20 @@ pub enum ScheduleAction {
 }
 
 pub async fn run(action: ScheduleAction) -> Result<()> {
+    let config = TitenConfig::from_env();
+    let api = TitenApi::new(&config);
+
     match action {
         ScheduleAction::List { account, status } => {
-            println!("Listing schedules...");
+            let mut path = "/api/schedules?".to_string();
             if let Some(a) = account {
-                println!("  Account: {a}");
+                path.push_str(&format!("account_id={a}&"));
             }
             if let Some(s) = status {
-                println!("  Status: {s}");
+                path.push_str(&format!("status={s}&"));
             }
+            let resp = api.get(&path).await?;
+            print_data(&resp);
         }
         ScheduleAction::Create {
             account,
@@ -43,16 +51,22 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
             at,
             media_type,
         } => {
-            println!("Scheduling post on account: {account}");
-            println!("  At: {at}");
-            println!("  Type: {media_type:?}");
-            println!("  Text: {text}");
+            let body = json!({
+                "account_id": account,
+                "caption": text,
+                "scheduled_at": at,
+                "media_type": media_type.unwrap_or_else(|| "TEXT".into()),
+            });
+            let resp = api.post("/api/schedules", body).await?;
+            print_data(&resp);
         }
         ScheduleAction::Cancel { id } => {
-            println!("Canceling schedule: {id}");
+            let resp = api.delete(&format!("/api/schedules/{id}")).await?;
+            print_data(&resp);
         }
         ScheduleAction::Upcoming => {
-            println!("Showing upcoming schedules...");
+            let resp = api.get("/api/schedules/upcoming").await?;
+            print_data(&resp);
         }
     }
     Ok(())

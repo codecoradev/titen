@@ -1,6 +1,3 @@
-mod routes;
-pub mod server;
-
 fn main() {
-    server::main()
+    titen_api::server::main()
 }

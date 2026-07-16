@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 use anyhow::Result;
 
+mod api;
 mod commands;
 
 #[derive(Parser)]

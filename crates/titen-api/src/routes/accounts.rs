@@ -10,7 +10,23 @@ use titen_core::models::*;
 
 pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_accounts().await {
-        Ok(accounts) => Json(serde_json::json!({ "data": accounts })),
+        Ok(accounts) => {
+            let data: Vec<serde_json::Value> = accounts
+                .into_iter()
+                .map(|a| {
+                    serde_json::json!({
+                        "id": a.id,
+                        "username": a.username,
+                        "user_id": a.user_id,
+                        "is_active": a.is_active,
+                        "expires_at": a.expires_at,
+                        "token_status": a.token_status(),
+                        "created_at": a.created_at,
+                    })
+                })
+                .collect();
+            Json(serde_json::json!({ "data": data }))
+        }
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
 }
@@ -58,8 +74,17 @@ pub async fn delete_account(
 }
 
 pub async fn refresh_token(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "message": "Token refresh not yet implemented", "account_id": id }))
+    match state.store.get_account(&id).await {
+        Ok(account) => match state.threads_client.refresh_token(&account).await {
+            Ok(updated) => Json(serde_json::json!({ "data": updated })),
+            Err(e) => Json(serde_json::json!({
+                "error": e.to_string(),
+                "code": "REFRESH_FAILED"
+            })),
+        },
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    }
 }

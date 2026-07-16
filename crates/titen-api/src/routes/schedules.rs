@@ -56,12 +56,17 @@ pub async fn create_schedule(
 }
 
 pub async fn update_schedule(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(_input): Json<CreateSchedule>,
+    Json(input): Json<CreateSchedule>,
 ) -> Json<serde_json::Value> {
-    // TODO: implement schedule update
-    Json(serde_json::json!({ "message": "Schedule update not yet implemented", "id": id }))
+    match state.store.delete_schedule(&id).await {
+        Ok(()) => match state.store.create_schedule(&id, &input).await {
+            Ok(schedule) => Json(serde_json::json!({ "data": schedule })),
+            Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "UPDATE_FAILED" })),
+        },
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    }
 }
 
 pub async fn delete_schedule(
