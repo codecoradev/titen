@@ -122,10 +122,10 @@ impl Store {
     ) -> Result<Vec<Post>> {
         let mut query = String::from("SELECT * FROM posts WHERE 1=1");
         if let Some(aid) = account_id {
-            query.push_str(&format!(" AND account_id = '{}'", aid));
+            query.push_str(&format!(" AND account_id = '{aid}'"));
         }
         if let Some(s) = status {
-            query.push_str(&format!(" AND status = '{}'", s));
+            query.push_str(&format!(" AND status = '{s}'"));
         }
         query.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
 
@@ -171,10 +171,10 @@ impl Store {
     ) -> Result<Vec<Schedule>> {
         let mut query = String::from("SELECT * FROM schedules WHERE 1=1");
         if let Some(aid) = account_id {
-            query.push_str(&format!(" AND account_id = '{}'", aid));
+            query.push_str(&format!(" AND account_id = '{aid}'"));
         }
         if let Some(s) = status {
-            query.push_str(&format!(" AND status = '{}'", s));
+            query.push_str(&format!(" AND status = '{s}'"));
         }
         query.push_str(" ORDER BY scheduled_at ASC");
 
