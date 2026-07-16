@@ -1,3 +1,26 @@
+//! Titen MCP server — stdio JSON-RPC 2.0 interface for AI agents.
+//!
+//! Implements the [Model Context Protocol](https://modelcontextprotocol.io/) over stdio,
+//! exposing Titen operations as tools that Claude Desktop, Cursor, and other MCP
+//! clients can call directly.
+//!
+//! # Available tools
+//!
+//! - `list_accounts` — list all managed Threads accounts
+//! - `create_post` — create and publish a post
+//! - `schedule_post` — schedule a post for future publishing
+//! - `list_schedules` — list scheduled posts
+//! - `cancel_schedule` — cancel a scheduled post
+//! - `fetch_comments` — fetch and store comments from a Threads post
+//! - `get_post_sentiment` — get sentiment analysis for a post's comments
+//! - `get_account_analytics` — get analytics summary for an account
+//! - `delete_post` — delete a post
+//! - `check_tokens` — check all accounts' token expiry status
+//!
+//! # Configuration
+//!
+//! Set `TITEN_DB_PATH` to point to the SQLite database. Defaults to `./titen.db`.
+
 use std::io::{self, BufRead, Write};
 
 use serde_json::json;

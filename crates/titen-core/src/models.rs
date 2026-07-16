@@ -210,3 +210,86 @@ pub struct CommentData {
     pub text: String,
     pub timestamp: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── Helper ────────────────────────────────────────────
+
+    fn make_account(expires_at: &str) -> Account {
+        Account {
+            id: "test-id".into(),
+            username: "testuser".into(),
+            user_id: "threads-123".into(),
+            access_token: "fake-token".into(),
+            refresh_token: Some("fake-refresh".into()),
+            expires_at: expires_at.into(),
+            app_id: Some("app-1".into()),
+            is_active: true,
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+        }
+    }
+
+    // ─── Account::token_status ────────────────────────────
+
+    #[test]
+    fn token_status_valid() {
+        let future = Utc::now() + chrono::Duration::days(30);
+        let account = make_account(&future.to_rfc3339());
+        assert_eq!(account.token_status(), "valid");
+    }
+
+    #[test]
+    fn token_status_expiring_soon_7_days() {
+        // Exactly 7 days from now → expiring_soon (d <= 7)
+        let future = Utc::now() + chrono::Duration::days(7);
+        let account = make_account(&future.to_rfc3339());
+        assert_eq!(account.token_status(), "expiring_soon");
+    }
+
+    #[test]
+    fn token_status_expiring_soon_1_day() {
+        // 3 days from now → expiring_soon (d <= 7)
+        let future = Utc::now() + chrono::Duration::days(3);
+        let account = make_account(&future.to_rfc3339());
+        assert_eq!(account.token_status(), "expiring_soon");
+    }
+
+    #[test]
+    fn token_status_expired() {
+        let past = Utc::now() - chrono::Duration::days(1);
+        let account = make_account(&past.to_rfc3339());
+        assert_eq!(account.token_status(), "expired");
+    }
+
+    #[test]
+    fn token_status_expired_exactly_now() {
+        let now = Utc::now();
+        let account = make_account(&now.to_rfc3339());
+        assert_eq!(account.token_status(), "expired");
+    }
+
+    #[test]
+    fn token_status_invalid_date() {
+        let account = make_account("not-a-valid-date");
+        assert_eq!(account.token_status(), "unknown");
+    }
+
+    #[test]
+    fn token_status_empty_date() {
+        let account = make_account("");
+        assert_eq!(account.token_status(), "unknown");
+    }
+
+    // ─── RateLimits::default ─────────────────────────────
+
+    #[test]
+    fn rate_limits_default_values() {
+        let limits = RateLimits::default();
+        assert_eq!(limits.post, 250);
+        assert_eq!(limits.reply, 1000);
+        assert_eq!(limits.delete, 100);
+    }
+}

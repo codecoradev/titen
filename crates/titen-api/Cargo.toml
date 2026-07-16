@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "HTTP server for titen — Axum-based REST API"
 
+[lib]
+name = "titen_api"
+path = "src/lib.rs"
+
 [[bin]]
 name = "titen-api"
 path = "src/main.rs"
@@ -24,3 +28,12 @@ tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+titen-core = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
