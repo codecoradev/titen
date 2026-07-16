@@ -1,8 +1,6 @@
 use axum::{Json, extract::Path, extract::State};
-use uuid::Uuid;
 
 use crate::server::AppState;
-use titen_core::models::*;
 
 pub async fn list_comments(
     State(state): State<AppState>,
@@ -15,7 +13,7 @@ pub async fn list_comments(
 }
 
 pub async fn fetch_comments(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(post_id): Path<String>,
 ) -> Json<serde_json::Value> {
     // TODO: implement actual Threads API comment fetching

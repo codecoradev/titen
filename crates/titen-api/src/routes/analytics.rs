@@ -5,9 +5,9 @@ use axum::{
 use serde::Deserialize;
 
 use crate::server::AppState;
-use titen_core::models::*;
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct AnalyticsQuery {
     pub account_id: Option<String>,
     pub from: Option<String>,
@@ -15,7 +15,7 @@ pub struct AnalyticsQuery {
 }
 
 pub async fn list_analytics(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(_q): Query<AnalyticsQuery>,
 ) -> Json<serde_json::Value> {
     // TODO: implement aggregated analytics

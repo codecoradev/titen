@@ -60,7 +60,7 @@ pub async fn create_post(
 }
 
 pub async fn delete_post(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
     // TODO: implement actual Threads delete + remove from DB

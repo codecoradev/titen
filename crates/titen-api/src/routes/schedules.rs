@@ -56,9 +56,9 @@ pub async fn create_schedule(
 }
 
 pub async fn update_schedule(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(id): Path<String>,
-    Json(input): Json<CreateSchedule>,
+    Json(_input): Json<CreateSchedule>,
 ) -> Json<serde_json::Value> {
     // TODO: implement schedule update
     Json(serde_json::json!({ "message": "Schedule update not yet implemented", "id": id }))

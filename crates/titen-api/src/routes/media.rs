@@ -2,10 +2,8 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use uuid::Uuid;
 
 use crate::server::AppState;
-use titen_core::models::*;
 
 pub async fn list_media(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_media().await {
@@ -14,7 +12,7 @@ pub async fn list_media(State(state): State<AppState>) -> Json<serde_json::Value
     }
 }
 
-pub async fn upload_media(State(state): State<AppState>) -> Json<serde_json::Value> {
+pub async fn upload_media(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // TODO: implement multipart upload + S3 storage
     Json(serde_json::json!({ "message": "Media upload not yet implemented" }))
 }
