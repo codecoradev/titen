@@ -8,16 +8,18 @@ pub enum AccountAction {
     /// Add a new account
     Add {
         username: String,
-        user_id: String,
+        user_id: Option<String>,
+        #[arg(long)]
         access_token: String,
-        expires_at: String,
+        #[arg(long)]
+        expires_at: Option<String>,
     },
     /// Remove an account
     Remove { id_or_username: String },
     /// Refresh account token
     Refresh { id_or_username: String },
-    /// Show account token status
-    Status { id_or_username: String },
+    /// Check token expiry
+    TokenCheck { id_or_username: String },
 }
 
 pub async fn run(action: AccountAction) -> Result<()> {
@@ -31,18 +33,18 @@ pub async fn run(action: AccountAction) -> Result<()> {
             access_token,
             expires_at,
         } => {
-            println!("Adding account: {} (user_id: {})", username, user_id);
+            println!("Adding account: {username} (user_id: {user_id:?})");
             println!("  Token: {}...", &access_token[..8.min(access_token.len())]);
-            println!("  Expires: {}", expires_at);
+            println!("  Expires: {expires_at:?}");
         }
         AccountAction::Remove { id_or_username } => {
-            println!("Removing account: {}", id_or_username);
+            println!("Removing account: {id_or_username}");
         }
         AccountAction::Refresh { id_or_username } => {
-            println!("Refreshing token for: {}", id_or_username);
+            println!("Refreshing token for: {id_or_username}");
         }
-        AccountAction::Status { id_or_username } => {
-            println!("Token status for: {}", id_or_username);
+        AccountAction::TokenCheck { id_or_username } => {
+            println!("Token status for: {id_or_username}");
         }
     }
     Ok(())

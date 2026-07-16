@@ -10,19 +10,19 @@ pub enum ScheduleAction {
         #[arg(short, long)]
         status: Option<String>,
     },
-    /// Schedule a new post
-    Add {
+    /// Create a new schedule
+    Create {
         account: String,
         #[arg(short, long)]
         text: String,
         #[arg(short, long)]
         at: String,
-        #[arg(short = 't', long, default_value = "TEXT")]
-        media_type: String,
+        #[arg(long)]
+        media_type: Option<String>,
     },
-    /// Cancel a scheduled post
+    /// Cancel a schedule
     Cancel { id: String },
-    /// Show upcoming scheduled posts
+    /// Show upcoming schedules
     Upcoming,
 }
 
@@ -31,25 +31,25 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
         ScheduleAction::List { account, status } => {
             println!("Listing schedules...");
             if let Some(a) = account {
-                println!("  Account: {}", a);
+                println!("  Account: {a}");
             }
             if let Some(s) = status {
-                println!("  Status: {}", s);
+                println!("  Status: {s}");
             }
         }
-        ScheduleAction::Add {
+        ScheduleAction::Create {
             account,
             text,
             at,
             media_type,
         } => {
-            println!("Scheduling post on account: {}", account);
-            println!("  At: {}", at);
-            println!("  Type: {}", media_type);
-            println!("  Text: {}", text);
+            println!("Scheduling post on account: {account}");
+            println!("  At: {at}");
+            println!("  Type: {media_type:?}");
+            println!("  Text: {text}");
         }
         ScheduleAction::Cancel { id } => {
-            println!("Canceling schedule: {}", id);
+            println!("Canceling schedule: {id}");
         }
         ScheduleAction::Upcoming => {
             println!("Showing upcoming schedules...");

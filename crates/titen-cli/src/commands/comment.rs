@@ -14,13 +14,13 @@ pub enum CommentAction {
 pub async fn run(action: CommentAction) -> Result<()> {
     match action {
         CommentAction::Fetch { post_id } => {
-            println!("Fetching comments for post: {}", post_id);
+            println!("Fetching comments for post: {post_id}");
         }
         CommentAction::List { post_id } => {
-            println!("Listing comments for post: {}", post_id);
+            println!("Listing comments for post: {post_id}");
         }
         CommentAction::Sentiment { post_id } => {
-            println!("Analyzing sentiment for post: {}", post_id);
+            println!("Analyzing sentiment for post: {post_id}");
         }
     }
     Ok(())

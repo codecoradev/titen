@@ -143,8 +143,8 @@ pub async fn serve(
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = format!("{}:{}", host, port);
-    tracing::info!("titen-api listening on {}", addr);
+    let addr = format!("{host}:{port}");
+    tracing::info!("titen-api listening on {addr}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
@@ -166,7 +166,7 @@ pub fn main() {
 
     runtime.block_on(async {
         if let Err(e) = serve(&host, port, &db_path, api_key).await {
-            tracing::error!("Server error: {}", e);
+            tracing::error!("Server error: {e}");
             std::process::exit(1);
         }
     });

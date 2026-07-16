@@ -11,7 +11,7 @@ pub enum MediaAction {
         #[arg(long)]
         content_type: Option<String>,
     },
-    /// Delete a media asset
+    /// Delete media
     Delete { id: String },
 }
 
@@ -24,13 +24,13 @@ pub async fn run(action: MediaAction) -> Result<()> {
             file_path,
             content_type,
         } => {
-            println!("Uploading: {}", file_path);
+            println!("Uploading: {file_path}");
             if let Some(ct) = content_type {
-                println!("  Content-Type: {}", ct);
+                println!("  Content-Type: {ct}");
             }
         }
         MediaAction::Delete { id } => {
-            println!("Deleting media: {}", id);
+            println!("Deleting media: {id}");
         }
     }
     Ok(())
