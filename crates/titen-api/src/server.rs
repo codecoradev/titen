@@ -70,7 +70,7 @@ pub async fn serve(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let pool = sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path)).await?;
+    let pool = sqlx::SqlitePool::connect(&format!("sqlite:{db_path}?mode=rwc")).await?;
     let store = Store::new(pool.clone());
     store.migrate().await?;
 
