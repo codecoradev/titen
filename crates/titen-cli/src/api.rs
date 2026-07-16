@@ -5,6 +5,7 @@ use serde_json::Value;
 pub struct TitenConfig {
     pub base_url: String,
     pub api_key: Option<String>,
+    #[allow(dead_code)]
     pub db_path: String,
 }
 
@@ -82,6 +83,7 @@ impl TitenApi {
         self.request(reqwest::Method::POST, path, Some(body)).await
     }
 
+    #[allow(dead_code)]
     pub async fn put(&self, path: &str, body: Value) -> Result<Value> {
         self.request(reqwest::Method::PUT, path, Some(body)).await
     }
