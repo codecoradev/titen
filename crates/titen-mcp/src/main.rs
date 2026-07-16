@@ -20,7 +20,7 @@ fn main() {
         let request: serde_json::Value = match serde_json::from_str(trimmed) {
             Ok(v) => v,
             Err(e) => {
-                let resp = json_rpc_error(0, &format!("Parse error: {}", e));
+                let resp = json_rpc_error(0, &format!("Parse error: {e}"));
                 let _ = writeln!(
                     stdout,
                     "{}",
@@ -77,7 +77,7 @@ fn main() {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
                 serde_json::json!({
-                    "content": [{ "type": "text", "text": format!("Tool '{}' not yet implemented. Connect titen to a database to enable.", tool_name) }]
+                    "content": [{ "type": "text", "text": format!("Tool '{tool_name}' not yet implemented. Connect titen to a database to enable.") }],
                 })
             }
             _ => json_rpc_error_value(&id, "Method not found", -32601),
