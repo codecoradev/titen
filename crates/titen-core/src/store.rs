@@ -14,6 +14,7 @@ impl Store {
 
     /// Run migrations from embedded SQL
     pub async fn migrate(&self) -> Result<()> {
+        // 001 — initial schema
         let sql = include_str!("../../titen-api/migrations/001_initial.sql");
         for statement in sql.split(';') {
             let trimmed = statement.trim();
@@ -21,6 +22,38 @@ impl Store {
                 sqlx::query(trimmed).execute(&self.pool).await?;
             }
         }
+
+        // 002 — drop refresh_token column (safe for fresh installs: ignore "no such column")
+        let sql_002 = include_str!("../../titen-api/migrations/002_drop_refresh_token.sql");
+        for statement in sql_002.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                let result = sqlx::query(trimmed).execute(&self.pool).await;
+                if let Err(e) = result {
+                    let msg = e.to_string();
+                    // SQLite error: "no such column" means the column was already absent (fresh install)
+                    if !msg.contains("no such column") {
+                        return Err(TitenError::DatabaseError(msg));
+                    }
+                }
+            }
+        }
+
+        // 003 — add app_secret column (safe for fresh installs: ignore "duplicate column")
+        let sql_003 = include_str!("../../titen-api/migrations/003_add_app_secret.sql");
+        for statement in sql_003.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                let result = sqlx::query(trimmed).execute(&self.pool).await;
+                if let Err(e) = result {
+                    let msg = e.to_string();
+                    if !msg.contains("duplicate column") {
+                        return Err(TitenError::DatabaseError(msg));
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -51,21 +84,20 @@ impl Store {
 
     pub async fn create_account(&self, id: &str, input: &CreateAccount) -> Result<Account> {
         sqlx::query(
-            "INSERT INTO accounts (id, username, user_id, access_token, refresh_token, expires_at, app_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO accounts (id, username, user_id, access_token, expires_at, app_id, app_secret)\n             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.username)
         .bind(&input.user_id)
         .bind(&input.access_token)
-        .bind(&input.refresh_token)
         .bind(&input.expires_at)
         .bind(&input.app_id)
+        .bind(&input.app_secret)
         .execute(&self.pool)
         .await
         .map_err(|e| {
             if e.to_string().contains("UNIQUE") {
-                TitenError::AccountAlreadyExists(input.username.clone())
+                TitenError::AccountAlreadyExists(input.username.clone().unwrap_or_default())
             } else {
                 TitenError::DatabaseError(e.to_string())
             }
@@ -79,18 +111,12 @@ impl Store {
 
         let access_token = input.access_token.as_deref().unwrap_or(&acc.access_token);
         let expires_at = input.expires_at.as_deref().unwrap_or(&acc.expires_at);
-        let refresh_token = input
-            .refresh_token
-            .as_deref()
-            .unwrap_or(acc.refresh_token.as_deref().unwrap_or(""));
         let is_active = input.is_active.unwrap_or(acc.is_active);
 
         sqlx::query(
-            "UPDATE accounts SET access_token = ?, refresh_token = ?, expires_at = ?, is_active = ?, updated_at = datetime('now')
-             WHERE id = ?",
+            "UPDATE accounts SET access_token = ?, expires_at = ?, is_active = ?, updated_at = datetime('now')\n             WHERE id = ?",
         )
         .bind(access_token)
-        .bind(refresh_token)
         .bind(expires_at)
         .bind(is_active)
         .bind(id)

@@ -29,9 +29,112 @@ impl ThreadsClient {
 
     // ─── Token Management ─────────────────────────────────────
 
+    /// Ensure the account's token is valid, refreshing if expiring.
+    ///
+    /// Call this before any API request. If the token is expiring within
+    /// 7 days or expired, it attempts to refresh automatically.
+    /// Returns the (possibly updated) account.
+    pub async fn ensure_valid_token(
+        &self,
+        account: &crate::models::Account,
+    ) -> Result<crate::models::Account> {
+        match account.token_status() {
+            "valid" => Ok(account.clone()),
+            "expiring_soon" | "expired" => self.refresh_token(account).await,
+            _ => Ok(account.clone()),
+        }
+    }
+
+    /// Exchange a short-lived token for a long-lived token.
+    ///
+    /// `GET /access_token?grant_type=th_exchange_token&client_secret={secret}&access_token={token}`
+    ///
+    /// Returns the new long-lived access_token + expires_in seconds.
+    pub async fn exchange_long_lived_token(
+        &self,
+        short_lived_token: &str,
+        app_secret: &str,
+    ) -> Result<(String, i64)> {
+        let url = format!(
+            "{THREADS_GRAPH_API}/access_token?grant_type=th_exchange_token&client_secret={}&access_token={}",
+            app_secret, short_lived_token
+        );
+
+        let resp: serde_json::Value =
+            self.http
+                .get(&url)
+                .send()
+                .await?
+                .json()
+                .await
+                .map_err(|e| {
+                    crate::error::TitenError::ThreadsApiError(format!(
+                        "Failed to parse token exchange response: {e}"
+                    ))
+                })?;
+
+        let access_token = resp
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError(
+                    "No access_token in exchange response".to_string(),
+                )
+            })?
+            .to_string();
+
+        let expires_in = resp
+            .get("expires_in")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(60 * 24 * 3600);
+
+        Ok((access_token, expires_in))
+    }
+
+    /// Resolve account info (user_id + username) from a Threads access token.
+    ///
+    /// Calls `GET /me?fields=id,username` to auto-discover the account identity.
+    pub async fn resolve_account(&self, access_token: &str) -> Result<(String, String)> {
+        let url =
+            format!("{THREADS_GRAPH_API}/v1.0/me?fields=id,username&access_token={access_token}");
+
+        let resp: serde_json::Value =
+            self.http
+                .get(&url)
+                .send()
+                .await?
+                .json()
+                .await
+                .map_err(|e| {
+                    crate::error::TitenError::ThreadsApiError(format!(
+                        "Failed to resolve account: {e}"
+                    ))
+                })?;
+
+        let user_id = resp
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError("No id in /me response".to_string())
+            })?
+            .to_string();
+
+        let username = resp
+            .get("username")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError("No username in /me response".to_string())
+            })?
+            .to_string();
+
+        Ok((user_id, username))
+    }
+
     /// Refresh an account's access token via the Threads API.
     ///
     /// `GET /refresh_access_token?grant_type=th_refresh_token&access_token={token}`
+    ///
+    /// No separate refresh token needed — Threads uses the current access_token.
     pub async fn refresh_token(
         &self,
         account: &crate::models::Account,
@@ -75,10 +178,8 @@ impl ThreadsClient {
             "Token refreshed for {}: expires {}",
             account.username, expires_at_str
         );
-
         let update = crate::models::UpdateAccount {
             access_token: Some(new_token.to_string()),
-            refresh_token: None,
             expires_at: Some(expires_at_str),
             is_active: None,
         };

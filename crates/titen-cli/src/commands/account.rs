@@ -8,13 +8,16 @@ use crate::api::{TitenApi, TitenConfig, print_data};
 pub enum AccountAction {
     /// List all accounts
     List,
-    /// Add a new account
+    /// Add a new account (username + user_id auto-resolved from token)
     Add {
-        username: String,
-        #[arg(long)]
-        user_id: Option<String>,
         #[arg(long)]
         access_token: String,
+        #[arg(long)]
+        app_secret: Option<String>,
+        #[arg(long)]
+        username: Option<String>,
+        #[arg(long)]
+        user_id: Option<String>,
         #[arg(long)]
         expires_at: Option<String>,
     },
@@ -36,16 +39,20 @@ pub async fn run(action: AccountAction) -> Result<()> {
             print_data(&resp);
         }
         AccountAction::Add {
+            access_token,
+            app_secret,
             username,
             user_id,
-            access_token,
             expires_at,
         } => {
             let body = json!({
+                "access_token": access_token,
+                "app_secret": app_secret,
                 "username": username,
                 "user_id": user_id,
-                "access_token": access_token,
-                "expires_at": expires_at,
+                "expires_at": expires_at.unwrap_or_else(|| {
+                    (chrono::Utc::now() + chrono::Duration::days(60)).to_rfc3339()
+                }),
             });
             let resp = api.post("/api/accounts", body).await?;
             print_data(&resp);

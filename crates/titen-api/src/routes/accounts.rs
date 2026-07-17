@@ -33,9 +33,64 @@ pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Va
 
 pub async fn create_account(
     State(state): State<AppState>,
-    Json(input): Json<CreateAccount>,
+    Json(mut input): Json<CreateAccount>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let id = Uuid::now_v7().to_string();
+
+    // Auto-resolve username + user_id from /me if not provided
+    if input.username.is_none() || input.user_id.is_none() {
+        match state
+            .threads_client
+            .resolve_account(&input.access_token)
+            .await
+        {
+            Ok((user_id, username)) => {
+                if input.username.is_none() {
+                    input.username = Some(username);
+                }
+                if input.user_id.is_none() {
+                    input.user_id = Some(user_id);
+                }
+            }
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("Failed to resolve account: {e}"),
+                        "code": "RESOLVE_FAILED"
+                    })),
+                );
+            }
+        }
+    }
+
+    // Auto-exchange short-lived → long-lived token if app_secret provided
+    if let Some(ref app_secret) = input.app_secret {
+        if !app_secret.is_empty() {
+            match state
+                .threads_client
+                .exchange_long_lived_token(&input.access_token, app_secret)
+                .await
+            {
+                Ok((long_token, expires_in)) => {
+                    input.access_token = long_token;
+                    let expires_at =
+                        (chrono::Utc::now() + chrono::Duration::seconds(expires_in)).to_rfc3339();
+                    input.expires_at = expires_at;
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "error": format!("Token exchange failed: {e}"),
+                            "code": "EXCHANGE_FAILED"
+                        })),
+                    );
+                }
+            }
+        }
+    }
+
     match state.store.create_account(&id, &input).await {
         Ok(account) => (
             StatusCode::CREATED,

@@ -10,7 +10,6 @@ pub struct Account {
     pub username: String,
     pub user_id: String,
     pub access_token: String,
-    pub refresh_token: Option<String>,
     pub expires_at: String,
     pub app_id: Option<String>,
     pub is_active: bool,
@@ -20,18 +19,17 @@ pub struct Account {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAccount {
-    pub username: String,
-    pub user_id: String,
+    pub username: Option<String>,
+    pub user_id: Option<String>,
     pub access_token: String,
     pub expires_at: String,
-    pub refresh_token: Option<String>,
     pub app_id: Option<String>,
+    pub app_secret: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateAccount {
     pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
     pub expires_at: Option<String>,
     pub is_active: Option<bool>,
 }
@@ -336,7 +334,6 @@ mod tests {
             username: "testuser".into(),
             user_id: "threads-123".into(),
             access_token: "fake-token".into(),
-            refresh_token: Some("fake-refresh".into()),
             expires_at: expires_at.into(),
             app_id: Some("app-1".into()),
             is_active: true,

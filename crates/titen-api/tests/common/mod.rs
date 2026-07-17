@@ -89,12 +89,12 @@ pub async fn create_test_account(app: &Router, pool: &SqlitePool) -> Value {
     let store = Store::new(pool.clone());
     let id = uuid::Uuid::now_v7().to_string();
     let input = titen_core::models::CreateAccount {
-        username: "testuser".to_string(),
-        user_id: "user_123".to_string(),
+        username: Some("testuser".to_string()),
+        user_id: Some("user_123".to_string()),
         access_token: "fake_token".to_string(),
         expires_at: "2099-12-31T00:00:00Z".to_string(),
-        refresh_token: Some("fake_refresh".to_string()),
         app_id: None,
+        app_secret: None,
     };
     store
         .create_account(&id, &input)
