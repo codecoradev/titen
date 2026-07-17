@@ -12,9 +12,10 @@ pub struct TitenConfig {
 impl TitenConfig {
     pub fn from_env() -> Self {
         Self {
-            base_url: std::env::var("TITEN_URL").unwrap_or_else(|_| "http://localhost:7845".into()),
-            api_key: std::env::var("TITEN_API_KEY").ok(),
-            db_path: std::env::var("TITEN_DB_PATH").unwrap_or_else(|_| "./titen.db".into()),
+            base_url: std::env::var(titen_core::config::ENV_URL)
+                .unwrap_or_else(|_| titen_core::config::DEFAULT_URL.into()),
+            api_key: std::env::var(titen_core::config::ENV_API_KEY).ok(),
+            db_path: titen_core::config::default_db_path(),
         }
     }
 }

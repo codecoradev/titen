@@ -230,12 +230,10 @@ pub async fn serve(
 }
 
 pub fn main() {
-    let host = std::env::var("TITEN_HOST").unwrap_or_else(|_| "0.0.0.0".into());
-    let port: u16 = std::env::var("TITEN_PORT")
-        .unwrap_or_else(|_| "7845".into())
-        .parse()
-        .unwrap_or(7845);
-    let db_path = std::env::var("TITEN_DB_PATH").unwrap_or_else(|_| "./titen.db".into());
+    let db_path = titen_core::config::default_db_path();
+    titen_core::config::ensure_parent_dir(&db_path);
+    let host = titen_core::config::default_host();
+    let port = titen_core::config::default_port();
     let api_key = std::env::var("TITEN_API_KEY").ok();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()

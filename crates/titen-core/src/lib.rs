@@ -18,6 +18,7 @@
 //! [`Store`], [`ThreadsClient`], [`TitenScheduler`], [`SentimentEngine`],
 //! [`KeywordEngine`], [`StubEngine`], [`Storage`], [`S3Storage`].
 
+pub mod config;
 pub mod error;
 pub mod models;
 pub mod scheduler;

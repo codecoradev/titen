@@ -25,7 +25,7 @@
 //!
 //! # Configuration
 //!
-//! Set `TITEN_DB_PATH` to point to the SQLite database. Defaults to `./titen.db`.
+//! Set `TITEN_DB_PATH` to point to the SQLite database. Defaults to `~/.codecoradev/titen/titen.db`.
 
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
@@ -43,7 +43,8 @@ fn main() {
         .expect("Failed to build tokio runtime");
 
     // Initialize store (blocking)
-    let db_path = std::env::var("TITEN_DB_PATH").unwrap_or_else(|_| "./titen.db".into());
+    let db_path = titen_core::config::default_db_path();
+    titen_core::config::ensure_parent_dir(&db_path);
     let (store, threads_client) = rt.block_on(async {
         let pool = sqlx::SqlitePool::connect(&format!("sqlite:{db_path}?mode=rwc"))
             .await
