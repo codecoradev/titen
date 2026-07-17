@@ -142,13 +142,36 @@ pub struct AnalyticsSnap {
     pub snapshot_at: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Insights {
     pub likes: Option<i64>,
     pub replies: Option<i64>,
     pub reposts: Option<i64>,
     pub views: Option<i64>,
     pub quotes: Option<i64>,
+    pub shares: Option<i64>,
+}
+
+impl From<Vec<InsightMetric>> for Insights {
+    fn from(metrics: Vec<InsightMetric>) -> Self {
+        let mut insights = Insights::default();
+        for m in metrics {
+            let val = m
+                .values
+                .and_then(|v| v.first().map(|iv| iv.value))
+                .or(m.total_value.map(|tv| tv.value));
+            match m.name.as_str() {
+                "likes" => insights.likes = val,
+                "replies" => insights.replies = val,
+                "reposts" => insights.reposts = val,
+                "views" => insights.views = val,
+                "quotes" => insights.quotes = val,
+                "shares" => insights.shares = val,
+                _ => {}
+            }
+        }
+        insights
+    }
 }
 
 // ─── Media ─────────────────────────────────────────────────
@@ -209,6 +232,96 @@ pub struct CommentData {
     pub author_user_id: Option<String>,
     pub text: String,
     pub timestamp: Option<String>,
+}
+
+// ─── Container Status (Threads API) ─────────────────────────
+/// Response from GET /{container_id}?fields=status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContainerStatus {
+    pub id: String,
+    /// "FINISHED", "IN_PROGRESS", "ERROR"
+    pub status: Option<String>,
+}
+
+// ─── User Profile (Threads API) ───────────────────────────
+/// Response from GET /{user_id}?fields=username,name,...
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub id: String,
+    pub username: Option<String>,
+    pub name: Option<String>,
+    pub profile_picture_url: Option<String>,
+    pub threads_profile_picture_url: Option<String>,
+    pub threads_biography: Option<String>,
+}
+
+// ─── Publishing Limit (Threads API) ─────────────────────────
+/// Response from GET /{user_id}/threads_publishing_limit
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishingLimit {
+    pub quota_usage: i64,
+    pub config: PublishingLimitConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishingLimitConfig {
+    pub quota_total: i64,
+}
+
+// ─── Insights (official Threads API format) ────────────────
+/// Response from GET /{media_id}/insights?metric=likes,reposts,...
+/// Returns an array of metrics with per-period values or totals.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsightMetric {
+    pub name: String,
+    pub period: String,
+    pub values: Option<Vec<InsightValue>>,
+    pub total_value: Option<InsightTotalValue>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsightValue {
+    pub value: i64,
+    pub end_time: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InsightTotalValue {
+    pub value: i64,
+}
+
+// ─── User Insights (Threads API) ───────────────────────────
+/// Response from GET /{user_id}/threads_insights?metric=views,likes,...
+/// Similar to InsightMetric but includes link_total_values for click metrics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserInsightMetric {
+    pub name: String,
+    pub period: String,
+    pub values: Option<Vec<InsightValue>>,
+    pub total_value: Option<InsightTotalValue>,
+    pub link_total_values: Option<Vec<LinkTotalValue>>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkTotalValue {
+    pub value: i64,
+    pub link_url: Option<String>,
+}
+
+// ─── Reply Creation (Threads API) ──────────────────────────
+/// Request body for POST /{post_id}/replies (creating a reply to a post)
+#[derive(Debug, Deserialize)]
+pub struct CreateReply {
+    pub media_type: String,
+    pub text: String,
+    #[allow(dead_code)]
+    pub reply_to_id: Option<String>,
 }
 
 #[cfg(test)]

@@ -7,24 +7,31 @@
 //! # Available tools
 //!
 //! - `list_accounts` — list all managed Threads accounts
+//! - `get_user_profile` — fetch a Threads user profile from the API
+//! - `get_publishing_limit` — fetch account's Threads publishing quota
 //! - `create_post` — create and publish a post
 //! - `schedule_post` — schedule a post for future publishing
 //! - `list_schedules` — list scheduled posts
 //! - `cancel_schedule` — cancel a scheduled post
+//! - `refresh_token` — refresh an account's access token
+//! - `check_tokens` — check and auto-refresh all accounts' tokens
 //! - `fetch_comments` — fetch and store comments from a Threads post
 //! - `get_post_sentiment` — get sentiment analysis for a post's comments
+//! - `get_post_insights` — fetch post insights from Threads API
 //! - `get_account_analytics` — get analytics summary for an account
 //! - `delete_post` — delete a post
-//! - `check_tokens` — check all accounts' token expiry status
+//! - `create_container` — create a Threads container (for carousel/media posts)
+//! - `publish_container` — publish a previously created container
 //!
 //! # Configuration
 //!
 //! Set `TITEN_DB_PATH` to point to the SQLite database. Defaults to `./titen.db`.
 
 use std::io::{self, BufRead, Write};
+use std::sync::Arc;
 
 use serde_json::json;
-use titen_core::Store;
+use titen_core::{Store, ThreadsClient};
 
 fn main() {
     eprintln!("titen-mcp starting (stdio JSON-RPC)");
@@ -37,13 +44,15 @@ fn main() {
 
     // Initialize store (blocking)
     let db_path = std::env::var("TITEN_DB_PATH").unwrap_or_else(|_| "./titen.db".into());
-    let store = rt.block_on(async {
+    let (store, threads_client) = rt.block_on(async {
         let pool = sqlx::SqlitePool::connect(&format!("sqlite:{db_path}?mode=rwc"))
             .await
             .expect("Failed to connect to database");
-        let store = Store::new(pool);
+        let store = Store::new(pool.clone());
         store.migrate().await.expect("Failed to run migrations");
-        store
+        let store = Arc::new(store);
+        let threads_client = Arc::new(ThreadsClient::new(store.clone()));
+        (store, threads_client)
     });
 
     let stdin = io::stdin();
@@ -102,7 +111,7 @@ fn main() {
                     .pointer("/params/arguments")
                     .cloned()
                     .unwrap_or(json!({}));
-                handle_tool_call(&rt, &store, tool_name, arguments)
+                handle_tool_call(&rt, &store, &threads_client, tool_name, arguments)
             }
             _ => json_rpc_error_value(&id, "Method not found", -32601),
         };
@@ -131,6 +140,28 @@ fn tools_list() -> serde_json::Value {
                 "inputSchema": { "type": "object", "properties": {} }
             },
             {
+                "name": "get_user_profile",
+                "description": "Fetch a Threads user's profile from the Threads API",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID" }
+                    },
+                    "required": ["account_id"]
+                }
+            },
+            {
+                "name": "get_publishing_limit",
+                "description": "Fetch an account's Threads publishing quota (daily post limit, etc.)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID" }
+                    },
+                    "required": ["account_id"]
+                }
+            },
+            {
                 "name": "create_post",
                 "description": "Create and publish a Threads post",
                 "inputSchema": {
@@ -139,7 +170,8 @@ fn tools_list() -> serde_json::Value {
                         "account_id": { "type": "string", "description": "Account ID to post from" },
                         "caption": { "type": "string", "description": "Post caption text" },
                         "media_type": { "type": "string", "enum": ["TEXT", "IMAGE"], "description": "Media type" },
-                        "image_url": { "type": "string", "description": "Image URL for IMAGE posts" }
+                        "image_url": { "type": "string", "description": "Image URL for IMAGE posts" },
+                        "alt_text": { "type": "string", "description": "Alt text for image accessibility" }
                     },
                     "required": ["account_id", "caption"]
                 }
@@ -181,8 +213,24 @@ fn tools_list() -> serde_json::Value {
                 }
             },
             {
+                "name": "refresh_token",
+                "description": "Refresh an account's Threads access token",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID to refresh" }
+                    },
+                    "required": ["account_id"]
+                }
+            },
+            {
+                "name": "check_tokens",
+                "description": "Check all accounts' token expiry status and auto-refresh expiring tokens",
+                "inputSchema": { "type": "object", "properties": {} }
+            },
+            {
                 "name": "fetch_comments",
-                "description": "Fetch and store comments from a Threads post",
+                "description": "Fetch and store comments from a Threads post via the Threads API",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -194,6 +242,17 @@ fn tools_list() -> serde_json::Value {
             {
                 "name": "get_post_sentiment",
                 "description": "Get sentiment analysis for a post's comments",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "post_id": { "type": "string", "description": "Post ID" }
+                    },
+                    "required": ["post_id"]
+                }
+            },
+            {
+                "name": "get_post_insights",
+                "description": "Fetch post insights (likes, replies, reposts, views, quotes) from the Threads API",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -215,7 +274,7 @@ fn tools_list() -> serde_json::Value {
             },
             {
                 "name": "delete_post",
-                "description": "Delete a post",
+                "description": "Delete a post from Threads and the local database",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -225,9 +284,31 @@ fn tools_list() -> serde_json::Value {
                 }
             },
             {
-                "name": "check_tokens",
-                "description": "Check all accounts' token expiry status",
-                "inputSchema": { "type": "object", "properties": {} }
+                "name": "create_container",
+                "description": "Create a Threads container (first step for media posts, carousel, etc.)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID" },
+                        "media_type": { "type": "string", "description": "Media type (TEXT, IMAGE, VIDEO)" },
+                        "text": { "type": "string", "description": "Caption text" },
+                        "image_url": { "type": "string", "description": "Image URL for IMAGE posts" },
+                        "video_url": { "type": "string", "description": "Video URL for VIDEO posts" }
+                    },
+                    "required": ["account_id", "media_type"]
+                }
+            },
+            {
+                "name": "publish_container",
+                "description": "Publish a previously created Threads container by container ID",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID" },
+                        "container_id": { "type": "string", "description": "Container ID from create_container" }
+                    },
+                    "required": ["account_id", "container_id"]
+                }
             }
         ]
     })
@@ -235,7 +316,8 @@ fn tools_list() -> serde_json::Value {
 
 fn handle_tool_call(
     rt: &tokio::runtime::Runtime,
-    store: &Store,
+    store: &Arc<Store>,
+    threads_client: &Arc<ThreadsClient>,
     tool_name: &str,
     args: serde_json::Value,
 ) -> serde_json::Value {
@@ -257,6 +339,32 @@ fn handle_tool_call(
                     Ok(json!(data))
                 }
                 Err(e) => Err(format!("Failed to list accounts: {e}")),
+            }
+        }),
+        "get_user_profile" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match store.get_account(account_id).await {
+                Ok(account) => match threads_client.fetch_my_profile(&account).await {
+                    Ok(profile) => Ok(json!(profile)),
+                    Err(e) => Err(format!("Failed to fetch user profile: {e}")),
+                },
+                Err(e) => Err(format!("Account not found: {e}")),
+            }
+        }),
+        "get_publishing_limit" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match store.get_account(account_id).await {
+                Ok(account) => match threads_client.fetch_publishing_limit(&account).await {
+                    Ok(limits) => Ok(json!(limits)),
+                    Err(e) => Err(format!("Failed to fetch publishing limit: {e}")),
+                },
+                Err(e) => Err(format!("Account not found: {e}")),
             }
         }),
         "create_post" => rt.block_on(async {
@@ -361,25 +469,89 @@ fn handle_tool_call(
                 Err(e) => Err(format!("Failed to cancel schedule: {e}")),
             }
         }),
+        "refresh_token" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match store.get_account(account_id).await {
+                Ok(account) => match threads_client.refresh_token(&account).await {
+                    Ok(updated) => Ok(json!({
+                        "id": updated.id,
+                        "username": updated.username,
+                        "token_status": updated.token_status(),
+                        "expires_at": updated.expires_at,
+                    })),
+                    Err(e) => Err(format!("Failed to refresh token: {e}")),
+                },
+                Err(e) => Err(format!("Account not found: {e}")),
+            }
+        }),
+        "check_tokens" => rt.block_on(async {
+            let results = threads_client.check_all_tokens().await;
+            let data: Vec<serde_json::Value> = results
+                .into_iter()
+                .map(|(username, status)| {
+                    json!({
+                        "username": username,
+                        "status": status,
+                    })
+                })
+                .collect();
+            Ok(json!(data))
+        }),
         "fetch_comments" => rt.block_on(async {
             let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
-            match store.list_comments(post_id).await {
-                Ok(comments) => {
-                    let data: Vec<serde_json::Value> = comments
-                        .into_iter()
-                        .map(|c| {
-                            json!({
-                                "id": c.id,
-                                "author_username": c.author_username,
-                                "text": c.text,
-                                "sentiment": c.sentiment,
-                            })
-                        })
-                        .collect();
-                    Ok(json!(data))
+
+            // Get post + account for live fetch
+            let post = match store.get_post(post_id).await {
+                Ok(p) => p,
+                Err(e) => return Err(format!("Post not found: {e}")),
+            };
+
+            let threads_post_id = match &post.threads_post_id {
+                Some(id) => id.clone(),
+                None => return Err("Post not yet published to Threads".to_string()),
+            };
+
+            let account = match store.get_account(&post.account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Fetch from Threads API
+            let comment_data = match threads_client
+                .fetch_comments(&account, &threads_post_id)
+                .await
+            {
+                Ok(data) => data,
+                Err(e) => return Err(format!("Failed to fetch comments: {e}")),
+            };
+
+            // Store in DB
+            let mut stored = Vec::new();
+            for cd in &comment_data {
+                let id = uuid::Uuid::now_v7().to_string();
+                match store
+                    .insert_comment(
+                        &id,
+                        post_id,
+                        cd.author_username.as_deref(),
+                        cd.author_user_id.as_deref(),
+                        &cd.text,
+                    )
+                    .await
+                {
+                    Ok(c) => stored.push(c),
+                    Err(_) => continue, // skip duplicates
                 }
-                Err(e) => Err(format!("Failed to fetch comments: {e}")),
             }
+
+            Ok(json!({
+                "comments": stored,
+                "fetched": comment_data.len(),
+                "stored": stored.len(),
+            }))
         }),
         "get_post_sentiment" => rt.block_on(async {
             let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
@@ -411,6 +583,40 @@ fn handle_tool_call(
                 "neutral": neutral,
             }))
         }),
+        "get_post_insights" => rt.block_on(async {
+            let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
+
+            let post = match store.get_post(post_id).await {
+                Ok(p) => p,
+                Err(e) => return Err(format!("Post not found: {e}")),
+            };
+
+            let threads_post_id = match &post.threads_post_id {
+                Some(id) => id.clone(),
+                None => return Err("Post not yet published to Threads".to_string()),
+            };
+
+            let account = match store.get_account(&post.account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            match threads_client
+                .fetch_insights(&account, &threads_post_id, None)
+                .await
+            {
+                Ok(insights) => {
+                    // Store snapshot
+                    let snap_id = uuid::Uuid::now_v7().to_string();
+                    let insights_model: titen_core::models::Insights = insights.into();
+                    let _ = store
+                        .insert_analytics_snap(&snap_id, post_id, &insights_model)
+                        .await;
+                    Ok(json!(insights_model))
+                }
+                Err(e) => Err(format!("Failed to fetch insights: {e}")),
+            }
+        }),
         "get_account_analytics" => rt.block_on(async {
             let account_id = args
                 .get("account_id")
@@ -438,27 +644,74 @@ fn handle_tool_call(
         }),
         "delete_post" => rt.block_on(async {
             let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Try to delete from Threads API first
+            if let Ok(post) = store.get_post(post_id).await {
+                if let Some(threads_post_id) = &post.threads_post_id {
+                    if let Ok(account) = store.get_account(&post.account_id).await {
+                        let _ = threads_client.delete_post(&account, threads_post_id).await;
+                    }
+                }
+            }
+
             match store.delete_post(post_id).await {
                 Ok(()) => Ok(json!({ "deleted": post_id })),
                 Err(e) => Err(format!("Failed to delete post: {e}")),
             }
         }),
-        "check_tokens" => rt.block_on(async {
-            match store.list_accounts().await {
-                Ok(accounts) => {
-                    let data: Vec<serde_json::Value> = accounts
-                        .into_iter()
-                        .map(|a| {
-                            json!({
-                                "username": a.username,
-                                "token_status": a.token_status(),
-                                "expires_at": a.expires_at,
-                            })
-                        })
-                        .collect();
-                    Ok(json!(data))
+        "create_container" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let media_type = args
+                .get("media_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("TEXT");
+            let text = args.get("text").and_then(|v| v.as_str());
+            let image_url = args.get("image_url").and_then(|v| v.as_str());
+            let video_url = args.get("video_url").and_then(|v| v.as_str());
+
+            match store.get_account(account_id).await {
+                Ok(account) => {
+                    match threads_client
+                        .create_container(&account, media_type, text, image_url, video_url)
+                        .await
+                    {
+                        Ok(container_id) => Ok(json!({
+                            "container_id": container_id,
+                            "media_type": media_type,
+                        })),
+                        Err(e) => Err(format!("Failed to create container: {e}")),
+                    }
                 }
-                Err(e) => Err(format!("Failed to check tokens: {e}")),
+                Err(e) => Err(format!("Account not found: {e}")),
+            }
+        }),
+        "publish_container" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let container_id = args
+                .get("container_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            match store.get_account(account_id).await {
+                Ok(account) => {
+                    match threads_client
+                        .publish_container(&account, container_id)
+                        .await
+                    {
+                        Ok(post_id) => Ok(json!({
+                            "post_id": post_id,
+                            "container_id": container_id,
+                        })),
+                        Err(e) => Err(format!("Failed to publish container: {e}")),
+                    }
+                }
+                Err(e) => Err(format!("Account not found: {e}")),
             }
         }),
         _ => Err(format!("Unknown tool: {tool_name}")),

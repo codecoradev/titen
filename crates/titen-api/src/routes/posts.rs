@@ -166,17 +166,18 @@ pub async fn get_insights(
         Ok(account) => {
             match state
                 .threads_client
-                .fetch_insights(&account, threads_post_id)
+                .fetch_insights(&account, threads_post_id, None)
                 .await
             {
                 Ok(insights) => {
                     // Store snapshot
                     let snap_id = Uuid::now_v7().to_string();
+                    let insights_model: titen_core::models::Insights = insights.into();
                     let _ = state
                         .store
-                        .insert_analytics_snap(&snap_id, &id, &insights)
+                        .insert_analytics_snap(&snap_id, &id, &insights_model)
                         .await;
-                    Json(serde_json::json!({ "data": insights }))
+                    Json(serde_json::json!({ "data": insights_model }))
                 }
                 Err(e) => {
                     Json(serde_json::json!({ "error": e.to_string(), "code": "INSIGHTS_FAILED" }))

@@ -31,4 +31,4 @@ pub use scheduler::TitenScheduler;
 pub use sentiment::{KeywordEngine, SentimentEngine, StubEngine, build_engine, compute_summary};
 pub use storage::{S3Storage, Storage};
 pub use store::Store;
-pub use threads_client::ThreadsClient;
+pub use threads_client::{ContainerParams, SearchParams, ThreadsClient};

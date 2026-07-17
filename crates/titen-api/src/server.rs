@@ -141,6 +141,18 @@ pub async fn serve(
             post(routes::accounts::refresh_token),
         )
         .route(
+            "/api/accounts/{id}/profile",
+            get(routes::threads::get_user_profile),
+        )
+        .route(
+            "/api/accounts/{id}/publishing-limit",
+            get(routes::threads::get_publishing_limit),
+        )
+        .route(
+            "/api/accounts/check-tokens",
+            get(routes::threads::check_all_tokens),
+        )
+        .route(
             "/api/posts",
             get(routes::posts::list_posts).post(routes::posts::create_post),
         )
@@ -186,6 +198,18 @@ pub async fn serve(
             get(routes::media::list_media).post(routes::media::upload_media),
         )
         .route("/api/media/{id}", delete(routes::media::delete_media))
+        .route(
+            "/api/threads/container",
+            post(routes::threads::create_container),
+        )
+        .route(
+            "/api/threads/container/{id}/publish",
+            post(routes::threads::publish_container),
+        )
+        .route(
+            "/api/threads/container/{id}/status",
+            post(routes::threads::get_container_status),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api_key_auth,
