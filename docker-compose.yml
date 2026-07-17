@@ -1,17 +1,26 @@
+# Titen Docker Compose — default: localhost only, no auth
+# Dev: use `build: .` (builds from source).
+# Production: switch to `image: ghcr.io/codecoradev/titen:latest` after first release.
+# For network access, set TITEN_API_KEY env var.
 services:
   titen:
     build: .
     container_name: titen
-    restart: unless-stopped
     ports:
-      - "7845:7845"
+      - "127.0.0.1:7845:7845"
     volumes:
-      - titen-data:/data/titen
+      - titen-data:/data
     environment:
-      - TITEN_API_KEY=${TITEN_API_KEY:-}
-      - TITEN_HOST=0.0.0.0
-      - TITEN_PORT=7845
+      # Auth (optional — set TITEN_API_KEY env var to enable)
+      # - TITEN_API_KEY
       - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7845/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   titen-data:

@@ -4,3 +4,4 @@
 *.db-wal
 .env
 .titen.env
+binaries/

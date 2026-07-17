@@ -1,42 +1,55 @@
-# ── Build stage ──────────────────────────────────────────────
-FROM rust:1.85-bookworm AS builder
+# ── Stage 1: Builder ────────────────────────────────────────────────
+FROM debian:bookworm-slim AS builder
 
-WORKDIR /app
+ARG TARGETARCH
+ARG VERSION=dev
 
-# Cache deps
-COPY Cargo.toml Cargo.lock ./
-COPY crates/titen-core/Cargo.toml crates/titen-core/
-COPY crates/titen-api/Cargo.toml crates/titen-api/
-COPY crates/titen-cli/Cargo.toml crates/titen-cli/
-COPY crates/titen-mcp/Cargo.toml crates/titen-mcp/
-RUN mkdir -p crates/titen-core/src && echo "" > crates/titen-core/src/lib.rs
-RUN mkdir -p crates/titen-api/src && echo "" > crates/titen-api/src/lib.rs && echo "fn main(){}" > crates/titen-api/src/main.rs
-RUN mkdir -p crates/titen-cli/src && echo "fn main(){}" > crates/titen-cli/src/main.rs
-RUN mkdir -p crates/titen-mcp/src && echo "fn main(){}" > crates/titen-mcp/src/main.rs
-RUN cargo build --release 2>/dev/null || true
+LABEL version=${VERSION}
+LABEL org.opencontainers.image.version=${VERSION}
 
-# Real build
-COPY . .
-RUN touch crates/titen-core/src/lib.rs crates/titen-api/src/lib.rs crates/titen-api/src/main.rs
-RUN touch crates/titen-cli/src/main.rs crates/titen-mcp/src/main.rs
-RUN cargo build --release --bin titen-api --bin titen-cli --bin titen-mcp
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# ── Runtime stage ──────────────────────────────────────────
+WORKDIR /build
+
+# Copy CI-downloaded binaries (preferred).
+COPY binaries/ ./
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      mv titen-api-arm64 titen-api && mv titen-arm64 titen && mv titen-mcp-arm64 titen-mcp && \
+      rm -f titen-api-amd64 titen-amd64 titen-mcp-amd64; \
+    else \
+      mv titen-api-amd64 titen-api && mv titen-amd64 titen && mv titen-mcp-amd64 titen-mcp && \
+      rm -f titen-api-arm64 titen-arm64 titen-mcp-arm64; \
+    fi && \
+    chmod +x titen-api titen titen-mcp
+
+# ── Stage 2: Runtime ────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3t64 libstdc++6 curl && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/titen-api /usr/local/bin/titen-api
-COPY --from=builder /app/target/release/titen-cli /usr/local/bin/titen-cli
-COPY --from=builder /app/target/release/titen-mcp /usr/local/bin/titen-mcp
+# Create non-root user
+RUN groupadd --system --gid 1000 titen && \
+    useradd --system --uid 1000 --gid titen --home /data titen
 
-# Data directory (DB + config)
-RUN mkdir -p /data/titen
-ENV TITEN_DB_PATH=/data/titen/titen.db
+# Copy binaries
+COPY --from=builder /build/titen-api /usr/local/bin/titen-api
+COPY --from=builder /build/titen /usr/local/bin/titen
+COPY --from=builder /build/titen-mcp /usr/local/bin/titen-mcp
+
+# Data directory (mount volume here for persistence)
+ENV TITEN_DB_PATH=/data/titen.db
 ENV TITEN_HOST=0.0.0.0
 ENV TITEN_PORT=7845
 
+# Create data directory with correct ownership
+RUN mkdir -p /data && chown titen:titen /data
+
+USER titen
+
 EXPOSE 7845
 
-WORKDIR /data/titen
 ENTRYPOINT ["titen-api"]
