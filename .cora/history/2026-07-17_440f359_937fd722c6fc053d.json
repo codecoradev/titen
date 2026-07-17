@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-07-17T06:30:03.801658296Z",
+  "commit": "440f359",
+  "branch": "develop",
+  "files_reviewed": 0,
+  "lines_reviewed": null,
+  "findings": {
+    "critical": 5
+  },
+  "categories": {
+    "other": 5
+  },
+  "quality_score": 0.0,
+  "gate_status": "disabled",
+  "duration_ms": null
+}

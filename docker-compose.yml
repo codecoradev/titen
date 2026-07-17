@@ -1,0 +1,17 @@
+services:
+  titen:
+    build: .
+    container_name: titen
+    restart: unless-stopped
+    ports:
+      - "7845:7845"
+    volumes:
+      - titen-data:/data/titen
+    environment:
+      - TITEN_API_KEY=${TITEN_API_KEY:-}
+      - TITEN_HOST=0.0.0.0
+      - TITEN_PORT=7845
+      - RUST_LOG=info
+
+volumes:
+  titen-data:
