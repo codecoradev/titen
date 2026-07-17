@@ -56,8 +56,7 @@ impl ThreadsClient {
         app_secret: &str,
     ) -> Result<(String, i64)> {
         let url = format!(
-            "{THREADS_GRAPH_API}/access_token?grant_type=th_exchange_token&client_secret={}&access_token={}",
-            app_secret, short_lived_token
+            "{THREADS_GRAPH_API}/access_token?grant_type=th_exchange_token&client_secret={app_secret}&access_token={short_lived_token}"
         );
 
         let resp: serde_json::Value =
