@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Router,
     body::Body,
-    routing::{delete, get, post, put},
+    routing::{get, put},
 };
 use serde_json::Value;
 use sqlx::{

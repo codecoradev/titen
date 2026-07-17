@@ -1,0 +1,244 @@
+name: Release
+
+# Release is triggered by pushing a vX.Y.Z tag.
+#
+# PREREQUISITE: Before tagging, merge develop → main via PR.
+# The tag must point to a commit on main, NOT develop.
+#
+# GitFlow: develop (default) → PR → main → tag → release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify-main:
+    name: Verify tag is on main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check tag is on main
+        run: |
+          git fetch origin main
+          TAG_SHA=$(git rev-parse "${{ github.ref }}^{commit}")
+          MAIN_SHA=$(git rev-parse origin/main)
+          echo "Tag: $TAG_SHA"
+          echo "main: $MAIN_SHA"
+          if [ "$TAG_SHA" = "$MAIN_SHA" ]; then
+            echo "✅ Tag is main HEAD"
+          elif git merge-base --is-ancestor "$TAG_SHA" origin/main 2>/dev/null; then
+            echo "✅ Tag commit $TAG_SHA is in main history"
+          else
+            echo "::error::Tag commit $TAG_SHA is NOT on main."
+            echo "Merge develop → main via PR before tagging."
+            exit 1
+          fi
+
+  build-release:
+    name: Build ${{ matrix.target }}
+    needs: [verify-main]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: titen-x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: titen-aarch64-unknown-linux-gnu
+            ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: titen-aarch64-apple-darwin
+            ext: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }} -p titen-api -p titen-cli -p titen-mcp
+
+      - name: Strip binaries (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          strip target/${{ matrix.target }}/release/titen-api || true
+          strip target/${{ matrix.target }}/release/titen || true
+          strip target/${{ matrix.target }}/release/titen-mcp || true
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Package
+        run: |
+          mkdir -p release
+          cp target/${{ matrix.target }}/release/titen-api release/titen-api
+          cp target/${{ matrix.target }}/release/titen release/titen
+          cp target/${{ matrix.target }}/release/titen-mcp release/titen-mcp
+          cd release
+          tar czf "${{ matrix.artifact }}-${{ steps.version.outputs.VERSION }}.${{ matrix.ext }}" titen-api titen titen-mcp
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-${{ steps.version.outputs.VERSION }}
+          path: release/${{ matrix.artifact }}-${{ steps.version.outputs.VERSION }}.${{ matrix.ext }}
+
+  release:
+    name: Create GitHub Release
+    needs: [build-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-artifacts
+          sha256sum * > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## What's New in ${{ steps.version.outputs.VERSION }}
+
+            ### 📦 Binaries
+
+            Each archive contains **three binaries**:
+            - `titen-api` — HTTP server (Threads management API)
+            - `titen` — CLI client
+            - `titen-mcp` — MCP server (stdio)
+
+            ### 🚀 Quick Start
+
+            ```bash
+            # Start API server
+            titen-api
+
+            # Add Threads account (token only, auto-resolves user_id + username)
+            titen accounts add --token <ACCESS_TOKEN>
+
+            # Or with short-lived → long-lived exchange
+            titen accounts add --token <SHORT_LIVED> --app-secret <APP_SECRET>
+
+            # Create a post
+            titen posts create --account <ID> --text "Hello Threads!"
+            ```
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build & Push Docker Image
+    needs: [build-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        id: dockerhub
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Download Linux binaries from build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: titen-*-${{ github.ref_name }}
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Extract binaries for Docker context
+        run: |
+          mkdir -p binaries
+          cd release-artifacts
+          AMD64=$(find . -name "titen-x86_64-unknown-linux-gnu-${{ github.ref_name }}.tar.gz" | head -1)
+          ARM64=$(find . -name "titen-aarch64-unknown-linux-gnu-${{ github.ref_name }}.tar.gz" | head -1)
+          if [ -z "$AMD64" ] || [ -z "$ARM64" ]; then
+            echo "::error::Linux binary artifacts not found"
+            exit 1
+          fi
+          tar xzf "$AMD64" -C ../binaries
+          mv ../binaries/titen-api ../binaries/titen-api-amd64
+          mv ../binaries/titen ../binaries/titen-amd64
+          mv ../binaries/titen-mcp ../binaries/titen-mcp-amd64
+          tar xzf "$ARM64" -C ../binaries
+          mv ../binaries/titen-api ../binaries/titen-api-arm64
+          mv ../binaries/titen ../binaries/titen-arm64
+          mv ../binaries/titen-mcp ../binaries/titen-mcp-arm64
+          chmod +x ../binaries/*
+          ls -lh ../binaries/
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ steps.dockerhub.outcome == 'success' && 'docker.io/codecoradev/titen' || '' }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64/v8
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
