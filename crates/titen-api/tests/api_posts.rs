@@ -2,7 +2,6 @@ mod common;
 
 use axum::body::Body;
 use common::{body_to_json, create_test_account, send, test_app, test_pool, test_state};
-use tower::ServiceExt;
 
 #[tokio::test]
 async fn create_and_list_posts() {

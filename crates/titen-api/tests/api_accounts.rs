@@ -85,7 +85,7 @@ async fn get_account_by_username() {
     let state = test_state(pool.clone());
     let app = test_app(state);
 
-    let account = create_test_account(&app, &pool).await;
+    let _account = create_test_account(&app, &pool).await;
 
     let req = axum::http::Request::builder()
         .method("GET")
