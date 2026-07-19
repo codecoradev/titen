@@ -7,7 +7,7 @@ use axum::{
     response::Json,
     routing::{delete, get, post, put},
 };
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -83,7 +83,11 @@ pub async fn api_key_auth(
     });
 
     match provided {
-        Some(key) if key == *required_key => Ok(next.run(req).await),
+        Some(key)
+            if subtle::ConstantTimeEq::ct_eq(key.as_bytes(), required_key.as_bytes()).into() =>
+        {
+            Ok(next.run(req).await)
+        }
         _ => Err(error_response(
             StatusCode::UNAUTHORIZED,
             "UNAUTHORIZED",
@@ -105,6 +109,7 @@ pub async fn serve(
     port: u16,
     db_path: &str,
     api_key: Option<String>,
+    cors_origins: Option<Vec<String>>,
 ) -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
@@ -219,7 +224,18 @@ pub async fn serve(
         .route("/health", get(health_check))
         .merge(protected_routes)
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
+        .layer(match cors_origins {
+            Some(origins) if !origins.is_empty() => CorsLayer::new()
+                .allow_origin(
+                    origins
+                        .into_iter()
+                        .map(|o| o.parse().unwrap_or_else(|_| o.parse().unwrap()))
+                        .collect::<Vec<_>>(),
+                )
+                .allow_methods(Any)
+                .allow_headers(Any),
+            _ => CorsLayer::permissive(),
+        })
         .with_state(state);
 
     let addr = format!("{host}:{port}");
@@ -235,6 +251,12 @@ pub fn main() {
     let host = titen_core::config::default_host();
     let port = titen_core::config::default_port();
     let api_key = std::env::var("TITEN_API_KEY").ok();
+    let cors_origins = std::env::var("TITEN_CORS_ORIGINS").ok().map(|s| {
+        s.split(',')
+            .map(|o| o.trim().to_string())
+            .filter(|o| !o.is_empty())
+            .collect()
+    });
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -242,7 +264,7 @@ pub fn main() {
         .expect("Failed to build tokio runtime");
 
     runtime.block_on(async {
-        if let Err(e) = serve(&host, port, &db_path, api_key).await {
+        if let Err(e) = serve(&host, port, &db_path, api_key, cors_origins).await {
             tracing::error!("Server error: {e}");
             std::process::exit(1);
         }

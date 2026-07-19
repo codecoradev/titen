@@ -28,6 +28,7 @@ tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
+subtle = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

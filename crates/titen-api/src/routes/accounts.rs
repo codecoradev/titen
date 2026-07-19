@@ -8,6 +8,20 @@ use uuid::Uuid;
 use crate::server::{AppState, error_response};
 use titen_core::models::*;
 
+/// Return a safe account JSON (no access_token or app_secret).
+fn safe_account_json(account: &titen_core::models::Account) -> serde_json::Value {
+    serde_json::json!({
+        "id": account.id,
+        "username": account.username,
+        "user_id": account.user_id,
+        "is_active": account.is_active,
+        "expires_at": account.expires_at,
+        "token_status": account.token_status(),
+        "created_at": account.created_at,
+        "updated_at": account.updated_at,
+    })
+}
+
 pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_accounts().await {
         Ok(accounts) => {
@@ -94,7 +108,7 @@ pub async fn create_account(
     match state.store.create_account(&id, &input).await {
         Ok(account) => (
             StatusCode::CREATED,
-            Json(serde_json::json!({ "data": account })),
+            Json(serde_json::json!({ "data": safe_account_json(&account) })),
         ),
         Err(e) => {
             let (status, body) =
@@ -113,7 +127,7 @@ pub async fn update_account(
     Json(input): Json<UpdateAccount>,
 ) -> Json<serde_json::Value> {
     match state.store.update_account(&id, &input).await {
-        Ok(account) => Json(serde_json::json!({ "data": account })),
+        Ok(account) => Json(serde_json::json!({ "data": safe_account_json(&account) })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "UPDATE_FAILED" })),
     }
 }
@@ -134,7 +148,7 @@ pub async fn refresh_token(
 ) -> Json<serde_json::Value> {
     match state.store.get_account(&id).await {
         Ok(account) => match state.threads_client.refresh_token(&account).await {
-            Ok(updated) => Json(serde_json::json!({ "data": updated })),
+            Ok(updated) => Json(serde_json::json!({ "data": safe_account_json(&updated) })),
             Err(e) => Json(serde_json::json!({
                 "error": e.to_string(),
                 "code": "REFRESH_FAILED"
