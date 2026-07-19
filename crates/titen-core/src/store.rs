@@ -147,16 +147,22 @@ impl Store {
         offset: i64,
     ) -> Result<Vec<Post>> {
         let mut query = String::from("SELECT * FROM posts WHERE 1=1");
-        if let Some(aid) = account_id {
-            query.push_str(&format!(" AND account_id = '{aid}'"));
+        if account_id.is_some() {
+            query.push_str(" AND account_id = ?");
         }
-        if let Some(s) = status {
-            query.push_str(&format!(" AND status = '{s}'"));
+        if status.is_some() {
+            query.push_str(" AND status = ?");
         }
         query.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
 
-        sqlx::query_as::<_, Post>(&query)
-            .bind(limit)
+        let mut q = sqlx::query_as::<_, Post>(&query);
+        if let Some(aid) = account_id {
+            q = q.bind(aid);
+        }
+        if let Some(s) = status {
+            q = q.bind(s);
+        }
+        q.bind(limit)
             .bind(offset)
             .fetch_all(&self.pool)
             .await
@@ -207,18 +213,22 @@ impl Store {
         status: Option<&str>,
     ) -> Result<Vec<Schedule>> {
         let mut query = String::from("SELECT * FROM schedules WHERE 1=1");
-        if let Some(aid) = account_id {
-            query.push_str(&format!(" AND account_id = '{aid}'"));
+        if account_id.is_some() {
+            query.push_str(" AND account_id = ?");
         }
-        if let Some(s) = status {
-            query.push_str(&format!(" AND status = '{s}'"));
+        if status.is_some() {
+            query.push_str(" AND status = ?");
         }
         query.push_str(" ORDER BY scheduled_at ASC");
 
-        sqlx::query_as::<_, Schedule>(&query)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(Into::into)
+        let mut q = sqlx::query_as::<_, Schedule>(&query);
+        if let Some(aid) = account_id {
+            q = q.bind(aid);
+        }
+        if let Some(s) = status {
+            q = q.bind(s);
+        }
+        q.fetch_all(&self.pool).await.map_err(Into::into)
     }
 
     pub async fn get_due_schedules(&self) -> Result<Vec<Schedule>> {
