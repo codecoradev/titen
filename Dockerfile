@@ -1,5 +1,5 @@
 # ── Stage 1: Builder ────────────────────────────────────────────────
-FROM debian:bookworm-slim AS builder
+FROM debian:trixie-slim AS builder
 
 ARG TARGETARCH
 ARG VERSION=dev
@@ -25,7 +25,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     chmod +x titen-api titen titen-mcp
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3t64 libstdc++6 curl && \
