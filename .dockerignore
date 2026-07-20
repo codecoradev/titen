@@ -1,7 +1,6 @@
 target/
 .git/
 .github/
-binaries/
 *.md
 tests/
 benches/
