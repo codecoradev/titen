@@ -6,7 +6,6 @@
 	import {
 		listSchedules,
 		createSchedule,
-		updateSchedule,
 		deleteSchedule
 	} from '$lib/api';
 	import { listAccounts } from '$lib/api';
@@ -27,9 +26,9 @@
 	let modalAccountId = $state('');
 	let modalScheduledAt = $state('');
 	let modalCaption = $state('');
+	let modalMediaType = $state('text');
 
 	let deleteTarget = $state<Schedule | null>(null);
-	let cancelling = $state(false);
 	let deleting = $state(false);
 
 	async function loadData() {
@@ -39,13 +38,13 @@
 			if (filterAccountId) params.account_id = filterAccountId;
 			if (filterStatus !== 'all') params.status = filterStatus;
 
-			const [schedulesRes, accountsRes] = await Promise.all([
+			const [schedulesData, accountsData] = await Promise.all([
 				listSchedules(params),
 				listAccounts()
 			]);
 
-			schedules = schedulesRes.data;
-			accounts = accountsRes.data;
+			schedules = schedulesData;
+			accounts = accountsData;
 		} catch (e: any) {
 			toast(e.message || 'Failed to load schedules', 'error');
 		} finally {
@@ -57,6 +56,7 @@
 		modalAccountId = accounts.length > 0 ? accounts[0].id : '';
 		modalScheduledAt = '';
 		modalCaption = '';
+		modalMediaType = 'text';
 		modalOpen = true;
 	}
 
@@ -70,11 +70,12 @@
 			return;
 		}
 		creating = true;
-		try {
+	try {
 			await createSchedule({
 				account_id: modalAccountId,
+				media_type: modalMediaType,
 				scheduled_at: new Date(modalScheduledAt).toISOString(),
-				post_data: { caption: modalCaption }
+				caption: modalCaption || undefined
 			});
 			toast('Schedule created', 'success');
 			closeCreateModal();
@@ -83,32 +84,6 @@
 			toast(e.message || 'Failed to create schedule', 'error');
 		} finally {
 			creating = false;
-		}
-	}
-
-	async function handleCancel(schedule: Schedule) {
-		cancelling = true;
-		try {
-			await updateSchedule(schedule.id, { status: 'cancelled' });
-			toast('Schedule cancelled', 'success');
-			await loadData();
-		} catch (e: any) {
-			toast(e.message || 'Failed to cancel schedule', 'error');
-		} finally {
-			cancelling = false;
-		}
-	}
-
-	async function handleComplete(schedule: Schedule) {
-		cancelling = true;
-		try {
-			await updateSchedule(schedule.id, { status: 'completed' });
-			toast('Schedule marked as completed', 'success');
-			await loadData();
-		} catch (e: any) {
-			toast(e.message || 'Failed to complete schedule', 'error');
-		} finally {
-			cancelling = false;
 		}
 	}
 
@@ -227,11 +202,11 @@
 					{:else}
 						{#each schedules as schedule (schedule.id)}
 							<tr>
-								<td class="truncate" title={schedule.caption || JSON.stringify(schedule.post_data)}>
-									{truncate(schedule.caption || JSON.stringify(schedule.post_data).slice(0, 60), 60)}
+								<td class="truncate" title={schedule.caption || '—'}>
+									{truncate(schedule.caption || '—', 60)}
 								</td>
 								<td>
-									{schedule.account?.username ?? '—'}
+									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
 								</td>
 								<td class="tabular-nums">
 									{formatDateTime(schedule.scheduled_at)}
@@ -239,32 +214,11 @@
 								<td>
 									<StatusBadge status={schedule.status} />
 								</td>
-								<td class="col-error" title={schedule.error_message ?? ''}>
-									{schedule.error_message ?? '—'}
+								<td class="col-error" title={schedule.error ?? ''}>
+									{schedule.error ?? '—'}
 								</td>
 								<td>
-									<div class="action-group">
-										{#if schedule.status === 'pending' || schedule.status === 'processing'}
-											<button
-												class="btn-ghost btn-sm"
-												onclick={() => handleCancel(schedule)}
-												disabled={cancelling}
-												title="Cancel"
-											>
-												Cancel
-											</button>
-										{/if}
-										{#if schedule.status === 'pending' || schedule.status === 'processing'}
-											<button
-												class="btn-ghost btn-sm"
-												onclick={() => handleComplete(schedule)}
-												disabled={cancelling}
-												title="Mark completed"
-											>
-												Complete
-											</button>
-										{/if}
-										<button
+									<button
 											class="btn-ghost btn-sm"
 											onclick={() => confirmDelete(schedule)}
 											disabled={deleting}
@@ -272,7 +226,6 @@
 										>
 											Delete
 										</button>
-									</div>
 								</td>
 							</tr>
 						{/each}

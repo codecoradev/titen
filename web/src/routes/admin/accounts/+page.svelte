@@ -13,9 +13,12 @@
 	let refreshingId = $state<string | null>(null);
 	let submitting = $state(false);
 
-	let formThreadsUserId = $state('');
+	let formUserId = $state('');
+	let formUsername = $state('');
 	let formAccessToken = $state('');
-	let formRefreshToken = $state('');
+	let formExpiresAt = $state(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16));
+	let formAppId = $state('');
+	let formAppSecret = $state('');
 
 	function formatDate(iso: string | null): string {
 		if (!iso) return '—';
@@ -26,11 +29,20 @@
 		});
 	}
 
+	function statusFromAccount(account: Account): string {
+		if (account.is_active) {
+			return 'active';
+		}
+		if (account.token_status === 'expired') {
+			return 'expired';
+		}
+		return 'suspended';
+	}
+
 	async function loadAccounts() {
 		loading = true;
 		try {
-			const res = await listAccounts();
-			accounts = res.data;
+			accounts = await listAccounts();
 		} catch (e: any) {
 			toast(e.message || 'Failed to load accounts', 'error');
 		} finally {
@@ -44,7 +56,7 @@
 			const res = await refreshToken(id);
 			toast('Token refreshed', 'success');
 			accounts = accounts.map((a) =>
-				a.id === id ? { ...a, token_expires_at: res.data.token_expires_at } : a,
+				a.id === id ? { ...a, expires_at: res.expires_at } : a,
 			);
 		} catch (e: any) {
 			toast(e.message || 'Failed to refresh token', 'error');
@@ -67,25 +79,31 @@
 	}
 
 	function resetForm() {
-		formThreadsUserId = '';
+		formUserId = '';
+		formUsername = '';
 		formAccessToken = '';
-		formRefreshToken = '';
+		formExpiresAt = '';
+		formAppId = '';
+		formAppSecret = '';
 	}
 
 	async function handleAddAccount() {
-		if (!formThreadsUserId || !formAccessToken || !formRefreshToken) {
-			toast('All fields are required', 'error');
+		if (!formAccessToken) {
+			toast('Access token is required', 'error');
 			return;
 		}
 		submitting = true;
 		try {
-			const res = await createAccount({
-				threads_user_id: formThreadsUserId,
+			const created = await createAccount({
+				...(formUserId && { user_id: formUserId }),
+				...(formUsername && { username: formUsername }),
 				access_token: formAccessToken,
-				refresh_token: formRefreshToken,
+				expires_at: new Date(formExpiresAt).toISOString(),
+				...(formAppId && { app_id: formAppId }),
+				...(formAppSecret && { app_secret: formAppSecret }),
 			});
 			toast('Account added', 'success');
-			accounts = [...accounts, res.data];
+			accounts = [...accounts, created];
 			showAddModal = false;
 			resetForm();
 		} catch (e: any) {
@@ -112,12 +130,12 @@
 			<thead><tr><th>Username</th><th>Status</th><th>Token</th><th>Created</th><th>Actions</th></tr></thead>
 			<tbody>
 				{#each Array(3) as _}
-						<tr>
-							{#each Array(5) as _}
-								<td><div class="skeleton" style="height: 1rem;"></div></td>
-							{/each}
-						</tr>
-				{/each}
+					<tr>
+						{#each Array(5) as _}
+							<td><div class="skeleton" style="height: 1rem;"></div></td>
+						{/each}
+					</tr>
+			{/each}
 			</tbody>
 		</table>
 	{:else if accounts.length === 0}
@@ -138,53 +156,48 @@
 			</thead>
 			<tbody>
 				{#each accounts as account (account.id)}
-						<tr>
-							<td>
-								<div style="display:flex;align-items:center;gap:var(--space-sm);">
-									{#if account.profile_pic_url}
-										<img
-											src={account.profile_pic_url}
-											alt=""
-											style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;"
-										/>
+					<tr>
+						<td>
+							<div style="display:flex;align-items:center;gap:var(--space-sm);">
+								<div>
+									<div style="font-weight:500;">{account.username}</div>
+									{#if account.user_id}
+										<div style="font-size:var(--text-xs);color:var(--color-muted);">ID: {account.user_id}</div>
 									{/if}
-									<div>
-										<div style="font-weight:500;">{account.display_name || account.username}</div>
-										<div style="font-size:var(--text-xs);color:var(--color-muted);">@{account.username}</div>
-									</div>
 								</div>
-							</td>
-							<td><StatusBadge status={account.status} /></td>
-							<td>
-								<span class="tabular-nums" style="font-size:var(--text-sm);">
-									{#if account.token_expires_at}
-										Expires {formatDate(account.token_expires_at)}
-									{:else}
-										—
-									{/if}
-								</span>
-							</td>
-							<td><span class="tabular-nums">{formatDate(account.created_at)}</span></td>
-							<td>
-								<div style="display:flex;gap:var(--space-2xs);">
-									<button
-										class="btn-outline btn-sm"
-											disabled={refreshingId === account.id}
-											onclick={() => handleRefreshToken(account.id)}
-										>
-											{refreshingId === account.id ? '…' : 'Refresh'}
-										</button>
-									<button class="btn-ghost btn-sm" onclick={() => (deletingId = account.id)}>
-											<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
-												<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
-											</svg>
-										</button>
-									</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+							</div>
+						</td>
+						<td><StatusBadge status={statusFromAccount(account)} /></td>
+						<td>
+							<span class="tabular-nums" style="font-size:var(--text-sm);">
+								{#if account.expires_at}
+									Expires {formatDate(account.expires_at)}
+								{:else}
+									—
+								{/if}
+							</span>
+						</td>
+						<td><span class="tabular-nums">{formatDate(account.created_at)}</span></td>
+						<td>
+							<div style="display:flex;gap:var(--space-2xs);">
+								<button
+									class="btn-outline btn-sm"
+									disabled={refreshingId === account.id}
+									onclick={() => handleRefreshToken(account.id)}
+								>
+									{refreshingId === account.id ? '…' : 'Refresh'}
+								</button>
+								<button class="btn-ghost btn-sm" onclick={() => (deletingId = account.id)}>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
+										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
+									</svg>
+								</button>
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
 	{/if}
 </div>
 
@@ -196,16 +209,28 @@
 			<p style="margin-bottom:var(--space-md);">Provide the Threads account credentials.</p>
 			<form onsubmit={(e) => { e.preventDefault(); handleAddAccount(); }}>
 				<div class="form-group" style="margin-bottom:var(--space-sm);">
-					<label class="form-label" for="threads_user_id">Threads User ID</label>
-					<input id="threads_user_id" class="form-input" type="text" bind:value={formThreadsUserId} placeholder="e.g. 1234567890" disabled={submitting} />
+					<label class="form-label" for="user_id">User ID <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+					<input id="user_id" class="form-input" type="text" bind:value={formUserId} placeholder="e.g. 1234567890" disabled={submitting} />
+				</div>
+				<div class="form-group" style="margin-bottom:var(--space-sm);">
+					<label class="form-label" for="username">Username <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+					<input id="username" class="form-input" type="text" bind:value={formUsername} placeholder="e.g. @username" disabled={submitting} />
 				</div>
 				<div class="form-group" style="margin-bottom:var(--space-sm);">
 					<label class="form-label" for="access_token">Access Token</label>
 					<input id="access_token" class="form-input" type="password" bind:value={formAccessToken} placeholder="Long-lived access token" disabled={submitting} />
 				</div>
+				<div class="form-group" style="margin-bottom:var(--space-sm);">
+					<label class="form-label" for="expires_at">Expires At <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+					<input id="expires_at" class="form-input" type="datetime-local" bind:value={formExpiresAt} disabled={submitting} />
+				</div>
+				<div class="form-group" style="margin-bottom:var(--space-sm);">
+					<label class="form-label" for="app_id">App ID <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+					<input id="app_id" class="form-input" type="text" bind:value={formAppId} placeholder="Facebook App ID" disabled={submitting} />
+				</div>
 				<div class="form-group" style="margin-bottom:var(--space-md);">
-					<label class="form-label" for="refresh_token">Refresh Token</label>
-					<input id="refresh_token" class="form-input" type="password" bind:value={formRefreshToken} placeholder="Refresh token" disabled={submitting} />
+					<label class="form-label" for="app_secret">App Secret <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+					<input id="app_secret" class="form-input" type="password" bind:value={formAppSecret} placeholder="Facebook App Secret" disabled={submitting} />
 				</div>
 				<div class="confirm-actions">
 					<button type="button" class="btn-outline btn-sm" onclick={() => (showAddModal = false)}>Cancel</button>

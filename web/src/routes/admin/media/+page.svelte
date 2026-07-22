@@ -27,8 +27,7 @@
 
 	async function loadMedia() {
 		try {
-			const res = await listMedia();
-			media = res.data;
+			media = await listMedia();
 		} catch (e: any) {
 			toast(e.message || 'Failed to load media', 'error');
 		}
@@ -130,7 +129,7 @@
 						<tr>
 							<td>
 								<img
-									src={item.s3_url}
+									src={item.s3_url || ''}
 									alt={item.filename}
 									class="media-thumb"
 								/>

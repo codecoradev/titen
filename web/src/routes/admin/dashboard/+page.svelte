@@ -4,30 +4,22 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { getHealth, listAccounts, listPosts, listSchedules, getUpcomingSchedules } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
-	import type { Account, Post, Schedule, HealthCheck } from '$lib/types';
+	import type { Account, Post, Schedule, HealthResponse } from '$lib/types';
 
 	let loading = $state(true);
-	let health = $state<HealthCheck | null>(null);
+	let health = $state<HealthResponse | null>(null);
 	let accounts = $state<Account[]>([]);
 	let posts = $state<Post[]>([]);
 	let schedules = $state<Schedule[]>([]);
 	let upcoming = $state<Schedule[]>([]);
 
-	let activeAccounts = $derived(accounts.filter((a) => a.status === 'active').length);
+	let activeAccounts = $derived(accounts.filter((a) => a.is_active).length);
 	let publishedPosts = $derived(posts.filter((p) => p.status === 'published').length);
 	let pendingSchedules = $derived(schedules.filter((s) => s.status === 'pending').length);
 
 	let recentPosts = $derived(
 		[...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5),
 	);
-
-	function formatUptime(seconds: number): string {
-		if (seconds < 60) return `${seconds}s`;
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		return `${h}h ${m}m`;
-	}
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -52,10 +44,10 @@
 		try {
 			const [h, a, p, s, u] = await Promise.all([
 				getHealth().catch(() => null),
-				listAccounts().then((r) => r.data).catch(() => []),
-				listPosts().then((r) => r.data).catch(() => []),
-				listSchedules().then((r) => r.data).catch(() => []),
-				getUpcomingSchedules().then((r) => r.data).catch(() => []),
+				listAccounts().catch(() => []),
+				listPosts().catch(() => []),
+				listSchedules().catch(() => []),
+				getUpcomingSchedules().catch(() => []),
 			]);
 			health = h;
 			accounts = a;
@@ -110,8 +102,8 @@
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-card-label">Uptime</div>
-				<div class="stat-card-value tabular-nums">{formatUptime(health.uptime)}</div>
+				<div class="stat-card-label">Version</div>
+				<div class="stat-card-value tabular-nums">{health.version}</div>
 			</div>
 		{/if}
 	</div>
@@ -124,14 +116,14 @@
 				<div class="token-list">
 					{#each accounts as account}
 						<div class="token-row">
-							<span class="token-username">{account.display_name || account.username}</span>
-							<StatusBadge status={account.status} />
+							<span class="token-username">{account.username}</span>
+							<StatusBadge status={account.is_active ? 'active' : 'inactive'} />
 							<span class="token-expiry">
-								{#if account.token_expires_at}
-									{#if isTokenExpiring(account.token_expires_at)}
-										<span class="badge badge--warning">Expires {formatDate(account.token_expires_at)}</span>
+								{#if account.expires_at}
+									{#if isTokenExpiring(account.expires_at)}
+										<span class="badge badge--warning">Expires {formatDate(account.expires_at)}</span>
 									{:else}
-										{formatDate(account.token_expires_at)}
+										{formatDate(account.expires_at)}
 									{/if}
 								{:else}
 									<span style="color: var(--color-muted);">—</span>
@@ -154,21 +146,21 @@
 					<div class="empty-state" style="padding: var(--space-lg);">
 						<p class="empty-state-title" style="font-size: var(--text-sm);">No posts yet</p>
 					</div>
-				{:else}
-					<ul class="compact-list">
-						{#each recentPosts as post}
-							<li class="compact-row">
-								<div class="compact-content">
-									<span class="truncate">{post.caption || '(no caption)'}</span>
-								</div>
-								<div class="compact-meta">
-									<StatusBadge status={post.status} />
-									<span class="compact-date">{formatDate(post.created_at)}</span>
-								</div>
-							</li>
-						{/each}
-					</ul>
-				{/if}
+			{:else}
+				<ul class="compact-list">
+					{#each recentPosts as post}
+					<li class="compact-row">
+						<div class="compact-content">
+							<span class="truncate">{post.caption || '(no caption)'}</span>
+						</div>
+						<div class="compact-meta">
+							<StatusBadge status={post.status} />
+							<span class="compact-date">{formatDate(post.created_at)}</span>
+						</div>
+					</li>
+				{/each}
+				</ul>
+			{/if}
 			</div>
 		</section>
 
@@ -180,21 +172,21 @@
 					<div class="empty-state" style="padding: var(--space-lg);">
 						<p class="empty-state-title" style="font-size: var(--text-sm);">No upcoming schedules</p>
 					</div>
-				{:else}
-					<ul class="compact-list">
-						{#each upcoming.slice(0, 5) as schedule}
-							<li class="compact-row">
-								<div class="compact-content">
-									<span class="truncate">{schedule.caption || '(no caption)'}</span>
-								</div>
-								<div class="compact-meta">
-									<StatusBadge status={schedule.status} />
-									<span class="compact-date">{formatDateTime(schedule.scheduled_at)}</span>
-								</div>
-							</li>
-						{/each}
-					</ul>
-				{/if}
+			{:else}
+				<ul class="compact-list">
+					{#each upcoming.slice(0, 5) as schedule}
+					<li class="compact-row">
+						<div class="compact-content">
+							<span class="truncate">{schedule.caption || '(no caption)'}</span>
+						</div>
+						<div class="compact-meta">
+							<StatusBadge status={schedule.status} />
+							<span class="compact-date">{formatDateTime(schedule.scheduled_at)}</span>
+						</div>
+					</li>
+				{/each}
+				</ul>
+			{/if}
 			</div>
 		</section>
 	</div>

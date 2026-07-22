@@ -3,18 +3,24 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import StatSkeleton from '$lib/components/StatSkeleton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
-	import { listAnalytics, getAnalyticsTrend, listAccounts, ApiError } from '$lib/api';
-	import type { AnalyticsSummary, AnalyticsTrend, Account } from '$lib/types';
+	import { listAnalytics, listAccounts, ApiError } from '$lib/api';
+	import type { AnalyticsSnap, Account } from '$lib/types';
 
 	// ── State ──
 	let loading = $state(true);
 	let error = $state('');
 	let accounts = $state<Account[]>([]);
 	let selectedAccountId = $state<string>('');
-	let summaries = $state<AnalyticsSummary[]>([]);
-	let trend = $state<AnalyticsTrend[]>([]);
-	let trendLoading = $state(false);
+	let summaries = $state<AnalyticsSnap[]>([]);
 	let selectedPeriod = $state('7d');
+	let trend = $state<import('$lib/types').AnalyticsTrend[]>([]);
+	let trendLoading = $state(false);
+
+	const trendMax = $derived(
+		trend.length > 0
+			? Math.max(...trend.flatMap((t) => [t.views, t.likes, t.replies]), 1)
+			: 1
+	);
 
 	const periods = [
 		{ value: '7d', label: '7 days' },
@@ -41,9 +47,7 @@
 		);
 	});
 
-	const trendMax = $derived(
-		trend.length > 0 ? Math.max(...trend.map((t) => t.views)) : 1,
-	);
+
 
 	// ── Formatters ──
 	function fmt(n: number): string {
@@ -64,7 +68,7 @@
 	async function loadAccounts() {
 		try {
 			const res = await listAccounts();
-			accounts = res.data.filter((a) => a.status === 'active');
+			accounts = res.filter((a) => a.is_active);
 		} catch (e) {
 			// Accounts not critical for analytics
 		}
@@ -78,7 +82,7 @@
 			if (selectedAccountId) params.account_id = selectedAccountId;
 			if (selectedPeriod) params.period = selectedPeriod;
 			const res = await listAnalytics(params);
-			summaries = res.data;
+			summaries = res;
 		} catch (e) {
 			error = e instanceof ApiError ? e.body || e.message : 'Failed to load analytics';
 		} finally {
@@ -87,19 +91,9 @@
 	}
 
 	async function loadTrend() {
-		if (!selectedAccountId) {
-			trend = [];
-			return;
-		}
-		trendLoading = true;
-		try {
-			const res = await getAnalyticsTrend(selectedAccountId, selectedPeriod);
-			trend = res.data;
-		} catch {
-			trend = [];
-		} finally {
-			trendLoading = false;
-		}
+		// Trend endpoint is per-post, not per-account — disabled for now
+		trend = [];
+		trendLoading = false;
 	}
 
 	// ── Init + reactive reload ──

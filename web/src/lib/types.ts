@@ -1,86 +1,92 @@
 // ── Titen Admin API types ──
-// Mirrors DESIGN.md ERD
+// Mirrors actual Rust models in titen-core/src/models.rs
+// and safe_account_json in titen-api/src/routes/accounts.rs
 
+// ─── Account (safe JSON from list/get endpoints) ───
 export interface Account {
 	id: string;
-	threads_user_id: string;
 	username: string;
-	display_name: string;
-	profile_pic_url: string | null;
-	platform: string;
-	status: 'active' | 'suspended' | 'expired';
-	token_expires_at: string | null;
+	user_id: string;
+	is_active: boolean;
+	expires_at: string | null;
+	token_status: 'valid' | 'expired' | 'unknown';
+	created_at: string;
+}
+
+// ─── Post ───
+export interface Post {
+	id: string;
+	threads_post_id: string | null;
+	account_id: string;
+	media_type: string;
+	caption: string | null;
+	text_attachment: string | null;
+	carousel_children: string | null;
+	status: string;
+	scheduled_id: string | null;
+	published_at: string | null;
+	insights_json: string | null;
+	created_at: string;
+	updated_at: string;
+	// Joined (may be populated by backend)
+	account?: Account;
+}
+
+// ─── Schedule ───
+export interface Schedule {
+	id: string;
+	account_id: string;
+	media_type: string;
+	caption: string | null;
+	text_attachment: string | null;
+	media_urls: string | null;
+	scheduled_at: string;
+	status: string;
+	published_at: string | null;
+	result_post_id: string | null;
+	result_json: string | null;
+	error: string | null;
 	created_at: string;
 	updated_at: string;
 }
 
-export interface Post {
-	id: string;
-	account_id: string;
-	threads_post_id: string | null;
-	media_type: 'TEXT' | 'IMAGE' | 'CAROUSEL' | 'VIDEO';
-	caption: string;
-	text_attachment: string | null;
-	image_url: string | null;
-	image_urls: string[] | null;
-	alt_text: string | null;
-	status: 'draft' | 'published' | 'failed' | 'deleted';
-	threads_api_error: string | null;
-	created_at: string;
-	published_at: string | null;
-	// Joined
-	account?: Account;
-	insights?: Insight[];
-}
-
-export interface Schedule {
-	id: string;
-	account_id: string;
-	post_data: Record<string, unknown>;
-	media_type: string;
-	caption: string;
-	scheduled_at: string;
-	status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
-	post_id: string | null;
-	error_message: string | null;
-	created_at: string;
-	// Joined
-	account?: Account;
-}
-
+// ─── Comment ───
 export interface Comment {
 	id: string;
 	post_id: string;
-	threads_comment_id: string;
-	author_username: string;
+	threads_comment_id: string | null;
+	author_username: string | null;
+	author_user_id: string | null;
 	text: string;
-	sentiment: 'positive' | 'negative' | 'neutral';
+	sentiment: string | null;
 	sentiment_score: number | null;
 	fetched_at: string;
 }
 
-export interface Insight {
-	id: string;
-	post_id: string;
-	likes: number;
-	replies: number;
-	reposts: number;
-	views: number;
-	quotes: number;
-	snapshot_at: string;
+// ─── Insights (per-post metric snapshot) ───
+export interface Insights {
+	likes: number | null;
+	replies: number | null;
+	reposts: number | null;
+	views: number | null;
+	quotes: number | null;
+	shares: number | null;
 }
 
+// ─── Media Asset ───
 export interface MediaItem {
 	id: string;
-	s3_key: string;
-	s3_url: string;
 	filename: string;
 	content_type: string;
 	size_bytes: number;
+	s3_key: string;
+	s3_url: string | null;
 	uploaded_at: string;
 }
 
-export interface AnalyticsSummary {
+// ─── Analytics Snap ───
+export interface AnalyticsSnap {
+	id: string;
 	account_id: string;
 	period: string;
 	total_posts: number;
@@ -89,9 +95,12 @@ export interface AnalyticsSummary {
 	total_reposts: number;
 	total_views: number;
 	engagement_rate: number;
+	snapshot_at: string;
 }
 
+// ─── Analytics Trend (per-post) ───
 export interface AnalyticsTrend {
+	post_id: string;
 	date: string;
 	likes: number;
 	replies: number;
@@ -99,41 +108,29 @@ export interface AnalyticsTrend {
 	views: number;
 }
 
-export interface ThreadsProfile {
-	username: string;
-	bio: string | null;
-	profile_pic_url: string | null;
-	follower_count: number;
-	following_count: number;
-	verified: boolean;
-}
-
-export interface PublishingLimit {
-	quota_remaining: number;
-	quota_total: number;
-	window_start: string;
-	window_end: string;
-}
-
-export interface HealthCheck {
-	status: 'healthy' | 'degraded' | 'unhealthy';
-	version: string;
-	uptime: number;
-	db_size: number;
-	account_count: number;
-	post_count: number;
-	schedule_count: number;
-}
-
-// API response wrappers
-export interface ApiResponse<T> {
-	data: T;
-	message?: string;
-}
-
-export interface PaginatedResponse<T> {
-	data: T[];
+// ─── Sentiment Summary ───
+export interface SentimentSummary {
 	total: number;
-	page: number;
-	per_page: number;
+	positive: number;
+	negative: number;
+	neutral: number;
+	average_score: number;
+}
+
+// ─── Health ───
+export interface HealthResponse {
+	status: string;
+	version: string;
+	db: string;
+}
+
+// ─── Dashboard Summary (computed client-side from list endpoints) ───
+export interface DashboardSummary {
+	total_accounts: number;
+	active_accounts: number;
+	total_posts: number;
+	published_posts: number;
+	pending_schedules: number;
+	total_comments: number;
+	positive_sentiment_pct: number;
 }
