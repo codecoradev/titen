@@ -29,13 +29,13 @@ pub const DEFAULT_URL: &str = "http://localhost:7845";
 
 /// Returns the configured or default database path.
 ///
-/// Default: `~/.codecoradev/titen/titen.db`
+/// Default: `~/.codecora/titen/titen.db`
 ///
 /// Override with the `TITEN_DB_PATH` environment variable.
 pub fn default_db_path() -> String {
     std::env::var(ENV_DB_PATH).unwrap_or_else(|_| {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        format!("{home}/.codecoradev/titen/titen.db")
+        format!("{home}/.codecora/titen/titen.db")
     })
 }
 
