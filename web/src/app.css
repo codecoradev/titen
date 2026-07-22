@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* Hallmark · macrostructure: Component Playground · tone: technical · anchor hue: 260
+ * genre: modern-minimal · theme: Cobalt · enrichment: none (typography only)
+ * nav: N9 Edge-aligned minimal · footer: Ft2 Inline rule single line
+ */
+
+@theme {
+	/* Fonts */
+	--font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+	--font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+	/* OKLCH colour tokens */
+	--color-paper: oklch(98.5% 0.005 260);
+	--color-paper-2: oklch(96% 0.006 260);
+	--color-paper-3: oklch(93% 0.008 260);
+	--color-rule: oklch(86% 0.006 260);
+	--color-neutral: oklch(55% 0.008 260);
+	--color-muted: oklch(38% 0.008 260);
+	--color-ink: oklch(15% 0.008 260);
+	--color-accent: oklch(55% 0.20 260);
+	--color-accent-dim: oklch(95% 0.06 260);
+	--color-focus: oklch(55% 0.22 260);
+
+	/* Spacing scale — 4pt base */
+	--space-3xs: 0.125rem;
+	--space-2xs: 0.25rem;
+	--space-xs: 0.5rem;
+	--space-sm: 0.75rem;
+	--space-md: 1rem;
+	--space-lg: 1.5rem;
+	--space-xl: 2.5rem;
+	--space-2xl: 4rem;
+	--space-3xl: 6rem;
+
+	/* Type scale — 1.25 ratio from 16px */
+	--text-xs: 0.64rem;
+	--text-sm: 0.8rem;
+	--text-base: 1rem;
+	--text-md: 1.25rem;
+	--text-lg: 1.5625rem;
+	--text-xl: 1.9531rem;
+	--text-2xl: 2.4414rem;
+	--text-3xl: 3.0518rem;
+
+	/* Motion */
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in: cubic-bezier(0.4, 0, 1, 1);
+	--dur-short: 150ms;
+	--dur-base: 250ms;
+	--dur-long: 400ms;
+
+	/* Z-index */
+	--z-base: 1;
+	--z-sticky: 200;
+	--z-modal: 400;
+}
+
+/* Base */
+html {
+	overflow-x: clip;
+	font-family: var(--font-body);
+	color: var(--color-ink);
+	background: var(--color-paper);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body {
+	overflow-x: clip;
+}
+
+/* Headings */
+h1, h2, h3 {
+	font-family: var(--font-display);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+	font-style: normal;
+}
+
+/* Code blocks — typographic frame, not fake window chrome */
+pre, code {
+	font-family: var(--font-mono);
+}
+
+pre {
+	background: var(--color-ink);
+	color: oklch(90% 0.008 260);
+	padding: var(--space-lg) var(--space-xl);
+	border-radius: 8px;
+	overflow-x: auto;
+	font-size: var(--text-sm);
+	line-height: 1.7;
+	white-space: pre;
+}
+
+code {
+	font-size: 0.875em;
+}
+
+:not(pre) > code {
+	background: var(--color-accent-dim);
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+	font-size: 0.85em;
+}
+
+/* Links */
+a {
+	color: var(--color-accent);
+	text-decoration: none;
+	transition: color var(--dur-short) var(--ease-out);
+}
+
+a:hover {
+	color: oklch(40% 0.22 260);
+}
+
+/* Buttons */
+.btn-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xs);
+	background: var(--color-ink);
+	color: var(--color-paper);
+	font-family: var(--font-display);
+	font-weight: 500;
+	font-size: var(--text-sm);
+	padding: var(--space-sm) var(--space-lg);
+	border-radius: 9999px;
+	border: none;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out);
+}
+
+.btn-primary:hover {
+	background: oklch(25% 0.008 260);
+}
+
+.btn-primary:active {
+	transform: translateY(1px);
+}
+
+.btn-primary:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+}
+
+.btn-outline {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-xs);
+	background: transparent;
+	color: var(--color-ink);
+	font-family: var(--font-display);
+	font-weight: 500;
+	font-size: var(--text-sm);
+	padding: var(--space-sm) var(--space-lg);
+	border-radius: 9999px;
+	border: 1px solid var(--color-rule);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: border-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out);
+}
+
+.btn-outline:hover {
+	border-color: var(--color-neutral);
+	color: var(--color-ink);
+}
+
+.btn-outline:active {
+	transform: translateY(1px);
+}
+
+.btn-outline:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+}
+
+/* Container */
+.container {
+	width: 100%;
+	max-width: 72rem;
+	margin-inline: auto;
+	padding-inline: clamp(1rem, 4vw, 1.5rem);
+}
+
+/* Code block label */
+.code-label {
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--color-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: var(--space-xs);
+}
+
+/* Focus ring — instant, never animated */
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Responsive display sizing */
+@media (max-width: 40rem) {
+	h1 { font-size: var(--text-2xl); }
+	h2 { font-size: var(--text-xl); }
+}
+
+@media (min-width: 40.01rem) and (max-width: 60rem) {
+	h1 { font-size: var(--text-3xl); }
+	h2 { font-size: var(--text-2xl); }
+}
+
+@media (min-width: 60.01rem) {
+	h1 { font-size: clamp(2.75rem, 5vw + 1rem, 5.25rem); }
+	h2 { font-size: var(--text-3xl); }
+}
+
+/* Headline overflow safety */
+h1, h2, h3, .display-text {
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
