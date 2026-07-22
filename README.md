@@ -1,49 +1,61 @@
+<!-- Badges -->
+[![CI](https://github.com/codecoradev/titen/actions/workflows/ci.yml/badge.svg)](https://github.com/codecoradev/titen/actions/workflows/ci.yml)
+[![Release](https://github.com/codecoradev/titen/actions/workflows/release.yml/badge.svg)](https://github.com/codecoradev/titen/actions/workflows/release.yml)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](LICENSE)
+[![Rust 1.85+](https://img.shields.io/badge/Rust-1.85+-orange.svg)](https://www.rust-lang.org/)
+
 # Titen
 
-> **titen** (Javanese): memperhatikan, memantai, cermat mengawasi.
+> *titen* — Javanese: to watch closely, to observe with care.
 
-Self-hosted Threads management platform — Rust + SQLite
+Self-hosted Threads management platform. Post, schedule, analyze — on your own infrastructure.
 
----
+## Why Titen?
+
+Threads has no native post scheduling. Every existing tool is a SaaS you don't control, with your API tokens living on someone else's server. Titen runs locally or on your box, talks directly to the Threads Graph API, and stores everything in a single SQLite file.
+
+That's it. No web dashboard you didn't ask for. No subscription. No vendor lock-in.
 
 ## Features
 
-- Multi-account management with token refresh
-- Post creation and scheduling (Threads API has no native scheduling)
-- Comment fetching and storage from the Threads Graph API
-- Sentiment analysis on comments (pluggable keyword/stub engines, bilingual EN+ID)
-- Analytics tracking with time-series snapshots
-- Media upload to S3-compatible storage
-- HTTP API with API key authentication
-- CLI tool for all operations
-- MCP server (stdio JSON-RPC) for AI agent integration
+| Capability | Details |
+|---|---|
+| **Multi-account** | Manage multiple Threads accounts in one instance |
+| **Post scheduling** | Cron-based scheduler — something Threads itself doesn't offer |
+| **Comment fetching** | Pull comments from the Threads API, store locally |
+| **Sentiment analysis** | Pluggable engine trait (stub default; ONNX/LLM/custom API extensible) |
+| **Analytics** | Time-series snapshots per post |
+| **Media storage** | S3-compatible via swappable storage trait |
+| **MCP server** | JSON-RPC 2.0 over stdio — works with Claude Desktop, Cursor, etc. |
+| **CLI** | Full CRUD from the terminal |
+| **Docker** | Single container, minimal footprint |
 
 ## Architecture
 
-Titen is a Rust workspace with four crates:
+4 crates, one binary each:
 
 | Crate | Purpose |
 |---|---|
-| `titen-core` | Domain logic — models, SQLite store, Threads API client, sentiment engine, scheduler, S3 storage |
-| `titen-api` | Axum HTTP server — REST API with API key middleware, CORS, rate limiting |
-| `titen-cli` | Clap CLI binary — all CRUD operations via the HTTP API |
-| `titen-mcp` | MCP stdio server — JSON-RPC 2.0 tools for Claude Desktop, Cursor, and other MCP clients |
+| `titen-core` | Domain logic — models, SQLite, Threads API client, sentiment trait, scheduler, S3 storage |
+| `titen-api` | Axum HTTP server — REST API, API key auth, CORS, rate limiting |
+| `titen-cli` | Clap CLI — all operations via the HTTP API |
+| `titen-mcp` | MCP stdio server — 14 tools for AI agent integration |
 
-```
-titen-core    → domain logic, SQLite store, traits
-titen-api     → Axum HTTP server
-titen-cli     → Clap CLI binary
-titen-mcp     → MCP server (stdio JSON-RPC)
-```
+7 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`.
+
+3 migrations: `001_initial` (schema), `002_drop_refresh_token`, `003_add_app_secret`.
 
 ## Quick Start
 
-### Prerequisites
+### Install (pre-built binary)
 
-- Rust 1.85+ (edition 2024)
-- SQLite3 (bundled via sqlx)
+```bash
+curl -sSL https://github.com/codecoradev/titen/releases/latest/download/install.sh | sh
+```
 
-### Build
+### Build from source
+
+Requires Rust 1.85+ (edition 2024). SQLite is bundled via sqlx.
 
 ```bash
 git clone https://github.com/codecoradev/titen.git
@@ -54,105 +66,45 @@ cargo build --release
 ### Run
 
 ```bash
-# Start the HTTP server (default: 0.0.0.0:7845)
-./target/release/titen-api
+# Start the API server (default: 0.0.0.0:7845)
+titen-api
 
 # Or via the CLI with embedded server
-./target/release/titen serve
+titen serve
 
-# Use the CLI against the running server
+# Add an account and post
 export TITEN_API_KEY=your-key
-./target/release/titen account add myuser --access-token "THREADS_TOKEN" --expires-at "2026-12-01T00:00:00Z"
-./target/release/titen post create myuser --text "Hello from titen!"
+titen account add myuser --access-token "THREADS_TOKEN" --expires-at "2026-12-01T00:00:00Z"
+titen post create myuser --text "Hello from titen!"
 ```
+
+The server creates a SQLite database at `~/.codecora/titen/titen.db` by default (override with `TITEN_DB_PATH`).
 
 ## Configuration
 
-All configuration is via environment variables:
+All config via environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `TITEN_DB_PATH` | `./titen.db` | SQLite database path |
-| `TITEN_API_KEY` | *(none)* | API key for authentication (unset = open access) |
-| `TITEN_HOST` | `0.0.0.0` | HTTP server bind address |
-| `TITEN_PORT` | `7845` | HTTP server port |
-| `TITEN_URL` | `http://localhost:7845` | Base URL for CLI (talking to API server) |
-| `TITEN_SENTIMENT_ENGINE` | `keyword` | Sentiment engine: `keyword` or `stub` |
-| `TITEN_SCHEDULER_INTERVAL_SECS` | `60` | Scheduler tick interval in seconds |
-| `TITEN_S3_ENDPOINT` | *(none)* | S3-compatible storage endpoint URL |
+| `TITEN_DB_PATH` | `~/.codecora/titen/titen.db` | SQLite database path |
+| `TITEN_API_KEY` | *(none)* | API key — when unset, all endpoints are open |
+| `TITEN_HOST` | `0.0.0.0` | Bind address |
+| `TITEN_PORT` | `7845` | Bind port |
+| `TITEN_URL` | `http://localhost:7845` | Base URL for CLI |
+| `TITEN_SENTIMENT_ENGINE` | `stub` | `stub`, `onnx`, `llm`, or `custom_api` |
+| `TITEN_SCHEDULER_INTERVAL_SECS` | `60` | Scheduler tick interval |
+| `TITEN_S3_ENDPOINT` | *(none)* | S3-compatible endpoint |
 | `TITEN_S3_BUCKET` | *(none)* | S3 bucket name |
 | `TITEN_S3_REGION` | `us-east-1` | S3 region |
 | `TITEN_S3_ACCESS_KEY` | *(none)* | S3 access key |
 | `TITEN_S3_SECRET_KEY` | *(none)* | S3 secret key |
-| `TITEN_S3_PUBLIC_URL` | *(none)* | Public URL for S3 objects (overrides endpoint) |
-
-## CLI Usage
-
-The CLI talks to the running HTTP server. Set `TITEN_URL` and `TITEN_API_KEY` as needed.
-
-### Server
-
-```bash
-titen serve [--host 0.0.0.0] [--port 7845] [--mcp]
-```
-
-### Accounts
-
-```bash
-titen account list
-titen account add <username> --access-token <TOKEN> [--user-id <ID>] [--expires-at <ISO8601>]
-titen account remove <id>
-titen account refresh <id>
-titen account token-check <id>
-titen token-check          # check all accounts
-```
-
-### Posts
-
-```bash
-titen post create <account> --text <TEXT> [--media-type TEXT|IMAGE] [--image-url <URL>]
-titen post list [--account <id>] [--status <status>]
-titen post delete <post_id>
-titen post insights <post_id>
-```
-
-### Schedules
-
-```bash
-titen schedule create <account> --text <TEXT> --at <ISO8601> [--media-type TEXT|IMAGE]
-titen schedule list [--account <id>] [--status <status>]
-titen schedule cancel <id>
-titen schedule upcoming
-```
-
-### Comments
-
-```bash
-titen comment fetch <post_id>     # fetch from Threads API
-titen comment list <post_id>      # list stored comments
-titen comment sentiment <post_id> # analyze sentiment
-```
-
-### Analytics
-
-```bash
-titen analytics posts <account> [--from <date>] [--to <date>]
-titen analytics trend <post_id>
-```
-
-### Media
-
-```bash
-titen media list
-titen media upload <file_path> [--content-type <mime>]
-titen media delete <id>
-```
+| `TITEN_S3_PUBLIC_URL` | *(none)* | Public URL for uploaded media |
 
 ## API Reference
 
 Base URL: `http://localhost:7845`
 
-All endpoints (except `/health`) require the `X-API-Key` header when `TITEN_API_KEY` is set:
+All endpoints except `/health` require `X-API-Key` authentication when `TITEN_API_KEY` is set. **Not** Bearer — it's a plain header:
 
 ```
 X-API-Key: your-key-here
@@ -160,9 +112,9 @@ X-API-Key: your-key-here
 
 ### Health
 
-| Method | Path | Description |
+| Method | Path | Auth |
 |---|---|---|
-| GET | `/health` | Health check (no auth required) |
+| GET | `/health` | None |
 
 ### Accounts
 
@@ -172,13 +124,16 @@ X-API-Key: your-key-here
 | POST | `/api/accounts` | Create an account |
 | PUT | `/api/accounts/{id}` | Update an account |
 | DELETE | `/api/accounts/{id}` | Delete an account |
-| POST | `/api/accounts/{id}/refresh-token` | Refresh account token |
+| POST | `/api/accounts/{id}/refresh-token` | Refresh OAuth token |
+| GET | `/api/accounts/{id}/profile` | Fetch Threads profile |
+| GET | `/api/accounts/{id}/publishing-limit` | Get remaining daily limits |
+| GET | `/api/accounts/check-tokens` | Batch token expiry check |
 
 ### Posts
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/posts` | List posts (query: `account_id`, `status`, `limit`, `offset`) |
+| GET | `/api/posts` | List posts (`?account_id=&status=&limit=&offset=`) |
 | POST | `/api/posts` | Create and publish a post |
 | GET | `/api/posts/{id}` | Get a single post |
 | DELETE | `/api/posts/{id}` | Delete a post |
@@ -188,11 +143,11 @@ X-API-Key: your-key-here
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/schedules` | List schedules (query: `account_id`, `status`) |
+| GET | `/api/schedules` | List schedules (`?account_id=&status=`) |
 | POST | `/api/schedules` | Create a schedule |
 | PUT | `/api/schedules/{id}` | Update a schedule |
 | DELETE | `/api/schedules/{id}` | Delete a schedule |
-| GET | `/api/schedules/upcoming` | List next 10 pending schedules |
+| GET | `/api/schedules/upcoming` | Next 10 pending schedules |
 
 ### Comments
 
@@ -206,7 +161,7 @@ X-API-Key: your-key-here
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/analytics/posts` | Account post analytics (query: `account_id`, `from`, `to`) |
+| GET | `/api/analytics/posts` | Post analytics (`?account_id=&from=&to=`) |
 | GET | `/api/analytics/posts/{id}/trend` | Time-series trend for a post |
 
 ### Media
@@ -214,14 +169,82 @@ X-API-Key: your-key-here
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/media` | List uploaded media |
-| POST | `/api/media` | Upload media (multipart form) |
+| POST | `/api/media` | Upload media (multipart) |
 | DELETE | `/api/media/{id}` | Delete media |
+
+### Threads (low-level)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/threads/container` | Create a Threads media container |
+| POST | `/api/threads/container/{id}/publish` | Publish a container |
+| POST | `/api/threads/container/{id}/status` | Check container status |
+
+## CLI
+
+The CLI talks to the running HTTP server. Set `TITEN_URL` and `TITEN_API_KEY` as needed.
+
+```bash
+titen serve [--host 0.0.0.0] [--port 7845] [--mcp]
+```
+
+### Accounts
+
+```bash
+titen account list
+titen account add <username> --access-token <TOKEN> [--user-id <ID>] [--expires-at <ISO8601>]
+titen account remove <id>
+titen account refresh <id>
+titen account status <id>
+titen token-check
+```
+
+### Posts
+
+```bash
+titen post create <account> --text <TEXT> [--media-type TEXT|IMAGE] [--image-url <URL>]
+titen post delete <post_id>
+titen post insights <post_id>
+```
+
+### Schedules
+
+```bash
+titen schedule add <account> --text <TEXT> --at <ISO8601> [--media-type TEXT|IMAGE]
+titen schedule list [--account <id>] [--status <status>]
+titen schedule cancel <id>
+titen schedule upcoming
+```
+
+### Comments
+
+```bash
+titen comment fetch <post_id>
+titen comment list <post_id>
+titen comment sentiment <post_id>
+```
+
+### Analytics
+
+```bash
+titen analytics posts <account> [--from <date>] [--to <date>]
+titen analytics trend <post_id>
+titen analytics sentiment-summary <post_id>
+```
+
+### Media
+
+```bash
+titen media list
+titen media upload <file_path> [--content-type <mime>]
+titen media delete <id>
+```
 
 ## MCP Server
 
-Titen includes an MCP (Model Context Protocol) server that exposes tools for AI agents. It communicates over stdio using JSON-RPC 2.0.
+Titen ships an MCP (Model Context Protocol) server for AI agent integration. Communicates over stdio using JSON-RPC 2.0.
 
-### Configuration
+### Setup
 
 **Claude Desktop** (`claude_desktop_config.json`):
 
@@ -258,48 +281,53 @@ Titen includes an MCP (Model Context Protocol) server that exposes tools for AI 
 | Tool | Description |
 |---|---|
 | `list_accounts` | List all Threads accounts |
-| `create_post` | Create and publish a post (args: `account_id`, `caption`, `media_type`, `image_url`) |
-| `schedule_post` | Schedule a post (args: `account_id`, `caption`, `scheduled_at`, `media_type`) |
-| `list_schedules` | List scheduled posts (args: `account_id`, `status`) |
-| `cancel_schedule` | Cancel a scheduled post (args: `id`) |
-| `fetch_comments` | Fetch and store comments from a post (args: `post_id`) |
-| `get_post_sentiment` | Get sentiment analysis for a post's comments (args: `post_id`) |
-| `get_account_analytics` | Get analytics for an account (args: `account_id`) |
-| `delete_post` | Delete a post (args: `post_id`) |
-| `check_tokens` | Check all accounts' token expiry status |
+| `get_account` | Get a single account by ID |
+| `create_post` | Create and publish a post |
+| `schedule_post` | Schedule a post for later |
+| `list_schedules` | List scheduled posts |
+| `cancel_schedule` | Cancel a scheduled post |
+| `fetch_comments` | Fetch and store comments from Threads |
+| `get_post_sentiment` | Sentiment analysis on a post's comments |
+| `get_post_analytics` | Analytics for a specific post |
+| `get_account_analytics` | Analytics summary for an account |
+| `upload_media` | Upload media to S3 storage |
+| `refresh_token` | Refresh an account's access token |
+| `check_tokens` | Batch check all accounts' token expiry |
+
+## Threads API Limits
+
+The platform enforces these per-account daily limits:
+
+| Limit | Count |
+|---|---|
+| Posts | 250/day |
+| Replies | 1,000/day |
+| Deletes | 100/day |
+| Caption length | 500 chars |
+| `text_attachment` length | 10,000 chars |
+
+## Scheduler Behavior
+
+- **Engine**: tokio-cron with a 60-second tick interval
+- **Flow**: At scheduled time → create media container → wait for ready → publish
+- **Publish delays**: text posts publish immediately (0s), image posts wait 30s, video posts wait 60s for processing
 
 ## Docker
-
-```dockerfile
-FROM rust:1.85-bookworm AS builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/titen-api /usr/local/bin/
-COPY --from=builder /app/target/release/titen-cli /usr/local/bin/
-COPY --from=builder /app/target/release/titen-mcp /usr/local/bin/
-EXPOSE 7845
-CMD ["titen-api"]
-```
-
-Build and run:
 
 ```bash
 docker build -t titen .
 docker run -p 7845:7845 \
   -e TITEN_API_KEY=your-key \
+  -e TITEN_DB_PATH=/data/titen.db \
   -e TITEN_S3_ENDPOINT=https://s3.example.com \
   -e TITEN_S3_BUCKET=titen-media \
   -v titen-data:/data \
-  titen -e TITEN_DB_PATH=/data/titen.db
+  titen
 ```
 
 ## License
 
-AGPL-3.0-only
+[AGPL-3.0-only](LICENSE)
 
 ## Contributing
 
