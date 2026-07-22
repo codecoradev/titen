@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-07-22T06:58:55.442295284Z",
+  "commit": "061ba92",
+  "branch": "fix/codecora-default-path",
+  "files_reviewed": 0,
+  "lines_reviewed": null,
+  "findings": {
+    "major": 1
+  },
+  "categories": {
+    "bug_risk": 1
+  },
+  "quality_score": 9.0,
+  "gate_status": "disabled",
+  "duration_ms": null
+}
