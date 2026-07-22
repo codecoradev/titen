@@ -2,7 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { getHealth, ApiError } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
-	import type { HealthCheck } from '$lib/types';
+	import type { HealthResponse } from '$lib/types';
 
 	// ── State ──
 	let activeTab = $state<'general' | 'api-keys' | 'danger'>('general');
@@ -25,7 +25,7 @@
 	let confirmDeleteText = $state('');
 
 	// Health
-	let health = $state<HealthCheck | null>(null);
+	let health = $state<HealthResponse | null>(null);
 	let healthLoading = $state(false);
 
 	const tabs = [
@@ -110,22 +110,6 @@
 		}
 	}
 
-	function formatUptime(seconds: number): string {
-		const d = Math.floor(seconds / 86400);
-		const h = Math.floor((seconds % 86400) / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const parts: string[] = [];
-		if (d > 0) parts.push(`${d}d`);
-		if (h > 0) parts.push(`${h}h`);
-		parts.push(`${m}m`);
-		return parts.join(' ');
-	}
-
-	function formatBytes(bytes: number): string {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
 
 	async function purgeFailedPosts() {
 		if (confirmPurgeText !== 'PURGE') return;
@@ -244,31 +228,15 @@
 				<div class="health-grid">
 					<div class="health-item">
 						<span class="health-label">Status</span>
-						<span class="badge badge--{health.status === 'healthy' ? 'success' : health.status === 'degraded' ? 'warning' : 'error'}">{health.status}</span>
+						<span class="badge badge--{health.status === 'ok' ? 'success' : 'error'}">{health.status}</span>
 					</div>
 					<div class="health-item">
 						<span class="health-label">Version</span>
 						<span class="health-value tabular-nums">{health.version}</span>
 					</div>
 					<div class="health-item">
-						<span class="health-label">Uptime</span>
-						<span class="health-value tabular-nums">{formatUptime(health.uptime)}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">DB Size</span>
-						<span class="health-value tabular-nums">{formatBytes(health.db_size)}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">Accounts</span>
-						<span class="health-value tabular-nums">{health.account_count}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">Posts</span>
-						<span class="health-value tabular-nums">{health.post_count}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">Schedules</span>
-						<span class="health-value tabular-nums">{health.schedule_count}</span>
+						<span class="health-label">Database</span>
+						<span class="health-value tabular-nums">{health.db}</span>
 					</div>
 				</div>
 			</div>

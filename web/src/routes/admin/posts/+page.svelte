@@ -32,8 +32,8 @@
 		loading = true;
 		try {
 			const [p, a] = await Promise.all([
-				listPosts().then((r) => r.data),
-				listAccounts().then((r) => r.data).catch(() => []),
+				listPosts().catch(() => []),
+				listAccounts().catch(() => []),
 			]);
 			posts = p;
 			accounts = a;
@@ -58,7 +58,7 @@
 			insightsLoading = postId;
 			try {
 				const res = await getPostInsights(postId);
-				insights[postId] = res.data;
+				insights[postId] = res;
 			} catch {
 				toast('Failed to load insights', 'error');
 				expandedPostId = null;

@@ -1,18 +1,50 @@
 // ── Titen Admin API client ──
-// All endpoints hit /api/* — no auth header needed for same-origin
+// Matches titen-api backend routes (Axum)
+// Dev: Vite proxies /api/* → localhost:7845
+// Prod: TITEN_API_BASE env var (defaults to same origin)
 
-const BASE = '/api';
+import type {
+	Account, Post, Schedule, Comment, Insights,
+	MediaItem, AnalyticsSnap, AnalyticsTrend,
+	SentimentSummary, HealthResponse,
+} from './types';
+
+const BASE = import.meta.env.TITEN_API_BASE || '/api';
+
+export function getApiKey(): string {
+	if (typeof window === 'undefined') return '';
+	return localStorage.getItem('titen_api_key') || import.meta.env.VITE_API_KEY || '';
+}
+
+function authHeaders(): Record<string, string> {
+	const key = getApiKey();
+	if (!key) return {};
+	return { 'X-API-Key': key };
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+	const isForm = init?.body instanceof FormData;
 	const res = await fetch(`${BASE}${path}`, {
-		headers: { 'Content-Type': 'application/json', ...init?.headers },
 		...init,
+		headers: isForm
+			? authHeaders()
+			: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers as Record<string, string>) },
 	});
+
 	if (!res.ok) {
 		const body = await res.text().catch(() => '');
-		throw new ApiError(res.status, res.statusText, body);
+		let msg = `API ${res.status}`;
+		try {
+			const parsed = JSON.parse(body);
+			msg = parsed.error || parsed.message || msg;
+		} catch {
+			if (body) msg = body;
+		}
+		throw new ApiError(res.status, res.statusText, msg);
 	}
-	return res.json();
+	const json = await res.json().catch(() => ({}));
+	// Backend wraps all responses in { "data": ... }
+	return (json.data !== undefined ? json.data : json) as T;
 }
 
 export class ApiError extends Error {
@@ -25,134 +57,181 @@ export class ApiError extends Error {
 	}
 }
 
+// ── Auth helper ──
+export function setApiKey(key: string) {
+	localStorage.setItem('titen_api_key', key);
+}
+
 // ── Health ──
-export const getHealth = () => request<import('./types').HealthCheck>('/system/health');
+export const getHealth = (): Promise<HealthResponse> =>
+	request<HealthResponse>('/health');
 
 // ── Accounts ──
-export const listAccounts = () =>
-	request<import('./types').ApiResponse<import('./types').Account[]>>('/accounts');
+export const listAccounts = (): Promise<Account[]> =>
+	request<Account[]>('/accounts');
 
-export const createAccount = (data: { threads_user_id: string; access_token: string; refresh_token: string }) =>
-	request<import('./types').ApiResponse<import('./types').Account>>('/accounts', {
+export const createAccount = (data: {
+	username?: string;
+	user_id?: string;
+	access_token: string;
+	expires_at: string;
+	app_id?: string;
+	app_secret?: string;
+}): Promise<Account> =>
+	request<Account>('/accounts', {
 		method: 'POST',
 		body: JSON.stringify(data),
 	});
 
-export const getAccount = (id: string) =>
-	request<import('./types').ApiResponse<import('./types').Account>>(`/accounts/${id}`);
+export const getAccount = (id: string): Promise<Account> =>
+	request<Account>(`/accounts/${id}`);
 
-export const deleteAccount = (id: string) =>
-	request<void>(`/accounts/${id}`, { method: 'DELETE' });
-
-export const refreshToken = (id: string) =>
-	request<import('./types').ApiResponse<{ token_expires_at: string }>>(`/accounts/${id}/refresh-token`, { method: 'POST' });
-
-export const checkToken = (id: string) =>
-	request<import('./types').ApiResponse<{ valid: boolean; expires_at: string | null }>>(`/accounts/${id}/check-token`);
-
-// ── Posts ──
-export const listPosts = (params?: { account_id?: string; status?: string; page?: number; per_page?: number }) => {
-	const q = new URLSearchParams();
-	if (params?.account_id) q.set('account_id', params.account_id);
-	if (params?.status) q.set('status', params.status);
-	if (params?.page) q.set('page', String(params.page));
-	if (params?.per_page) q.set('per_page', String(params.per_page));
-	const qs = q.toString();
-	return request<import('./types').ApiResponse<import('./types').Post[]>>(`/posts${qs ? `?${qs}` : ''}`);
-};
-
-export const createPost = (data: { account_id: string; caption: string; media_type?: string; image_url?: string }) =>
-	request<import('./types').ApiResponse<import('./types').Post>>('/posts', {
-		method: 'POST',
-		body: JSON.stringify(data),
-	});
-
-export const getPost = (id: string) =>
-	request<import('./types').ApiResponse<import('./types').Post>>(`/posts/${id}`);
-
-export const deletePost = (id: string) =>
-	request<void>(`/posts/${id}`, { method: 'DELETE' });
-
-export const getPostInsights = (id: string) =>
-	request<import('./types').ApiResponse<import('./types').Insight[]>>(`/posts/${id}/insights`);
-
-// ── Schedules ──
-export const listSchedules = (params?: { account_id?: string; status?: string }) => {
-	const q = new URLSearchParams();
-	if (params?.account_id) q.set('account_id', params.account_id);
-	if (params?.status) q.set('status', params.status);
-	const qs = q.toString();
-	return request<import('./types').ApiResponse<import('./types').Schedule[]>>(`/schedules${qs ? `?${qs}` : ''}`);
-};
-
-export const createSchedule = (data: { account_id: string; scheduled_at: string; post_data: Record<string, unknown> }) =>
-	request<import('./types').ApiResponse<import('./types').Schedule>>('/schedules', {
-		method: 'POST',
-		body: JSON.stringify(data),
-	});
-
-export const updateSchedule = (id: string, data: { scheduled_at?: string; status?: string }) =>
-	request<import('./types').ApiResponse<import('./types').Schedule>>(`/schedules/${id}`, {
+export const updateAccount = (id: string, data: Record<string, unknown>): Promise<Account> =>
+	request<Account>(`/accounts/${id}`, {
 		method: 'PUT',
 		body: JSON.stringify(data),
 	});
 
-export const deleteSchedule = (id: string) =>
-	request<void>(`/schedules/${id}`, { method: 'DELETE' });
+export const deleteAccount = (id: string): Promise<void> =>
+	request<void>(`/accounts/${id}`, { method: 'DELETE' });
 
-export const getUpcomingSchedules = () =>
-	request<import('./types').ApiResponse<import('./types').Schedule[]>>('/schedules/upcoming');
-
-// ── Comments ──
-export const listComments = (post_id?: string) => {
-	const q = post_id ? `?post_id=${post_id}` : '';
-	return request<import('./types').ApiResponse<import('./types').Comment[]>>(`/comments${q}`);
-};
-
-export const fetchComments = (post_id: string) =>
-	request<import('./types').ApiResponse<import('./types').Comment[]>>(`/comments/fetch`, {
+export const refreshToken = (id: string): Promise<Account> =>
+	request<Account>(`/accounts/${id}/refresh-token`, {
 		method: 'POST',
-		body: JSON.stringify({ post_id }),
 	});
 
+export const checkAllTokens = (): Promise<Account[]> =>
+	request<Account[]>('/accounts/check-tokens');
+
+export const getThreadsProfile = (accountId: string): Promise<unknown> =>
+	request<unknown>(`/accounts/${accountId}/profile`);
+
+export const getPublishingLimit = (accountId: string): Promise<unknown> =>
+	request<unknown>(`/accounts/${accountId}/publishing-limit`);
+
+// ── Posts ──
+export const listPosts = (params?: {
+	account_id?: string;
+	status?: string;
+	limit?: number;
+	offset?: number;
+}): Promise<Post[]> => {
+	const q = new URLSearchParams();
+	if (params?.account_id) q.set('account_id', params.account_id);
+	if (params?.status) q.set('status', params.status);
+	if (params?.limit) q.set('limit', String(params.limit));
+	if (params?.offset) q.set('offset', String(params.offset));
+	const qs = q.toString();
+	return request<Post[]>(`/posts${qs ? `?${qs}` : ''}`);
+};
+
+export const createPost = (data: {
+	account_id: string;
+	caption?: string;
+	media_type?: string;
+	image_url?: string;
+}): Promise<Post> =>
+	request<Post>('/posts', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+
+export const getPost = (id: string): Promise<Post> =>
+	request<Post>(`/posts/${id}`);
+
+export const deletePost = (id: string): Promise<void> =>
+	request<void>(`/posts/${id}`, { method: 'DELETE' });
+
+export const getPostInsights = (id: string): Promise<Insights> =>
+	request<Insights>(`/posts/${id}/insights`);
+
+// ── Schedules ──
+export const listSchedules = (params?: {
+	account_id?: string;
+	status?: string;
+}): Promise<Schedule[]> => {
+	const q = new URLSearchParams();
+	if (params?.account_id) q.set('account_id', params.account_id);
+	if (params?.status) q.set('status', params.status);
+	const qs = q.toString();
+	return request<Schedule[]>(`/schedules${qs ? `?${qs}` : ''}`);
+};
+
+export const createSchedule = (data: {
+	account_id: string;
+	scheduled_at: string;
+	media_type?: string;
+	caption?: string;
+	text_attachment?: string;
+	media_urls?: string;
+}): Promise<Schedule> =>
+	request<Schedule>('/schedules', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+
+export const updateSchedule = (id: string, data: {
+	scheduled_at?: string;
+	status?: string;
+}): Promise<Schedule> =>
+	request<Schedule>(`/schedules/${id}`, {
+		method: 'PUT',
+		body: JSON.stringify(data),
+	});
+
+export const deleteSchedule = (id: string): Promise<void> =>
+	request<void>(`/schedules/${id}`, { method: 'DELETE' });
+
+export const getUpcomingSchedules = (): Promise<Schedule[]> =>
+	request<Schedule[]>('/schedules/upcoming');
+
+// ── Comments (nested under posts in backend) ──
+export const listComments = (postId: string): Promise<Comment[]> =>
+	request<Comment[]>(`/posts/${postId}/comments`);
+
+export const fetchComments = (postId: string): Promise<Comment[]> =>
+	request<Comment[]>(`/posts/${postId}/comments/fetch`, {
+		method: 'POST',
+	});
+
+export const getCommentSentiment = (postId: string): Promise<SentimentSummary> =>
+	request<SentimentSummary>(`/posts/${postId}/comments/sentiment`);
+
 // ── Analytics ──
-export const listAnalytics = (params?: { account_id?: string; period?: string }) => {
+export const listAnalytics = (params?: {
+	account_id?: string;
+	period?: string;
+}): Promise<AnalyticsSnap[]> => {
 	const q = new URLSearchParams();
 	if (params?.account_id) q.set('account_id', params.account_id);
 	if (params?.period) q.set('period', params.period);
 	const qs = q.toString();
-	return request<import('./types').ApiResponse<import('./types').AnalyticsSummary[]>>(`/analytics${qs ? `?${qs}` : ''}`);
+	return request<AnalyticsSnap[]>(`/analytics/posts${qs ? `?${qs}` : ''}`);
 };
 
-export const getAnalyticsTrend = (account_id: string, period?: string) => {
-	const q = new URLSearchParams({ account_id });
+export const getAnalyticsTrend = (postId: string, period?: string): Promise<AnalyticsTrend[]> => {
+	const q = new URLSearchParams();
 	if (period) q.set('period', period);
-	return request<import('./types').ApiResponse<import('./types').AnalyticsTrend[]>>(`/analytics/trend?${q}`);
+	const qs = q.toString();
+	return request<AnalyticsTrend[]>(`/analytics/posts/${postId}/trend${qs ? `?${qs}` : ''}`);
 };
 
 // ── Media ──
-export const listMedia = () =>
-	request<import('./types').ApiResponse<import('./types').MediaItem[]>>('/media');
+export const listMedia = (): Promise<MediaItem[]> =>
+	request<MediaItem[]>('/media');
 
-export const uploadMedia = (file: File) => {
+export const uploadMedia = (file: File): Promise<MediaItem> => {
 	const form = new FormData();
 	form.append('file', file);
-	return request<import('./types').ApiResponse<import('./types').MediaItem>>('/media/upload', {
+	return request<MediaItem>('/media', {
 		method: 'POST',
 		body: form,
-		headers: {}, // let browser set multipart boundary
 	});
 };
 
-export const deleteMedia = (id: string) =>
+export const deleteMedia = (id: string): Promise<void> =>
 	request<void>(`/media/${id}`, { method: 'DELETE' });
 
-// ── Threads ──
-export const getThreadsContainer = (account_id: string) =>
-	request<unknown>(`/threads/container?account_id=${account_id}`);
-
-export const getThreadsProfile = (account_id: string) =>
-	request<import('./types').ApiResponse<import('./types').ThreadsProfile>>(`/threads/profile?account_id=${account_id}`);
-
-export const getPublishingLimit = (account_id: string) =>
-	request<import('./types').ApiResponse<import('./types').PublishingLimit>>(`/threads/publishing-limit?account_id=${account_id}`);
+// ── Threads proxy ──
+export const checkTokens = (): Promise<unknown> =>
+	request<unknown>('/accounts/check-tokens');
