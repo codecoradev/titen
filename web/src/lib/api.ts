@@ -235,3 +235,15 @@ export const deleteMedia = (id: string): Promise<void> =>
 // ── Threads proxy ──
 export const checkTokens = (): Promise<unknown> =>
 	request<unknown>('/accounts/check-tokens');
+
+// ── OAuth ──
+export const oauthExchange = (data: {
+	code: string;
+	app_id: string;
+	app_secret: string;
+	redirect_uri: string;
+}): Promise<Account> =>
+	request<Account>('/oauth/exchange', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});

@@ -113,6 +113,28 @@
 		}
 	}
 
+	function getThreadsConfig() {
+		try {
+			const s = JSON.parse(localStorage.getItem('titen-settings') || '{}');
+			return { appId: s.threadsAppId || '', appSecret: s.threadsAppSecret || '' };
+		} catch {
+			return { appId: '', appSecret: '' };
+		}
+	}
+
+	function handleConnectThreads() {
+		const { appId, appSecret } = getThreadsConfig();
+		if (!appId || !appSecret) {
+			toast('Set App ID and Secret in Settings first', 'error');
+			return;
+		}
+		const redirectUri = `${window.location.origin}/auth/callback`;
+		localStorage.setItem('titen_oauth_redirect_uri', redirectUri);
+		const scopes = 'threads_basic,threads_content_publish';
+		const url = `https://www.threads.net/oauth/authorize?client_id=${encodeURIComponent(appId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
+		window.location.href = url;
+	}
+
 	$effect(() => {
 		loadAccounts();
 	});
@@ -206,7 +228,21 @@
 	<div class="confirm-overlay" onclick={() => (showAddModal = false)} role="dialog" aria-modal="true" aria-label="Add Account">
 		<div class="confirm-dialog" style="max-width:32rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>Add Account</h3>
-			<p style="margin-bottom:var(--space-md);">Provide the Threads account credentials.</p>
+
+			<!-- OAuth connect -->
+			<button
+				type="button"
+				class="oauth-connect-btn"
+				onclick={() => { showAddModal = false; handleConnectThreads(); }}
+			>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+				</svg>
+				Connect with Threads
+			</button>
+
+			<div class="oauth-divider"><span>or add manually</span></div>
+
 			<form onsubmit={(e) => { e.preventDefault(); handleAddAccount(); }}>
 				<div class="form-group" style="margin-bottom:var(--space-sm);">
 					<label class="form-label" for="user_id">User ID <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
@@ -250,3 +286,42 @@
 	onconfirm={handleDelete}
 	oncancel={() => (deletingId = null)}
 />
+
+<style>
+	.oauth-connect-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-sm);
+		width: 100%;
+		padding: var(--space-md) var(--space-lg);
+		margin-bottom: var(--space-md);
+		background: var(--color-accent);
+		color: var(--color-accent-ink);
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: var(--text-sm);
+		border: none;
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: background-color var(--dur-short) var(--ease-out);
+	}
+	.oauth-connect-btn:hover {
+		background: oklch(50% 0.22 260);
+	}
+
+	.oauth-divider {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+	}
+	.oauth-divider::before,
+	.oauth-divider::after {
+		content: '';
+		flex: 1;
+		border-top: var(--rule-subtle);
+	}
+</style>

@@ -90,6 +90,65 @@ impl ThreadsClient {
         Ok((access_token, expires_in))
     }
 
+    /// Exchange an OAuth authorization code for a short-lived access token.
+    ///
+    /// `POST https://graph.threads.net/oauth/access_token`
+    ///
+    /// Returns the short-lived access_token + user_id from Meta.
+    pub async fn exchange_code_for_token(
+        &self,
+        code: &str,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uri: &str,
+    ) -> Result<(String, String)> {
+        let url = format!("{THREADS_GRAPH_API}/oauth/access_token");
+
+        let params = [
+            ("grant_type", "authorization_code"),
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+            ("code", code),
+            ("redirect_uri", redirect_uri),
+        ];
+
+        let resp: serde_json::Value = self
+            .http
+            .post(&url)
+            .form(&params)
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| {
+                crate::error::TitenError::ThreadsApiError(format!(
+                    "Failed to parse code exchange response: {e}"
+                ))
+            })?;
+
+        let access_token = resp
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError(
+                    "No access_token in code exchange response".to_string(),
+                )
+            })?
+            .to_string();
+
+        let user_id = resp
+            .get("user_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError(
+                    "No user_id in code exchange response".to_string(),
+                )
+            })?
+            .to_string();
+
+        Ok((access_token, user_id))
+    }
+
     /// Resolve account info (user_id + username) from a Threads access token.
     ///
     /// Calls `GET /me?fields=id,username` to auto-discover the account identity.
