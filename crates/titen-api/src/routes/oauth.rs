@@ -26,7 +26,12 @@ pub async fn oauth_exchange(
     // Step 1: code → short-lived token + user_id
     let (short_token, user_id) = match state
         .threads_client
-        .exchange_code_for_token(&input.code, &input.app_id, &input.app_secret, &input.redirect_uri)
+        .exchange_code_for_token(
+            &input.code,
+            &input.app_id,
+            &input.app_secret,
+            &input.redirect_uri,
+        )
         .await
     {
         Ok(result) => result,
@@ -36,7 +41,10 @@ pub async fn oauth_exchange(
                 "OAUTH_EXCHANGE_FAILED",
                 &format!("Failed to exchange code: {e}"),
             );
-            return (status, Json(serde_json::json!({ "error": body.error, "code": body.code })));
+            return (
+                status,
+                Json(serde_json::json!({ "error": body.error, "code": body.code })),
+            );
         }
     };
 
@@ -53,16 +61,15 @@ pub async fn oauth_exchange(
                 "TOKEN_EXCHANGE_FAILED",
                 &format!("Failed to get long-lived token: {e}"),
             );
-            return (status, Json(serde_json::json!({ "error": body.error, "code": body.code })));
+            return (
+                status,
+                Json(serde_json::json!({ "error": body.error, "code": body.code })),
+            );
         }
     };
 
     // Step 3: resolve username
-    let (_resolved_id, username) = match state
-        .threads_client
-        .resolve_account(&long_token)
-        .await
-    {
+    let (_resolved_id, username) = match state.threads_client.resolve_account(&long_token).await {
         Ok(result) => result,
         Err(e) => {
             let (status, body) = error_response(
@@ -70,7 +77,10 @@ pub async fn oauth_exchange(
                 "RESOLVE_FAILED",
                 &format!("Failed to resolve account: {e}"),
             );
-            return (status, Json(serde_json::json!({ "error": body.error, "code": body.code })));
+            return (
+                status,
+                Json(serde_json::json!({ "error": body.error, "code": body.code })),
+            );
         }
     };
 
@@ -103,12 +113,12 @@ pub async fn oauth_exchange(
             })),
         ),
         Err(e) => {
-            let (status, body) = error_response(
-                StatusCode::CONFLICT,
-                "CREATE_FAILED",
-                &e.to_string(),
-            );
-            (status, Json(serde_json::json!({ "error": body.error, "code": body.code })))
+            let (status, body) =
+                error_response(StatusCode::CONFLICT, "CREATE_FAILED", &e.to_string());
+            (
+                status,
+                Json(serde_json::json!({ "error": body.error, "code": body.code })),
+            )
         }
     }
 }

@@ -203,10 +203,7 @@ pub async fn serve(
             get(routes::media::list_media).post(routes::media::upload_media),
         )
         .route("/api/media/{id}", delete(routes::media::delete_media))
-        .route(
-            "/api/oauth/exchange",
-            post(routes::oauth::oauth_exchange),
-        )
+        .route("/api/oauth/exchange", post(routes::oauth::oauth_exchange))
         .route(
             "/api/threads/container",
             post(routes::threads::create_container),
