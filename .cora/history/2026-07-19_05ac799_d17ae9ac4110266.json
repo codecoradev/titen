@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-07-19T14:26:39.003840868Z",
+  "commit": "05ac799",
+  "branch": "release/v0.1.0",
+  "files_reviewed": 0,
+  "lines_reviewed": null,
+  "findings": {},
+  "categories": {},
+  "quality_score": 10.0,
+  "gate_status": "disabled",
+  "duration_ms": null
+}
