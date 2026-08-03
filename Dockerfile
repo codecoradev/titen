@@ -1,55 +1,52 @@
-# ── Stage 1: Builder ────────────────────────────────────────────────
-FROM debian:trixie-slim AS builder
+# ── Titen — build-from-source Dockerfile (standalone / dev) ──────────────
+# CI release builds use Dockerfile.release instead.
+# Builds all three Rust binaries from source, then ships a minimal runtime.
 
-ARG TARGETARCH
-ARG VERSION=dev
+# ── Stage 1: Builder ─────────────────────────────────────────────────────
+FROM rust:1.88-slim-bookworm AS builder
 
-LABEL version=${VERSION}
-LABEL org.opencontainers.image.version=${VERSION}
-
+# sqlx/sqlite bundling needs a C compiler; reqwest uses rustls (no openssl).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl && \
+    build-essential pkg-config ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
+WORKDIR /app
 
-# Copy CI-downloaded binaries (preferred).
-COPY binaries/ ./
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      mv titen-api-arm64 titen-api && mv titen-arm64 titen && mv titen-mcp-arm64 titen-mcp && \
-      rm -f titen-api-amd64 titen-amd64 titen-mcp-amd64; \
-    else \
-      mv titen-api-amd64 titen-api && mv titen-amd64 titen && mv titen-mcp-amd64 titen-mcp && \
-      rm -f titen-api-arm64 titen-arm64 titen-mcp-arm64; \
-    fi && \
-    chmod +x titen-api titen titen-mcp
+# Cache deps: copy manifests first, build deps, then copy source.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
 
-# ── Stage 2: Runtime ────────────────────────────────────────────────
+# Build release binaries (3 crates produce titen-api, titen, titen-mcp).
+RUN cargo build --release -p titen-api -p titen-cli -p titen-mcp && \
+    strip target/release/titen-api target/release/titen target/release/titen-mcp
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────
 FROM debian:trixie-slim
+
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="titen"
+LABEL org.opencontainers.image.version=${VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3t64 libstdc++6 curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
+# Non-root user (uid/gid 1000)
 RUN groupadd --system --gid 1000 titen && \
-    useradd --system --uid 1000 --gid titen --home /data titen
+    useradd --system --uid 1000 --gid titen --home-dir /data titen
 
-# Copy binaries
-COPY --from=builder /build/titen-api /usr/local/bin/titen-api
-COPY --from=builder /build/titen /usr/local/bin/titen
-COPY --from=builder /build/titen-mcp /usr/local/bin/titen-mcp
+COPY --from=builder /app/target/release/titen-api /usr/local/bin/titen-api
+COPY --from=builder /app/target/release/titen       /usr/local/bin/titen
+COPY --from=builder /app/target/release/titen-mcp   /usr/local/bin/titen-mcp
 
-# Data directory (mount volume here for persistence)
+RUN mkdir -p /data && chown -R titen:titen /data
+
 ENV TITEN_DB_PATH=/data/titen.db
 ENV TITEN_HOST=0.0.0.0
 ENV TITEN_PORT=7845
 
-# Create data directory with correct ownership
-RUN mkdir -p /data && chown titen:titen /data
-
 USER titen
-
+WORKDIR /data
 EXPOSE 7845
 
 ENTRYPOINT ["titen-api"]

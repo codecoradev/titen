@@ -314,16 +314,37 @@ The platform enforces these per-account daily limits:
 
 ## Docker
 
+### Standalone (recommended) — API + Web UI + reverse proxy
+
+One `docker compose up` brings up the Rust API, the SvelteKit admin UI, and a
+Caddy reverse proxy that serves everything from a single origin on port `7845`.
+
 ```bash
-docker build -t titen .
+cp .env.example .env          # optional: edit to set TITEN_API_KEY, S3, etc.
+docker compose up -d --build
+```
+
+- Web UI:  http://localhost:7845
+- API:     http://localhost:7845/api/*  and  http://localhost:7845/health
+- SQLite:  persisted in the `titen-data` volume (`/data/titen.db`)
+
+To lock down the API, set `TITEN_API_KEY` in `.env` (then provide the same value
+in the Web UI Settings screen, or via the `X-API-Key` header).
+
+### API only (no Web UI)
+
+```bash
+docker build -t titen -f Dockerfile .        # build-from-source Dockerfile
 docker run -p 7845:7845 \
   -e TITEN_API_KEY=your-key \
   -e TITEN_DB_PATH=/data/titen.db \
-  -e TITEN_S3_ENDPOINT=https://s3.example.com \
-  -e TITEN_S3_BUCKET=titen-media \
   -v titen-data:/data \
   titen
 ```
+
+> `Dockerfile` builds from source (dev/standalone).
+> `Dockerfile.release` is used by the CI release workflow (expects pre-built
+> binaries in `binaries/`).
 
 ## License
 

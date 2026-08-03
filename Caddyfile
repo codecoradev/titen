@@ -1,0 +1,18 @@
+# Titen single-origin reverse proxy.
+# Routes /api/* and /health* to the Rust API; everything else to the web UI.
+
+:80 {
+	encode gzip zstd
+
+	handle /health* {
+		reverse_proxy titen:7845
+	}
+
+	handle /api/* {
+		reverse_proxy titen:7845
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
