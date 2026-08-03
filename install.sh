@@ -93,11 +93,10 @@ for bin in titen titen-api titen-mcp; do
 done
 
 # ── Verify ─────────────────────────────────────────────────────────────────
-if "${install_dir}/titen" --version &>/dev/null; then
-  version=$("${install_dir}/titen" --version)
-  info "Verified: ${version}"
+if "${install_dir}/titen" --help &>/dev/null; then
+  info "Verified: titen binary runs"
 else
-  warn "titen --version did not succeed (binary may need runtime deps)"
+  warn "titen binary did not run (may need runtime deps)"
 fi
 
 # ── Add to PATH ────────────────────────────────────────────────────────────

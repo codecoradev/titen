@@ -63,8 +63,13 @@ export function setApiKey(key: string) {
 }
 
 // ── Health ──
-export const getHealth = (): Promise<HealthResponse> =>
-	request<HealthResponse>('/health');
+// NOTE: /health lives at the API origin root, outside the /api prefix.
+const API_ORIGIN = (import.meta.env.TITEN_API_BASE || '/api').replace(/\/api\/?$/, '');
+export const getHealth = async (): Promise<HealthResponse> => {
+	const res = await fetch(`${API_ORIGIN}/health`);
+	if (!res.ok) throw new ApiError(res.status, res.statusText, await res.text().catch(() => ''));
+	return res.json();
+};
 
 // ── Accounts ──
 export const listAccounts = (): Promise<Account[]> =>

@@ -5,3 +5,4 @@
 .env
 .titen.env
 binaries/
+.playwright-cli/
