@@ -346,6 +346,70 @@ docker run -p 7845:7845 \
 > `Dockerfile.release` is used by the CI release workflow (expects pre-built
 > binaries in `binaries/`).
 
+## Web UI (admin dashboard)
+
+The web UI is an optional SvelteKit dashboard served alongside the API.
+There is **no user/password login** — the only gate is the optional
+`TITEN_API_KEY`. When the key is unset, the dashboard is open.
+
+### First run
+
+1. Start the stack (see [Docker](#docker)) and open:
+   ```
+   http://localhost:7845/admin/dashboard
+   ```
+   (`/admin` redirects to `/admin/dashboard` automatically.)
+2. If you set `TITEN_API_KEY`, the dashboard loads empty until you authenticate:
+   - Go to **Settings** (`/admin/settings`).
+   - Paste the same key you put in `TITEN_API_KEY` and **Save**.
+   - The key is stored in your browser's `localStorage` and sent as the
+     `X-API-Key` header on every API call. It never leaves the browser.
+3. The dashboard starts empty. Fill it by adding a Threads account (below).
+
+### Add a Threads account
+
+Two ways, both from **Accounts** (`/admin/accounts`):
+
+**A. Token paste (works on localhost)** — quickest for testing.
+1. Get a long-lived Threads access token from the
+   [Threads API](https://developers.facebook.com/docs/threads-api).
+2. **Add account** → paste the `access_token` + an `expires_at` (ISO 8601).
+3. Titen resolves `user_id` and `username` automatically.
+
+**B. OAuth login (needs a public domain)** — production flow.
+1. In **Settings**, enter your Threads `app_id` and `app_secret` (from the Meta
+   developer portal).
+2. Click the Threads login link. After you authorize, Threads redirects to:
+   ```
+   https://YOUR_PUBLIC_DOMAIN/auth/callback?code=...
+   ```
+   > ⚠️ OAuth **does not work on `localhost`** — Threads requires a real,
+   > publicly reachable `redirect_uri`. For local testing use method A.
+3. Titen exchanges the code → short-lived token → long-lived token, then stores
+   the account.
+
+### Do things
+
+Once an account exists:
+- **Posts** (`/admin/posts`) — create and publish immediately.
+- **Schedules** (`/admin/schedules`) — queue a post for a future time. The
+  built-in scheduler publishes it automatically (60s tick).
+- **Comments** (`/admin/comments`) — fetch and analyze sentiment on a post's
+  comments.
+- **Analytics** (`/admin/analytics`) — time-series engagement per post.
+- **Media** (`/admin/media`) — upload to S3 storage (requires `TITEN_S3_*`).
+
+### Locking down the API
+
+For anything beyond localhost, set `TITEN_API_KEY`:
+```bash
+# generate a strong key
+openssl rand -hex 32
+```
+Put it in `.env`, `docker compose up -d`, then enter the same key in
+**Settings**. Every API call (including from the dashboard) must then carry the
+`X-API-Key` header.
+
 ## License
 
 [AGPL-3.0-only](LICENSE)
