@@ -86,7 +86,7 @@ The HTTP server crate, built on **Axum**.
 
 - **REST API** — all endpoints under `/api/*`
 - **API key auth** — `api_key_auth` middleware layer
-- **CORS** — configurable via `TITEN_CORS_ORIGINS` environment variable. Only explicitly listed origins are allowed; malformed entries are silently skipped. No catch-all origin pattern is permitted. Default: same-origin only.
+- **CORS** — configurable via `TITEN_CORS_ORIGINS` environment variable. Only explicitly listed origins are permitted; malformed entries are silently skipped. Default: same-origin only.
 - **Rate limiting** — backed by the `rate_tracking` table in SQLite
 
 ### titen-cli
