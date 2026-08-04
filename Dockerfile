@@ -37,7 +37,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi && \
     chmod +x titen-api titen titen-mcp
 
-# ── Stage 2: Runtime ────────────────────────────────────────────────
+# ── Stage 3: Runtime ────────────────────────────────────────────────
 FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

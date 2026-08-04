@@ -252,15 +252,13 @@ pub async fn serve(
         .nest_service("/", static_service)
         .layer(TraceLayer::new_for_http())
         .layer(match cors_origins {
-            Some(origins) if !origins.is_empty() => CorsLayer::new()
-                .allow_origin(
-                    origins
-                        .into_iter()
-                        .map(|o| o.parse().unwrap_or_else(|_| o.parse().unwrap()))
-                        .collect::<Vec<_>>(),
-                )
-                .allow_methods(Any)
-                .allow_headers(Any),
+            Some(origins) if !origins.is_empty() => {
+                let parsed: Vec<_> = origins.into_iter().filter_map(|o| o.parse().ok()).collect();
+                CorsLayer::new()
+                    .allow_origin(parsed)
+                    .allow_methods(Any)
+                    .allow_headers(Any)
+            }
             // Default: same-origin only. Set TITEN_CORS_ORIGINS for cross-origin access.
             _ => CorsLayer::new(),
         })
