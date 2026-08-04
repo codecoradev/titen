@@ -13,14 +13,19 @@
 <nav class="nav">
 	<div class="container nav__inner">
 		<a href="/" class="nav__wordmark" aria-label="Titen home">titen</a>
-		<a
-			href="https://github.com/codecoradev/titen"
-			target="_blank"
-			rel="noopener noreferrer"
-			class="btn-outline nav__cta"
-		>
-			GitHub ↗
-		</a>
+		<div class="nav__actions">
+			<a href="/login" class="btn-outline nav__signin">
+				Sign in
+			</a>
+			<a
+				href="https://github.com/codecoradev/titen"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="btn-outline nav__cta"
+			>
+				GitHub ↗
+			</a>
+		</div>
 	</div>
 </nav>
 
@@ -81,9 +86,9 @@
 				<div class="code-section__label">HTTP API</div>
 				<h2>Schedule a post</h2>
 				<pre><code>curl -X POST http://localhost:7845/api/schedules \
-	  -H "X-API-Key: your-key" \
-	  -H "Content-Type: application/json" \
-	  -d '&#123;
+				  -H "X-API-Key: your-key" \
+				  -H "Content-Type: application/json" \
+				  -d '&#123;
 	    "account_id": "...",
 	    "caption": "Shipping Titen v0.1 today.",
 	    "scheduled_at": "2026-07-23T09:00:00Z"
@@ -155,6 +160,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+	}
+
+	.nav__actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
 	}
 
 	.nav__wordmark {

@@ -16,10 +16,11 @@
 			return;
 		}
 
+		// Redirect to login if no API key — user needs to authenticate first
 		const apiKey = getApiKey();
 		if (!apiKey) {
-			status = 'error';
-			errorMessage = 'Not authenticated. Please log in first.';
+			const redirect = encodeURIComponent(`/auth/callback${url.search}`);
+			goto(`/login?redirect=${redirect}`);
 			return;
 		}
 
