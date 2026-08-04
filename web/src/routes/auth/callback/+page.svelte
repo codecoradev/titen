@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { oauthExchange, getApiKey } from '$lib/api';
+	import { oauthExchange, checkSession } from '$lib/api';
 
 	let status: 'loading' | 'success' | 'error' = 'loading';
 	let errorMessage = '';
@@ -16,9 +16,9 @@
 			return;
 		}
 
-		// Redirect to login if no API key — user needs to authenticate first
-		const apiKey = getApiKey();
-		if (!apiKey) {
+		// Check if user is authenticated via session cookie
+		const session = await checkSession();
+		if (session.requires_auth) {
 			const redirect = encodeURIComponent(`/auth/callback${url.search}`);
 			goto(`/login?redirect=${redirect}`);
 			return;
