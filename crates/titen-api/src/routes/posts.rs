@@ -87,6 +87,19 @@ pub async fn create_post(
                     .await
             }
         }
+        "VIDEO" => {
+            let url = input.video_url.as_deref().unwrap_or("");
+            if url.is_empty() {
+                Err(titen_core::TitenError::InvalidRequest(
+                    "video_url is required for VIDEO posts".to_string(),
+                ))
+            } else {
+                state
+                    .threads_client
+                    .publish_video(&account, Some(caption), url)
+                    .await
+            }
+        }
         media => Err(titen_core::TitenError::InvalidRequest(format!(
             "Unsupported media type: {media}"
         ))),

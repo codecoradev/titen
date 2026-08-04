@@ -25,20 +25,7 @@ fn safe_account_json(account: &titen_core::models::Account) -> serde_json::Value
 pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_accounts().await {
         Ok(accounts) => {
-            let data: Vec<serde_json::Value> = accounts
-                .into_iter()
-                .map(|a| {
-                    serde_json::json!({
-                        "id": a.id,
-                        "username": a.username,
-                        "user_id": a.user_id,
-                        "is_active": a.is_active,
-                        "expires_at": a.expires_at,
-                        "token_status": a.token_status(),
-                        "created_at": a.created_at,
-                    })
-                })
-                .collect();
+            let data: Vec<serde_json::Value> = accounts.iter().map(safe_account_json).collect();
             Json(serde_json::json!({ "data": data }))
         }
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
