@@ -8,6 +8,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -49,7 +50,7 @@ pub fn error_response(
     )
 }
 
-/// API key auth middleware — checks X-API-Key header or api_key query param
+/// API key auth middleware — checks X-API-Key header, api_key query param, or session cookie
 pub async fn api_key_auth(
     State(state): State<AppState>,
     req: axum::http::Request<axum::body::Body>,
@@ -80,6 +81,20 @@ pub async fn api_key_auth(
                 .find(|p| p.starts_with("api_key="))
                 .map(|p| p.trim_start_matches("api_key=").to_string())
         })
+    });
+
+    // Check session cookie
+    let provided = provided.or_else(|| {
+        req.headers()
+            .get(axum::http::header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cookies| {
+                cookies
+                    .split(';')
+                    .map(|c| c.trim())
+                    .find(|c| c.starts_with("titen_session="))
+                    .map(|c| c.trim_start_matches("titen_session=").to_string())
+            })
     });
 
     match provided {
@@ -221,9 +236,19 @@ pub async fn serve(
             api_key_auth,
         ));
 
+    // Static file serving for web dashboard (SvelteKit adapter-node output)
+    let web_dir = std::env::var("TITEN_WEB_DIR").unwrap_or_else(|_| "/app/web".to_string());
+    let static_service = ServeDir::new(&web_dir)
+        .fallback(tower_http::services::ServeFile::new(format!("{web_dir}/index.html")));
+
     let app = Router::new()
         .route("/health", get(health_check))
+        // Auth routes — public (not behind API key middleware)
+        .route("/api/auth/login", post(routes::auth::login))
+        .route("/api/auth/session", get(routes::auth::session))
+        .route("/api/auth/logout", post(routes::auth::logout))
         .merge(protected_routes)
+        .nest_service("/", static_service)
         .layer(TraceLayer::new_for_http())
         .layer(match cors_origins {
             Some(origins) if !origins.is_empty() => CorsLayer::new()
@@ -235,7 +260,8 @@ pub async fn serve(
                 )
                 .allow_methods(Any)
                 .allow_headers(Any),
-            _ => CorsLayer::permissive(),
+            // Default: same-origin only. Set TITEN_CORS_ORIGINS for cross-origin access.
+            _ => CorsLayer::new(),
         })
         .with_state(state);
 
