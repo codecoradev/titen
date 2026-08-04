@@ -3,8 +3,23 @@
 	import { getIcon } from '$lib/icons';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
+	import { getApiKey, logout } from '$lib/api';
+	import { goto } from '$app/navigation';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
+
+	// Auth guard: redirect to login if no API key in localStorage
+	$effect(() => {
+		if (!getApiKey()) {
+			const currentPath = page.url.pathname + page.url.search;
+			goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
+		}
+	});
+
+	async function handleLogout() {
+		await logout();
+		goto('/login');
+	}
 
 	const navItems = [
 		{ href: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -72,7 +87,8 @@
 			{/each}
 		</nav>
 		<div class="sidebar-footer">
-			v0.1.2 · admin
+			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
+			<span class="sidebar-version">v0.1.2 · admin</span>
 		</div>
 	</aside>
 
@@ -106,5 +122,33 @@
 		.mobile-menu-btn {
 			display: flex;
 		}
+	}
+
+	.sidebar-footer {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		align-items: flex-start;
+	}
+
+	.sidebar-logout {
+		background: none;
+		border: none;
+		color: var(--color-muted);
+		font-size: var(--text-xs);
+		font-family: var(--font-mono);
+		cursor: pointer;
+		padding: var(--space-3xs) 0;
+		transition: color 0.15s ease;
+	}
+
+	.sidebar-logout:hover {
+		color: var(--color-error);
+	}
+
+	.sidebar-version {
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+		font-family: var(--font-mono);
 	}
 </style>

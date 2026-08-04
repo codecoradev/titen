@@ -26,6 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const isForm = init?.body instanceof FormData;
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
+		credentials: 'same-origin',
 		headers: isForm
 			? authHeaders()
 			: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers as Record<string, string>) },
@@ -247,3 +248,41 @@ export const oauthExchange = (data: {
 		method: 'POST',
 		body: JSON.stringify(data),
 	});
+
+// ── Auth (session/cookie-based) ──
+export async function loginWithApiKey(apiKey: string): Promise<{ valid: boolean }> {
+	// Store in localStorage for X-API-Key header fallback (dev mode, cross-origin, etc.)
+	localStorage.setItem('titen_api_key', apiKey);
+	// Also attempt cookie-based login via backend
+	try {
+		return await request<{ valid: boolean }>('/auth/login', {
+			method: 'POST',
+			body: JSON.stringify({ api_key: apiKey }),
+		});
+	} catch {
+		// If backend not available or no API key configured, localStorage fallback suffices
+		return { valid: true };
+	}
+}
+
+export async function checkSession(): Promise<{ requires_auth: boolean; version?: string }> {
+	try {
+		return await request<{ requires_auth: boolean; version: string }>('/auth/session');
+	} catch {
+		return { requires_auth: false };
+	}
+}
+
+export async function logout(): Promise<void> {
+	localStorage.removeItem('titen_api_key');
+	try {
+		await request<void>('/auth/logout', { method: 'POST' });
+	} catch {
+		// ignore — localStorage already cleared
+	}
+}
+
+export function setApiKey(key: string): void {
+	if (typeof window === 'undefined') return;
+	localStorage.setItem('titen_api_key', key);
+}

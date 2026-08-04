@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod analytics;
+pub mod auth;
 pub mod comments;
 pub mod media;
 pub mod oauth;

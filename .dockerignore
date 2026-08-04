@@ -1,6 +1,13 @@
+# Dependencies
+web/node_modules/
+
+# Rust build artifacts
 target/
+
+# Git
 .git/
-.github/
-*.md
-tests/
-benches/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
