@@ -2,6 +2,9 @@
 // Matches titen-api backend routes (Axum)
 // Dev: Vite proxies /api/* → localhost:7845
 // Prod: TITEN_API_BASE env var (defaults to same origin)
+//
+// Auth: httpOnly cookie set by POST /api/auth/login.
+// Cookie auto-attaches via `credentials: 'same-origin'`.
 
 import type {
 	Account, Post, Schedule, Comment, Insights,
@@ -11,25 +14,14 @@ import type {
 
 const BASE = import.meta.env.TITEN_API_BASE || '/api';
 
-export function getApiKey(): string {
-	if (typeof window === 'undefined') return '';
-	return localStorage.getItem('titen_api_key') || import.meta.env.VITE_API_KEY || '';
-}
-
-function authHeaders(): Record<string, string> {
-	const key = getApiKey();
-	if (!key) return {};
-	return { 'X-API-Key': key };
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const isForm = init?.body instanceof FormData;
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
 		credentials: 'same-origin',
 		headers: isForm
-			? authHeaders()
-			: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers as Record<string, string>) },
+			? { ...(init?.headers as Record<string, string>) }
+			: { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string>) },
 	});
 
 	if (!res.ok) {
@@ -56,11 +48,6 @@ export class ApiError extends Error {
 	) {
 		super(`API ${status}: ${statusText}`);
 	}
-}
-
-// ── Auth helper ──
-export function setApiKey(key: string) {
-	localStorage.setItem('titen_api_key', key);
 }
 
 // ── Health ──
@@ -251,38 +238,25 @@ export const oauthExchange = (data: {
 
 // ── Auth (session/cookie-based) ──
 export async function loginWithApiKey(apiKey: string): Promise<{ valid: boolean }> {
-	// Store in localStorage for X-API-Key header fallback (dev mode, cross-origin, etc.)
-	localStorage.setItem('titen_api_key', apiKey);
-	// Also attempt cookie-based login via backend
-	try {
-		return await request<{ valid: boolean }>('/auth/login', {
-			method: 'POST',
-			body: JSON.stringify({ api_key: apiKey }),
-		});
-	} catch {
-		// If backend not available or no API key configured, localStorage fallback suffices
-		return { valid: true };
-	}
+	return await request<{ valid: boolean }>('/auth/login', {
+		method: 'POST',
+		body: JSON.stringify({ api_key: apiKey }),
+	});
 }
 
 export async function checkSession(): Promise<{ requires_auth: boolean; version?: string }> {
 	try {
 		return await request<{ requires_auth: boolean; version: string }>('/auth/session');
 	} catch {
-		return { requires_auth: false };
+		// Backend unreachable — treat as requiring auth (safe default)
+		return { requires_auth: true };
 	}
 }
 
 export async function logout(): Promise<void> {
-	localStorage.removeItem('titen_api_key');
 	try {
 		await request<void>('/auth/logout', { method: 'POST' });
 	} catch {
-		// ignore — localStorage already cleared
+		// ignore — cookie may already be expired
 	}
-}
-
-export function setApiKey(key: string): void {
-	if (typeof window === 'undefined') return;
-	localStorage.setItem('titen_api_key', key);
 }

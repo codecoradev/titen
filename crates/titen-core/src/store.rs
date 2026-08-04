@@ -291,6 +291,21 @@ impl Store {
         Ok(())
     }
 
+    /// Atomically claim a schedule for processing.
+    ///
+    /// Only transitions `pending → processing` if the row is still pending.
+    /// Returns `true` if claimed, `false` if already claimed by another worker.
+    /// This prevents double-posting when multiple scheduler instances run.
+    pub async fn claim_schedule(&self, id: &str) -> Result<bool> {
+        let result = sqlx::query(
+            "UPDATE schedules SET status = 'processing', updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn delete_schedule(&self, id: &str) -> Result<()> {
         let result = sqlx::query("DELETE FROM schedules WHERE id = ?")
             .bind(id)

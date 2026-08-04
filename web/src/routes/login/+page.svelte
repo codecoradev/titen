@@ -28,7 +28,6 @@
 			const redirect = params.get('redirect') || '/admin/dashboard';
 			goto(redirect);
 		} catch {
-			localStorage.removeItem('titen_api_key');
 			error = 'Invalid API key. Make sure it matches the TITEN_API_KEY on the server.';
 		} finally {
 			loading = false;

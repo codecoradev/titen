@@ -3,17 +3,31 @@
 	import { getIcon } from '$lib/icons';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
-	import { getApiKey, logout } from '$lib/api';
+	import { checkSession, logout } from '$lib/api';
 	import { goto } from '$app/navigation';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
-	// Auth guard: redirect to login if no API key in localStorage
+	// Auth guard: verify session cookie is valid, redirect to login if not
+	let authed = $state(false);
+
 	$effect(() => {
-		if (!getApiKey()) {
-			const currentPath = page.url.pathname + page.url.search;
-			goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
-		}
+		if (authed) return;
+		(async () => {
+			try {
+				const session = await checkSession();
+				if (session.requires_auth) {
+					const currentPath = page.url.pathname + page.url.search;
+					goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
+				} else {
+					authed = true;
+				}
+			} catch {
+				// Network error — redirect to login as safe fallback
+				const currentPath = page.url.pathname + page.url.search;
+				goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
+			}
+		})();
 	});
 
 	async function handleLogout() {
@@ -95,7 +109,11 @@
 	<!-- Main content -->
 	<div class="admin-main">
 		<main class="admin-content">
-			{@render children()}
+			{#if authed}
+				{@render children()}
+			{:else}
+				<div class="auth-loading">Verifying session…</div>
+			{/if}
 		</main>
 	</div>
 </div>
@@ -150,5 +168,14 @@
 		font-size: var(--text-xs);
 		color: var(--color-muted);
 		font-family: var(--font-mono);
+	}
+
+	.auth-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 50vh;
+		color: var(--color-muted);
+		font-size: var(--text-sm);
 	}
 </style>
