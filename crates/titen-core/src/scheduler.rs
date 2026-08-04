@@ -242,6 +242,28 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     }
                 }
             }
+            "VIDEO" => {
+                let urls: Vec<String> = schedule
+                    .media_urls
+                    .as_ref()
+                    .and_then(|u| serde_json::from_str(u).ok())
+                    .unwrap_or_default();
+                let video_url = urls.first().cloned().unwrap_or_default();
+                if video_url.is_empty() {
+                    Err("No video URL provided".to_string())
+                } else {
+                    match client
+                        .publish_video(&account, schedule.caption.as_deref(), &video_url)
+                        .await
+                    {
+                        Ok(post_id) => {
+                            let _ = store.track_rate(&schedule.account_id, "post").await;
+                            Ok(serde_json::json!({ "threads_post_id": post_id }))
+                        }
+                        Err(e) => Err(e.to_string()),
+                    }
+                }
+            }
             _ => Err(format!("Unsupported media type: {}", schedule.media_type)),
         };
 

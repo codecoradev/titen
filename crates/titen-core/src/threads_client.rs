@@ -488,6 +488,47 @@ impl ThreadsClient {
         Ok(post_id)
     }
 
+    /// Create and publish a video post.
+    ///
+    /// Videos require processing time on Threads' side. This method
+    /// creates the container, polls `check_container_status` until
+    /// `FINISHED`, then publishes.
+    pub async fn publish_video(
+        &self,
+        account: &crate::models::Account,
+        caption: Option<&str>,
+        video_url: &str,
+    ) -> Result<String> {
+        let container_id = self
+            .create_container(account, "VIDEO", caption, None, Some(video_url))
+            .await?;
+
+        // Poll until container is ready (video processing)
+        // Max ~90 attempts × 3s = ~4.5 min before giving up
+        for attempt in 0..90 {
+            let status = self.check_container_status(account, &container_id).await?;
+            match status.status.as_deref() {
+                Some("FINISHED") => break,
+                Some("IN_PROGRESS") | None => {
+                    if attempt == 89 {
+                        return Err(crate::error::TitenError::ThreadsApiError(
+                            "Video container processing timed out after ~4.5 minutes".to_string(),
+                        ));
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                }
+                Some(other) => {
+                    return Err(crate::error::TitenError::ThreadsApiError(format!(
+                        "Container processing failed: status={other}"
+                    )));
+                }
+            }
+        }
+
+        let post_id = self.publish_container(account, &container_id).await?;
+        Ok(post_id)
+    }
+
     /// Create and publish a carousel post (3-step flow).
     ///
     /// Official flow:
