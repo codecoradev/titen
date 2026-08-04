@@ -32,6 +32,8 @@ That's it. No web dashboard you didn't ask for. No subscription. No vendor lock-
 
 ## Architecture
 
+> **Detailed docs:** [Architecture Overview](docs/architecture.md) · [Auth Flow](docs/auth-flow.md) · [Changelog](CHANGELOG.md)
+
 4 crates, one binary each:
 
 | Crate | Purpose |
