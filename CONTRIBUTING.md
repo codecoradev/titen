@@ -5,14 +5,26 @@ Thanks for your interest in contributing! This guide covers the basics.
 ## Prerequisites
 
 - **Rust** 1.88+ — install via [rustup](https://rustup.rs/)
+- **Node.js** 22+ and **Bun** (for frontend development)
 - **Git**
 
 ## Build
+
+### Backend (Rust)
 
 ```bash
 git clone https://github.com/codecoradev/titen.git
 cd titen
 cargo build --workspace
+```
+
+### Frontend (SvelteKit)
+
+```bash
+cd web
+bun install
+bun run dev    # dev server at localhost:5173 (proxies /api → localhost:7845)
+bun run build  # production build to web/build/
 ```
 
 ## Test
@@ -88,6 +100,20 @@ crates/
 
 - **Bugs:** Use the [Bug Report](https://github.com/codecoradev/titen/issues/new?template=bug_report.md) template
 - **Features:** Use the [Feature Request](https://github.com/codecoradev/titen/issues/new?template=feature_request.md) template
+
+## Security
+
+**Do not open public issues for security vulnerabilities.**
+
+If you discover a security issue, please email **security@codecora.dev** with a detailed description and reproduction steps. We will acknowledge receipt within 48 hours and aim to publish a fix within 7 days.
+
+## Branch Strategy
+
+- `main` — stable, tagged releases only. Never commit directly.
+- `develop` — integration branch. PRs merge here first.
+- Feature branches — `feat/`, `fix/`, `docs/`, `refactor/` prefixes.
+
+All PRs target `develop`. Releases merge `develop` → `main` + tag.
 
 ## License
 
