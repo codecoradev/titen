@@ -3,7 +3,7 @@ use crate::store::Store;
 use crate::threads_client::ThreadsClient;
 use std::sync::Arc;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Scheduler that ticks every N seconds to check for due schedules
 pub struct TitenScheduler {
@@ -128,13 +128,17 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
     info!("Processing {} due schedule(s)", due_schedules.len());
 
     for schedule in due_schedules {
-        // Mark as processing
-        if let Err(e) = store
-            .update_schedule_status(&schedule.id, "processing", None, None)
-            .await
-        {
-            error!("Failed to mark schedule {} as processing: {e}", schedule.id);
-            continue;
+        // Atomically claim: pending → processing (prevents double-post in HA)
+        match store.claim_schedule(&schedule.id).await {
+            Ok(true) => {} // claimed successfully
+            Ok(false) => {
+                debug!("Schedule {} already claimed by another worker", schedule.id);
+                continue;
+            }
+            Err(e) => {
+                error!("Failed to claim schedule {}: {e}", schedule.id);
+                continue;
+            }
         }
 
         // Get account
