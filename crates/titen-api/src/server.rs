@@ -238,8 +238,9 @@ pub async fn serve(
 
     // Static file serving for web dashboard (SvelteKit adapter-node output)
     let web_dir = std::env::var("TITEN_WEB_DIR").unwrap_or_else(|_| "/app/web".to_string());
-    let static_service = ServeDir::new(&web_dir)
-        .fallback(tower_http::services::ServeFile::new(format!("{web_dir}/index.html")));
+    let static_service = ServeDir::new(&web_dir).fallback(tower_http::services::ServeFile::new(
+        format!("{web_dir}/index.html"),
+    ));
 
     let app = Router::new()
         .route("/health", get(health_check))

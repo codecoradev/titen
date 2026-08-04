@@ -1,12 +1,12 @@
 use axum::{
     Json,
     extract::State,
-    http::{StatusCode, header::SET_COOKIE, HeaderMap, HeaderValue},
+    http::{HeaderMap, HeaderValue, StatusCode, header::SET_COOKIE},
     response::IntoResponse,
 };
 use serde::Deserialize;
 
-use crate::server::{AppState, error_response};
+use crate::server::{AppState, ErrorResponse};
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -47,12 +47,26 @@ pub async fn login(
             input.api_key
         );
         let mut headers = HeaderMap::new();
-        headers.insert(SET_COOKIE, HeaderValue::from_str(&cookie_value).unwrap());
+        // Safe unwrap: cookie_value contains only the API key (validated ASCII/UTF-8 by ct_eq
+        // against the configured key) plus standard cookie syntax characters.
+        match HeaderValue::from_str(&cookie_value) {
+            Ok(val) => headers.insert(SET_COOKIE, val),
+            Err(_) => {
+                // Non-ASCII API key — reject rather than panic
+                let body = ErrorResponse {
+                    error: "API key contains invalid characters for cookie storage".to_string(),
+                    code: "INVALID_API_KEY".to_string(),
+                };
+                return (StatusCode::BAD_REQUEST, HeaderMap::new(), Json(body)).into_response();
+            }
+        };
         (StatusCode::OK, headers, Json(LoginResponse { valid: true })).into_response()
     } else {
-        let (status, body) =
-            error_response(StatusCode::UNAUTHORIZED, "INVALID_API_KEY", "Invalid API key");
-        (status, HeaderMap::new(), Json(body)).into_response()
+        let body = ErrorResponse {
+            error: "Invalid API key".to_string(),
+            code: "INVALID_API_KEY".to_string(),
+        };
+        (StatusCode::UNAUTHORIZED, HeaderMap::new(), Json(body)).into_response()
     }
 }
 
@@ -75,5 +89,9 @@ pub async fn logout() -> impl IntoResponse {
     let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
     let mut headers = HeaderMap::new();
     headers.insert(SET_COOKIE, HeaderValue::from_str(cookie).unwrap());
-    (StatusCode::OK, headers, Json(serde_json::json!({ "ok": true })))
+    (
+        StatusCode::OK,
+        headers,
+        Json(serde_json::json!({ "ok": true })),
+    )
 }
