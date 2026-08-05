@@ -11,3 +11,22 @@ target/
 # IDE
 .vscode/
 .idea/
+
+# Docker artifacts — don't include in build context
+data/
+
+# Env files (secrets)
+.env
+.env.*
+!.env.example
+
+# Cora / local tooling
+.cora/
+
+# Old CI-built binaries (legacy single-container approach)
+binaries/
+
+# CI / docs
+.github/
+docs/
+*.md

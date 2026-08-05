@@ -1,26 +1,90 @@
-# Titen Docker Compose — default: localhost only, no auth
-# Dev: use `build: .` (builds from source).
-# Production: switch to `image: ghcr.io/codecoradev/titen:latest` after first release.
-# For network access, set TITEN_API_KEY env var.
-services:
-  titen:
-    build: .
-    container_name: titen
-    ports:
-      - "127.0.0.1:7845:7845"
-    volumes:
-      - titen-data:/data
-    environment:
-      # Auth (optional — set TITEN_API_KEY env var to enable)
-      # - TITEN_API_KEY
-      - RUST_LOG=info
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7845/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+# Titen — local dev / single-host deploy via Docker Compose.
+#
+# Two-container architecture:
+#   - web: SvelteKit SSR server (Bun + adapter-node) — serves pages + proxies /api
+#   - api: Rust Axum backend — API, scheduling, Threads integration
+#
+# Default: build from source. For production, switch to prebuilt images after
+# first release:
+#   docker compose pull && docker compose up -d
+#
+# SQLite database persists to a bind-mounted volume (./data/).
+#
+# Usage:
+#   cp .env.example .env        # fill in TITEN_API_KEY + OAuth creds
+#   docker compose up --build   # build locally + start
+#
+# Production: set TRAEFIK_ENABLED=true + TITEN_HOST + join an external
+# Traefik network (TRAEFIK_NETWORK). When TRAEFIK_ENABLED=false the web
+# service publishes its port to the host (local dev).
+#
+# NOTE: The web container (SvelteKit) handles all HTTP routing. /api/* and
+# /health requests are forwarded to the api container via Docker internal
+# network. Traefik only needs to route to the web service.
 
-volumes:
-  titen-data:
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    container_name: titen-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - ORIGIN=${APP_URL:-http://localhost:3000}
+      - API_INTERNAL=http://api:7845
+    depends_on:
+      - api
+    labels:
+      # ── Traefik reverse-proxy + auto-HTTPS ────────────────────────
+      - "traefik.enable=${TRAEFIK_ENABLED:-false}"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-public}"
+      - "traefik.http.routers.titen-web.rule=Host(`${TITEN_HOST:-titen.azfirazka.com}`)"
+      - "traefik.http.routers.titen-web.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.titen-web.tls=true"
+      - "traefik.http.routers.titen-web.tls.certresolver=${CERTRESOLVER:-myresolver}"
+      - "traefik.http.services.titen-web.loadbalancer.server.port=3000"
+    networks:
+      - default
+      - traefik
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: titen-api
+    restart: unless-stopped
+    # API is NOT exposed to the host in production — only accessible from
+    # the web container via Docker network on port 7845.
+    expose:
+      - "7845"
+    volumes:
+      # Bind-mount SQLite so the DB survives container rebuilds.
+      - ./data:/data
+    environment:
+      - RUST_LOG=${RUST_LOG:-titen_api=info,tower_http=info}
+      - TITEN_DB_PATH=/data/titen.db
+      - TITEN_HOST=0.0.0.0
+      - TITEN_PORT=7845
+      - TITEN_API_KEY=${TITEN_API_KEY:-}
+      - TITEN_CORS_ORIGINS=${TITEN_CORS_ORIGINS:-}
+    networks:
+      - default
+
+networks:
+  default:
+    name: titen
+  # External Traefik network — must already exist in production (created by
+  # the Traefik stack). The web container joins it so Traefik can route :3000.
+  # For local-only compose without Traefik, create once:
+  #   docker network create traefik-public
+  # Or use: docker compose up (without TRAEFIK_ENABLED) — the traefik
+  # network is only required when TRAEFIK_ENABLED=true.
+  traefik:
+    name: ${TRAEFIK_NETWORK:-traefik-public}
+    external: ${TRAEFIK_EXTERNAL:-false}
