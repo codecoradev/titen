@@ -16,7 +16,7 @@ titen-api = { path = "crates/titen-api" }
 
 # HTTP
 axum = { version = "0.8", features = ["macros"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 tower = "0.5"
 
 # CLI

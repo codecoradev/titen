@@ -1,72 +1,85 @@
-# ── Stage 1: Web builder ────────────────────────────────────────────
-FROM node:22-slim AS web-builder
+# Titen — multi-target Dockerfile
+#
+# Usage:
+#   docker build --target web -t titen-web .       # SvelteKit SSR via Bun
+#   docker build --target api -t titen-api .        # Rust Axum API
+#
+# By default, builds the API target (backward compatible).
 
-WORKDIR /web
-
-# Copy FE source
+# ── Shared: Build the SvelteKit frontend ──────────────────────────────
+# adapter-node generates build/server/index.js + build/client/.
+FROM oven/bun:1-alpine AS frontend
+WORKDIR /app/web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY web/ ./
+RUN bun run build
 
-# Install Bun and build
-RUN npm install -g bun && \
-    bun install --frozen-lockfile && \
-    bun run build
+# ── Web target: SvelteKit SSR server via Bun ─────────────────────────
+FROM oven/bun:1-alpine AS web
 
-# ── Stage 2: Binary builder ────────────────────────────────────────
-FROM debian:trixie-slim AS builder
+WORKDIR /app
+COPY --from=frontend /app/web/build ./
+# Runtime deps that Vite 8 does not bundle into SSR output.
+# adapter-node generates chunks that import these at runtime from
+# node_modules, so they must be present in the image.
+COPY --from=frontend /app/web/node_modules ./node_modules
 
-ARG TARGETARCH
-ARG VERSION=dev
+# Run as non-root user (bun image ships with `bun` user uid 1000)
+USER bun
 
-LABEL version=${VERSION}
-LABEL org.opencontainers.image.version=${VERSION}
+# adapter-node reads HOST, PORT, ORIGIN from environment.
+ENV HOST=0.0.0.0
+ENV PORT=3000
+ENV ORIGIN=http://localhost:3000
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl && \
-    rm -rf /var/lib/apt/lists/*
+EXPOSE 3000
 
-WORKDIR /build
+ENTRYPOINT ["bun", "run", "index.js"]
 
-# Copy CI-downloaded binaries (preferred).
-COPY binaries/ ./
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      mv titen-api-arm64 titen-api && mv titen-arm64 titen && mv titen-mcp-arm64 titen-mcp && \
-      rm -f titen-api-amd64 titen-amd64 titen-mcp-amd64; \
-    else \
-      mv titen-api-amd64 titen-api && mv titen-amd64 titen && mv titen-mcp-amd64 titen-mcp && \
-      rm -f titen-api-arm64 titen-arm64 titen-mcp-arm64; \
-    fi && \
-    chmod +x titen-api titen titen-mcp
+# ── API target: Rust Axum API (backend-only, no static files) ──────────
+FROM rust:1.88-alpine AS api-builder
 
-# ── Stage 3: Runtime ────────────────────────────────────────────────
-FROM debian:trixie-slim
+RUN apk add --no-cache \
+        musl-dev \
+        cmake \
+        make \
+        perl \
+        clang \
+        llvm-dev \
+        libgcc
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3t64 libstdc++6 curl && \
-    rm -rf /var/lib/apt/lists/*
+ENV CC=clang CXX=clang++
 
-# Create non-root user
-RUN groupadd --system --gid 1000 titen && \
-    useradd --system --uid 1000 --gid titen --home /data titen
+WORKDIR /app
 
-# Copy binaries
-COPY --from=builder /build/titen-api /usr/local/bin/titen-api
-COPY --from=builder /build/titen /usr/local/bin/titen
-COPY --from=builder /build/titen-mcp /usr/local/bin/titen-mcp
+# Cache dependencies — copy only Cargo files first and build a dummy crate.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+RUN cargo build --release --bin titen-api
 
-# Copy web dashboard build output
-COPY --from=web-builder /web/build /app/web
+# ── API runtime ──────────────────────────────────────────────────────
+FROM alpine:3.22 AS api
 
-# Data directory (mount volume here for persistence)
+RUN apk add --no-cache ca-certificates libgcc libstdc++ \
+    && addgroup -S -g 1000 titen \
+    && adduser -S -D -H -u 1000 -G titen titen
+
+# Static binary + CLI tools.
+COPY --from=api-builder --chown=titen:titen /app/target/release/titen-api /usr/local/bin/titen-api
+COPY --from=api-builder --chown=titen:titen /app/target/release/titen /usr/local/bin/titen
+COPY --from=api-builder --chown=titen:titen /app/target/release/titen-mcp /usr/local/bin/titen-mcp
+
+# SQLite database lives on a bind-mounted volume (see docker-compose.yml).
+VOLUME /data
+
 ENV TITEN_DB_PATH=/data/titen.db
 ENV TITEN_HOST=0.0.0.0
 ENV TITEN_PORT=7845
-ENV TITEN_WEB_DIR=/app/web
-
-# Create data directory with correct ownership
-RUN mkdir -p /data && chown titen:titen /data
+ENV RUST_LOG=titen_api=info,tower_http=info
 
 USER titen
 
 EXPOSE 7845
 
-ENTRYPOINT ["titen-api"]
+ENTRYPOINT ["/usr/local/bin/titen-api"]

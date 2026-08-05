@@ -8,7 +8,6 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -141,6 +140,11 @@ pub async fn serve(
     let store = Arc::new(store);
     let threads_client = Arc::new(ThreadsClient::new(store.clone()));
 
+    // Start the background scheduler for due post publishing.
+    let scheduler = titen_core::TitenScheduler::new(store.clone(), threads_client.clone())
+        .await?;
+    scheduler.start().await?;
+
     let state = AppState {
         store: store.clone(),
         threads_client,
@@ -236,12 +240,6 @@ pub async fn serve(
             api_key_auth,
         ));
 
-    // Static file serving for web dashboard (SvelteKit adapter-node output)
-    let web_dir = std::env::var("TITEN_WEB_DIR").unwrap_or_else(|_| "/app/web".to_string());
-    let static_service = ServeDir::new(&web_dir).fallback(tower_http::services::ServeFile::new(
-        format!("{web_dir}/index.html"),
-    ));
-
     let app = Router::new()
         .route("/health", get(health_check))
         // Auth routes — public (not behind API key middleware)
@@ -249,7 +247,6 @@ pub async fn serve(
         .route("/api/auth/session", get(routes::auth::session))
         .route("/api/auth/logout", post(routes::auth::logout))
         .merge(protected_routes)
-        .nest_service("/", static_service)
         .layer(TraceLayer::new_for_http())
         .layer(match cors_origins {
             Some(origins) if !origins.is_empty() => {
