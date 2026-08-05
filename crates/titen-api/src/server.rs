@@ -141,8 +141,7 @@ pub async fn serve(
     let threads_client = Arc::new(ThreadsClient::new(store.clone()));
 
     // Start the background scheduler for due post publishing.
-    let scheduler = titen_core::TitenScheduler::new(store.clone(), threads_client.clone())
-        .await?;
+    let scheduler = titen_core::TitenScheduler::new(store.clone(), threads_client.clone()).await?;
     scheduler.start().await?;
 
     let state = AppState {
