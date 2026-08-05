@@ -2,10 +2,8 @@ name: Release
 
 # Release is triggered by pushing a vX.Y.Z tag.
 #
-# PREREQUISITE: Before tagging, merge develop → main via PR.
-# The tag must point to a commit on main, NOT develop.
-#
-# GitFlow: develop (default) → PR → main → tag → release.
+# Tags are created from develop (the default branch).
+# Single-branch flow: develop → tag → release.
 
 on:
   push:
@@ -16,33 +14,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  verify-main:
-    name: Verify tag is on main
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Check tag is on main
-        run: |
-          git fetch origin main
-          TAG_SHA=$(git rev-parse "${{ github.ref }}^{commit}")
-          MAIN_SHA=$(git rev-parse origin/main)
-          echo "Tag: $TAG_SHA"
-          echo "main: $MAIN_SHA"
-          if [ "$TAG_SHA" = "$MAIN_SHA" ]; then
-            echo "✅ Tag is main HEAD"
-          elif git merge-base --is-ancestor "$TAG_SHA" origin/main 2>/dev/null; then
-            echo "✅ Tag commit $TAG_SHA is in main history"
-          else
-            echo "::error::Tag commit $TAG_SHA is NOT on main."
-            echo "Merge develop → main via PR before tagging."
-            exit 1
-          fi
 
   build-release:
     name: Build ${{ matrix.target }}
-    needs: [verify-main]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
