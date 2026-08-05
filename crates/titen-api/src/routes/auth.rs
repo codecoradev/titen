@@ -41,9 +41,16 @@ pub async fn login(
     };
 
     if subtle::ConstantTimeEq::ct_eq(input.api_key.as_bytes(), required_key.as_bytes()).into() {
-        // Set httpOnly cookie with the API key
+        // Set httpOnly cookie with the API key.
+        // Secure flag added only when TITEN_COOKIE_SECURE=true (production HTTPS).
+        // In dev (HTTP), the Secure attribute must be omitted entirely, not set to false.
+        let secure = std::env::var("TITEN_COOKIE_SECURE")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
+        let secure_attr = if secure { "; Secure" } else { "" };
         let cookie_value = format!(
-            "titen_session={}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800",
+            "titen_session={}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800{secure_attr}",
             input.api_key
         );
         let mut headers = HeaderMap::new();

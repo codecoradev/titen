@@ -113,6 +113,18 @@ impl TitenScheduler {
 
 /// Process all due schedules — called by the scheduler tick
 async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<()> {
+    // B4 fix: Reap schedules stuck in 'processing' (server crash recovery).
+    // Any row processing > 5 minutes is considered stale → reset to 'pending'.
+    match store.reap_stale_schedules(300).await {
+        Ok(reaped) if reaped > 0 => {
+            warn!("Reaped {reaped} stale schedule(s) stuck in 'processing'");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            error!("Failed to reap stale schedules: {e}");
+        }
+    }
+
     let due_schedules = match store.get_due_schedules().await {
         Ok(s) => s,
         Err(e) => {
@@ -261,6 +273,53 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                             Ok(serde_json::json!({ "threads_post_id": post_id }))
                         }
                         Err(e) => Err(e.to_string()),
+                    }
+                }
+            }
+            "CAROUSEL" => {
+                let urls: Vec<String> = schedule
+                    .media_urls
+                    .as_ref()
+                    .and_then(|u| serde_json::from_str(u).ok())
+                    .unwrap_or_default();
+                if urls.len() < 2 || urls.len() > 20 {
+                    Err(format!(
+                        "CAROUSEL requires 2-20 image_urls, got {}",
+                        urls.len()
+                    ))
+                } else {
+                    // Create child containers, then publish carousel
+                    let mut children_ids = Vec::with_capacity(urls.len());
+                    let mut had_error = None;
+                    for url in &urls {
+                        match client
+                            .create_carousel_item(&account, "IMAGE", Some(url.as_str()), None, None)
+                            .await
+                        {
+                            Ok(id) => children_ids.push(id),
+                            Err(e) => {
+                                error!(
+                                    "Partial carousel failure after {n} children. \
+                                     Orphaned children IDs (manual cleanup needed): {children_ids:?}",
+                                    n = children_ids.len()
+                                );
+                                had_error = Some(e.to_string());
+                                break;
+                            }
+                        }
+                    }
+                    match had_error {
+                        Some(e) => Err(format!("Failed to create carousel item: {e}")),
+                        None => match client
+                            .publish_carousel(&account, schedule.caption.as_deref(), &children_ids)
+                            .await
+                        {
+                            Ok(post_id) => {
+                                let _ = store.track_rate(&schedule.account_id, "post").await;
+                                Ok(serde_json::json!({ "threads_post_id": post_id }))
+                            }
+                            Err(e) => Err(e.to_string()),
+                        },
                     }
                 }
             }
