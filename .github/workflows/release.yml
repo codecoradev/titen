@@ -159,21 +159,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  docker:
-    name: Build & Push Docker Image
+  docker-build:
+    name: Docker ${{ matrix.target }} ${{ matrix.platform }}
     needs: [build-release]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: api
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: api
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: web
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - target: web
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Extract version
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          SEMVER="${TAG_VERSION#v}"
+          echo "TAG=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "SEMVER=$SEMVER" >> $GITHUB_OUTPUT
 
-      - name: Set up Docker Buildx
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            suffix=-${{ matrix.target }},onlatest=true
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
@@ -183,62 +215,79 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
-        id: dockerhub
-        continue-on-error: true
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Download Linux binaries from build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: titen-*-${{ github.ref_name }}
-          path: release-artifacts
-          merge-multiple: true
-
-      - name: Extract binaries for Docker context
-        run: |
-          mkdir -p binaries
-          cd release-artifacts
-          AMD64=$(find . -name "titen-x86_64-unknown-linux-gnu-${{ github.ref_name }}.tar.gz" | head -1)
-          ARM64=$(find . -name "titen-aarch64-unknown-linux-gnu-${{ github.ref_name }}.tar.gz" | head -1)
-          if [ -z "$AMD64" ] || [ -z "$ARM64" ]; then
-            echo "::error::Linux binary artifacts not found"
-            exit 1
-          fi
-          tar xzf "$AMD64" -C ../binaries
-          mv ../binaries/titen-api ../binaries/titen-api-amd64
-          mv ../binaries/titen ../binaries/titen-amd64
-          mv ../binaries/titen-mcp ../binaries/titen-mcp-amd64
-          tar xzf "$ARM64" -C ../binaries
-          mv ../binaries/titen-api ../binaries/titen-api-arm64
-          mv ../binaries/titen ../binaries/titen-arm64
-          mv ../binaries/titen-mcp ../binaries/titen-mcp-arm64
-          chmod +x ../binaries/*
-          ls -lh ../binaries/
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            ${{ steps.dockerhub.outcome == 'success' && 'docker.io/codecoradev/titen' || '' }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64/v8
-          build-args: |
-            VERSION=${{ github.ref_name }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ matrix.target }}-${{ matrix.platform }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.target }}-${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-merge:
+    name: Docker merge ${{ matrix.target }}
+    needs: [docker-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version parts
+        id: version
+        run: |
+          SEMVER="${GITHUB_REF#refs/tags/v}"
+          MAJOR_MINOR=$(echo "$SEMVER" | cut -d. -f1-2)
+          echo "SEMVER=$SEMVER" >> $GITHUB_OUTPUT
+          echo "MAJOR_MINOR=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.target }}-*
+          merge-multiple: true
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository }}:${{ steps.version.outputs.SEMVER }}-${{ matrix.target }} \
+            -t ghcr.io/${{ github.repository }}:${{ steps.version.outputs.MAJOR_MINOR }}-${{ matrix.target }} \
+            -t ghcr.io/${{ github.repository }}:latest-${{ matrix.target }} \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.version.outputs.SEMVER }}-${{ matrix.target }}
