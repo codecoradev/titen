@@ -4,8 +4,9 @@
 #   - web: SvelteKit SSR server (Bun + adapter-node) — serves pages + proxies /api
 #   - api: Rust Axum backend — API, scheduling, Threads integration
 #
-# Default: build from source. For production, switch to prebuilt images after
-# first release:
+# Default: build from source. For production, set image tags in .env:
+#   WEB_IMAGE=ghcr.io/codecoradev/titen:latest-web
+#   API_IMAGE=ghcr.io/codecoradev/titen:latest-api
 #   docker compose pull && docker compose up -d
 #
 # SQLite database persists to a bind-mounted volume (./data/).
@@ -24,6 +25,7 @@
 
 services:
   web:
+    image: ${WEB_IMAGE:-}
     build:
       context: .
       dockerfile: Dockerfile
@@ -53,6 +55,7 @@ services:
       - traefik
 
   api:
+    image: ${API_IMAGE:-}
     build:
       context: .
       dockerfile: Dockerfile
