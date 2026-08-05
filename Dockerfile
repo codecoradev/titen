@@ -56,7 +56,7 @@ WORKDIR /app
 # Cache dependencies — copy only Cargo files first and build a dummy crate.
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
-RUN cargo build --release --bin titen-api
+RUN cargo build --release --bins
 
 # ── API runtime ──────────────────────────────────────────────────────
 FROM alpine:3.22 AS api
