@@ -306,6 +306,26 @@ impl Store {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Reap schedules stuck in `processing` state longer than a timeout.
+    ///
+    /// If the server crashes or a panic occurs after `claim_schedule` but before
+    /// the schedule reaches `published` or `failed`, the row stays `processing`
+    /// forever and the post is never retried. This resets rows that have been
+    /// `processing` for longer than `stale_secs` back to `pending` so the next
+    /// scheduler tick picks them up again.
+    pub async fn reap_stale_schedules(&self, stale_secs: i64) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE schedules
+             SET status = 'pending', updated_at = datetime('now')
+             WHERE status = 'processing'
+               AND updated_at < datetime('now', ?)",
+        )
+        .bind(format!("-{stale_secs} seconds"))
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     pub async fn delete_schedule(&self, id: &str) -> Result<()> {
         let result = sqlx::query("DELETE FROM schedules WHERE id = ?")
             .bind(id)
