@@ -8,7 +8,7 @@ This guide covers everything you need to deploy Titen in a production environmen
 
 1. [Overview](#1-overview)
 2. [Prerequisites](#2-prerequisites)
-3. [Quick Deploy (Docker — recommended)](#3-quick-deploy-docker--recommended)
+3. [Quick Deploy (Docker, recommended)](#3-quick-deploy-docker--recommended)
 4. [Native Deploy (binary)](#4-native-deploy-binary)
 5. [Reverse Proxy Configuration](#5-reverse-proxy-configuration)
 6. [Threads API Setup](#6-threads-api-setup)
@@ -22,7 +22,7 @@ This guide covers everything you need to deploy Titen in a production environmen
 
 ## 1. Overview
 
-This guide covers production deployment options for **Titen** — a self-hosted Threads management platform.
+This guide covers production deployment options for **Titen**, a self-hosted Threads management platform.
 
 **What this guide covers:**
 
@@ -39,13 +39,13 @@ Titen is built as a **single self-contained binary** with three core components:
 
 | Component | Description |
 |---|---|
-| **Rust binary** | HTTP server (Axum), scheduler, CLI, MCP server — all in one |
+| **Rust binary** | HTTP server (Axum), scheduler, CLI, MCP server, all in one |
 | **Static web assets** | Pre-built SvelteKit dashboard served from `/app/web` inside Docker |
 | **SQLite database** | Single-file database at `/data/titen.db` (Docker) or `~/.codecora/titen/titen.db` (local) |
 
 No external database, Redis, or message queue is required. The binary is fully self-contained.
 
-> **Default port:** `7845` — the binary listens on this port for HTTP traffic. In production, place it behind a reverse proxy.
+> **Default port:** `7845`. The binary listens on this port for HTTP traffic. In production, place it behind a reverse proxy.
 
 ---
 
@@ -67,7 +67,7 @@ Titen integrates with the **Meta Threads API**. You need a Meta for Developers a
 5. Note your **App ID** and **App Secret**
 6. Generate an initial **access token** via the Threads API settings
 
-> Detailed step-by-step in [Section 6 — Threads API Setup](#6-threads-api-setup).
+> Detailed step-by-step in [Section 6, Threads API Setup](#6-threads-api-setup).
 
 ### Runtime Requirements
 
@@ -88,11 +88,11 @@ A **reverse proxy** is required in production for:
 - **Request size limits** (for media uploads)
 - **Security** (Titen should not be exposed directly on port 7845)
 
-Supported: **Caddy** (recommended — automatic HTTPS) or **Nginx**.
+Supported: **Caddy** (recommended for automatic HTTPS) or **Nginx**.
 
 ---
 
-## 3. Quick Deploy (Docker — recommended)
+## 3. Quick Deploy (Docker, recommended)
 
 Docker is the fastest and most reliable way to deploy Titen.
 
@@ -116,13 +116,15 @@ services:
     container_name: titen
     restart: unless-stopped
     ports:
-      - "127.0.0.1:7845:7845"  # Bind to localhost only — reverse proxy handles external traffic
+      - "127.0.0.1:7845:7845"  # Bind to localhost only; reverse proxy handles external traffic
     volumes:
       - titen-data:/data       # Persistent SQLite database + config
     environment:
       # ── Core ──
       TITEN_DB_PATH: "/data/titen.db"
       TITEN_API_KEY: "your-secure-api-key-here"       # MANDATORY in production
+      TITEN_ENCRYPTION_KEY: "your-encryption-key-here" # AES-256-GCM key for token encryption. Generate: openssl rand -hex 32
+      TITEN_REQUIRE_ENCRYPTION: "true"                 # Fail-fast if encryption key is missing
       TITEN_HOST: "0.0.0.0"
       TITEN_PORT: "7845"
       TITEN_URL: "https://titen.yourdomain.com"       # Public-facing URL
@@ -137,7 +139,7 @@ services:
       # ── Sentiment Engine ──
       TITEN_SENTIMENT_ENGINE: "rule-based"             # or "ai" if configured
 
-      # ── S3 Media Storage (optional — uncomment if using) ──
+      # ── S3 Media Storage (optional, uncomment if using) ──
       # TITEN_S3_ENDPOINT: "https://s3.amazonaws.com"
       # TITEN_S3_BUCKET: "titen-media"
       # TITEN_S3_REGION: "us-east-1"
@@ -197,7 +199,7 @@ You should see a `200 OK` response from the health endpoint and startup logs sho
 
 The `titen-data` volume is mounted at `/data` inside the container and stores:
 
-- **SQLite database** (`/data/titen.db`) — all posts, schedules, accounts, analytics
+- **SQLite database** (`/data/titen.db`): all posts, schedules, accounts, analytics
 - **Uploaded media** (if stored locally rather than S3)
 - **Configuration state**
 
@@ -267,7 +269,7 @@ Create `/etc/systemd/system/titen.service`:
 
 ```ini
 [Unit]
-Description=Titen — Self-hosted Threads Management Platform
+Description=Titen: Self-hosted Threads Management Platform
 Documentation=https://github.com/codecoradev/titen
 After=network-online.target
 Wants=network-online.target
@@ -325,7 +327,7 @@ curl http://localhost:7845/api/health
 
 In production, Titen must be placed behind a reverse proxy for TLS termination and security.
 
-### Caddy (recommended — automatic HTTPS)
+### Caddy (recommended for automatic HTTPS)
 
 Caddy is recommended because it **automatically provisions and renews TLS certificates** via Let's Encrypt.
 
@@ -442,7 +444,7 @@ sudo systemctl reload nginx
 
 ## 6. Threads API Setup
 
-Titen uses the **Threads API** to publish and manage posts on behalf of your connected Threads accounts. This is separate from the admin login — it connects your Threads social account.
+Titen uses the **Threads API** to publish and manage posts on behalf of your connected Threads accounts. This is separate from the admin login. It connects your Threads social account.
 
 ### Step 1: Create a Meta App
 
@@ -468,24 +470,24 @@ Titen uses the **Threads API** to publish and manage posts on behalf of your con
    https://titen.yourdomain.com/auth/callback
    ```
 3. Add the required permissions:
-   - `threads_basic` — read profile info
-   - `threads_content_publish` — publish posts
-   - `threads_manage_insights` — read analytics
-   - `threads_manage_reply` — manage replies
+   - `threads_basic` (read profile info)
+   - `threads_content_publish` (publish posts)
+   - `threads_manage_insights` (read analytics)
+   - `threads_manage_reply` (manage replies)
 
 ### Step 4: Connect via OAuth Flow
 
 Titen provides a built-in OAuth flow. Start it from the web dashboard or via the API:
 
-**Option A — Via API:**
+**Option A, via API:**
 
 ```bash
-# Initiate OAuth — returns a redirect URL
+# Initiate OAuth; returns a redirect URL
 curl -X POST https://titen.yourdomain.com/api/threads/oauth/initiate \
   -H "X-API-Key: your-api-key"
 ```
 
-**Option B — Via Web Dashboard:**
+**Option B, via Web Dashboard:**
 
 1. Log in to your Titen dashboard at `https://titen.yourdomain.com/login`
 2. Navigate to **Settings → Threads Accounts → Connect Account**
@@ -610,11 +612,15 @@ volumes:
 
 Before going to production, verify every item on this checklist:
 
-- [ ] **Set `TITEN_API_KEY`** — Mandatory for production. Without it, Titen runs in dev mode with all endpoints open and unauthenticated. Generate with `openssl rand -hex 32`.
+- [ ] **Set `TITEN_API_KEY`**: Mandatory for production. Without it, Titen runs in dev mode with all endpoints open and unauthenticated. Generate with `openssl rand -hex 32`.
 
-- [ ] **Behind TLS reverse proxy** — Titen does not handle TLS itself. Use Caddy or Nginx. The `Secure` flag on session cookies requires HTTPS.
+- [ ] **Set `TITEN_ENCRYPTION_KEY`**: Generates the AES-256-GCM key for encrypting `access_token` and `app_secret` at rest. Without it, tokens are stored in plaintext. Generate with `openssl rand -hex 32`. Back up this key: losing it makes existing encrypted tokens unrecoverable.
 
-- [ ] **Firewall: only expose 443/80** — Do NOT expose port 7845 directly to the internet. The Docker Compose example binds to `127.0.0.1:7845` to prevent direct access.
+- [ ] **Set `TITEN_REQUIRE_ENCRYPTION=true`**: Fail-fast guard. The server refuses to start if the encryption key is missing. Recommended for all production deployments.
+
+- [ ] **Behind TLS reverse proxy**: Titen does not handle TLS itself. Use Caddy or Nginx. The `Secure` flag on session cookies requires HTTPS.
+
+- [ ] **Firewall: only expose 443/80**: Do NOT expose port 7845 directly to the internet. The Docker Compose example binds to `127.0.0.1:7845` to prevent direct access.
 
   ```bash
   # UFW example
@@ -625,23 +631,23 @@ Before going to production, verify every item on this checklist:
   sudo ufw enable
   ```
 
-- [ ] **Set `TITEN_CORS_ORIGINS`** — Restrict cross-origin policy to your exact domain (e.g., `https://titen.yourdomain.com`). Do not leave this unset in production.
+- [ ] **Set `TITEN_CORS_ORIGINS`**: Restrict cross-origin policy to your exact domain (e.g., `https://titen.yourdomain.com`). Do not leave this unset in production.
 
-- [ ] **Volume backup strategy for `/data`** — Set up automated backups (see [Section 9](#9-backup--recovery)). The SQLite database and uploaded media live here.
+- [ ] **Volume backup strategy for `/data`**: Set up automated backups (see [Section 9](#9-backup--recovery)). The SQLite database and uploaded media live here.
 
-- [ ] **Regular SQLite backup** — Use the safe online backup command (does not lock the database):
+- [ ] **Regular SQLite backup**: Use the safe online backup command (does not lock the database):
   ```bash
   sqlite3 /data/titen.db ".backup '/data/backup.db'"
   ```
 
-- [ ] **Keep Docker image updated** — Subscribe to release notifications and update regularly:
+- [ ] **Keep Docker image updated**: Subscribe to release notifications and update regularly:
   ```bash
   docker compose pull && docker compose up -d
   ```
 
-- [ ] **Protect `TITEN_API_KEY`** — Store it in a `.env` file (not committed to git) or a secrets manager. Never hardcode in version control.
+- [ ] **Protect `TITEN_API_KEY`**: Store it in a `.env` file (not committed to git) or a secrets manager. Never hardcode in version control.
 
-- [ ] **Restrict Threads OAuth redirect URI** — Ensure only your production domain is registered in the Meta for Developers console.
+- [ ] **Restrict Threads OAuth redirect URI**: Ensure only your production domain is registered in the Meta for Developers console.
 
 ---
 
@@ -687,7 +693,7 @@ echo "Backup complete: $(date)"
 ```bash
 chmod +x /opt/titen/backup.sh
 
-# Add to crontab — runs daily at 3 AM
+# Add to crontab; runs daily at 3 AM
 crontab -e
 # 0 3 * * * /opt/titen/backup.sh >> /var/log/titen-backup.log 2>&1
 ```
@@ -762,7 +768,7 @@ docker logs titen
 curl http://localhost:7845/api/health
 ```
 
-This preserves your data volume — no data loss.
+This preserves your data volume. No data loss.
 
 ### Binary (Native Deploy)
 
@@ -787,7 +793,7 @@ curl http://localhost:7845/api/health
 
 ### Database Migration
 
-Titen includes **built-in database migrations** (3 migrations as of current release). Migrations run **automatically on startup** — no manual action needed.
+Titen includes **built-in database migrations** (4 migrations as of current release). Migrations run **automatically on startup**. No manual action needed.
 
 On startup, Titen will:
 
@@ -844,27 +850,27 @@ sudo kill -9 <PID>
 
 **Causes & Fixes:**
 
-1. **Multiple instances accessing the same database** — Ensure only one Titen instance is running against the same SQLite file.
+1. **Multiple instances accessing the same database**: ensure only one Titen instance is running against the same SQLite file.
 
    ```bash
    # Check for duplicate containers
    docker ps | grep titen
    ```
 
-2. **Stale lock from a crashed process** — Restart the container:
+2. **Stale lock from a crashed process**: restart the container:
 
    ```bash
    docker compose restart titen
    ```
 
-3. **Disk full** — Check disk space:
+3. **Disk full**: check disk space:
 
    ```bash
    df -h
    docker system df
    ```
 
-4. **WAL file corruption** — If persistent, run a checkpoint:
+4. **WAL file corruption**: if persistent, run a checkpoint:
 
    ```bash
    docker exec titen sqlite3 /data/titen.db "PRAGMA wal_checkpoint(TRUNCATE);"
