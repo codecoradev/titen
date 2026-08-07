@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide walks through everyday tasks with Titen — from connecting your first Threads account to scheduling posts and reading analytics.
+This guide walks through everyday tasks with Titen, from connecting your first Threads account to scheduling posts and reading analytics.
 
 > **New here?** Follow the [Deployment Guide](deployment.md) first to get the server running.
 
@@ -48,7 +48,7 @@ Titen includes a built-in web dashboard served at the root URL.
 
 Titen uses the Threads Graph API. You need a Threads account and a Meta for Developers app.
 
-### Step 1 — Get API Credentials
+### Step 1: Get API Credentials
 
 1. Go to [Meta for Developers](https://developers.facebook.com/apps).
 2. Create a new app (type: **Business**).
@@ -56,7 +56,7 @@ Titen uses the Threads Graph API. You need a Threads account and a Meta for Deve
 4. Navigate to **Threads → API Setup** to find your App ID and App Secret.
 5. Generate a long-lived access token via the OAuth flow or the Token Generator tool.
 
-### Step 2 — Add Account via CLI
+### Step 2: Add Account via CLI
 
 ```bash
 # Set your API key (if auth is enabled)
@@ -70,7 +70,7 @@ titen account add mybrand \
   --expires-at "2026-12-01T00:00:00Z"
 ```
 
-### Step 3 — Add Account via Dashboard
+### Step 3: Add Account via Dashboard
 
 Alternatively, use the web dashboard:
 
@@ -78,9 +78,9 @@ Alternatively, use the web dashboard:
 2. Enter username, access token, and optional user ID.
 3. Click **Save**.
 
-### Step 4 — Add Account via OAuth (recommended)
+### Step 4: Add Account via OAuth (recommended)
 
-The cleanest method — no manual token copying:
+The cleanest method, no manual token copying:
 
 1. Set these environment variables on the server:
    ```
@@ -243,7 +243,7 @@ Schedule created (status: pending)
     ▼
 Scheduler tick (every 60s)
     │
-    ├── claim_schedule() — atomic UPDATE WHERE status='pending'
+    ├── claim_schedule() - atomic UPDATE WHERE status='pending'
     │   (prevents double-posting if running multiple instances)
     │
     ├── status → processing

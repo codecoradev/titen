@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `enc:v1:` versioned prefix for transparent migration of existing plaintext data
 - Migration 004: one-time plaintext-to-encrypted upgrade on startup (idempotent)
 - Encryption key zeroized on drop via `zeroize` crate
+- `TITEN_REQUIRE_ENCRYPTION` env var: fail-fast on startup if encryption key is missing in production (PR #48)
+- HTTP client timeouts on all outbound calls: Threads API (30s total, 10s connect) and S3 storage (60s total, 10s connect) (PR #50)
+- `Arc::from_static` replaced raw static references to prevent pointer lifetime issues (PR #50)
+- Error-swallowing patterns replaced with logged warnings: best-effort operations now surface failures instead of silently dropping them (PR #51)
+- Token logging audit: confirmed no access tokens or secrets appear in log output at any level (PR #51)
+- Integration test verifying encryption at rest: creates an account, reads raw SQLite, confirms ciphertext prefix `enc:v1:` is present and plaintext is absent (PR #52)
+
+### Documentation
+- `.env.example` updated with S3 storage and scheduler interval variables (PR #53)
 
 ## [0.2.0] - 2026-08-05
 
@@ -31,7 +40,7 @@ Docker GHCR images + scheduler hardening + two-container architecture.
 - GHCR Docker workflow with native ARM runner (split per-arch + manifest merge)
 - `docker-compose.yml` with Traefik optional + GHCR image pull support
 - CAROUSEL media type: multi-step flow (N children containers → publish carousel)
-- `reap_stale_schedules()` — reaps schedules stuck in `processing` > 5min timeout
+- `reap_stale_schedules()` reaps schedules stuck in `processing` beyond a 5-minute timeout
 - `TITEN_COOKIE_SECURE` env var for production HTTPS Secure flag
 - `.env.example` with all configuration documented
 

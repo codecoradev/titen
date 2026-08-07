@@ -6,27 +6,27 @@
 
 # Titen
 
-> *titen* — Javanese: to watch closely, to observe with care.
+> *titen* (Javanese): to watch closely, to observe with care.
 
-Self-hosted Threads management platform. Post, schedule, analyze — on your own infrastructure.
+Self-hosted Threads management platform. Post, schedule, and analyze Threads content from your own infrastructure.
 
 ## Why Titen?
 
-Threads has no native post scheduling. Every existing tool is a SaaS you don't control, with your API tokens living on someone else's server. Titen runs locally or on your box, talks directly to the Threads Graph API, and stores everything in a single SQLite file.
+Threads has no native post scheduling. Existing tools are SaaS products where your API tokens live on someone else's server. Titen runs on your box, talks directly to the Threads Graph API, and stores everything in a single SQLite file.
 
-That's it. No web dashboard you didn't ask for. No subscription. No vendor lock-in.
+No subscription. No vendor lock-in. Your tokens stay on your machine, encrypted at rest with AES-256-GCM.
 
 ## Features
 
 | Capability | Details |
 |---|---|
 | **Multi-account** | Manage multiple Threads accounts in one instance |
-| **Post scheduling** | Cron-based scheduler — something Threads itself doesn't offer |
+| **Post scheduling** | Cron-based scheduler for automated posting that Threads itself does not offer |
 | **Comment fetching** | Pull comments from the Threads API, store locally |
 | **Sentiment analysis** | Pluggable engine trait (stub default; ONNX/LLM/custom API extensible) |
 | **Analytics** | Time-series snapshots per post |
 | **Media storage** | S3-compatible via swappable storage trait |
-| **MCP server** | JSON-RPC 2.0 over stdio — works with Claude Desktop, Cursor, etc. |
+| **MCP server** | JSON-RPC 2.0 over stdio, compatible with Claude Desktop, Cursor, etc. |
 | **CLI** | Full CRUD from the terminal |
 | **Docker** | Single container, minimal footprint |
 
@@ -38,14 +38,14 @@ That's it. No web dashboard you didn't ask for. No subscription. No vendor lock-
 
 | Crate | Purpose |
 |---|---|
-| `titen-core` | Domain logic — models, SQLite, Threads API client, sentiment trait, scheduler, S3 storage |
-| `titen-api` | Axum HTTP server — REST API, API key auth, CORS, rate limiting |
-| `titen-cli` | Clap CLI — all operations via the HTTP API |
-| `titen-mcp` | MCP stdio server — 14 tools for AI agent integration |
+| `titen-core` | Domain logic: models, SQLite store, Threads API client, sentiment trait, scheduler, S3 storage, AES-256-GCM encryption |
+| `titen-api` | Axum HTTP server: REST API, API key auth, CORS, rate limiting |
+| `titen-cli` | Clap CLI: all operations via the HTTP API |
+| `titen-mcp` | MCP stdio server: 14 tools for AI agent integration |
 
-7 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`.
+8 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`, `_encryption_meta`.
 
-3 migrations: `001_initial` (schema), `002_drop_refresh_token`, `003_add_app_secret`.
+4 migrations: `001_initial` (schema), `002_drop_refresh_token`, `003_add_app_secret`, `004_encrypt_tokens` (encrypts existing plaintext tokens on startup).
 
 ## Quick Start
 
@@ -89,7 +89,9 @@ All config via environment variables:
 | Variable | Default | Description |
 |---|---|---|
 | `TITEN_DB_PATH` | `~/.codecora/titen/titen.db` | SQLite database path |
-| `TITEN_API_KEY` | *(none)* | API key — when unset, all endpoints are open |
+| `TITEN_API_KEY` | *(none)* | API key for endpoint access. When unset, all endpoints are open (dev mode) |
+| `TITEN_ENCRYPTION_KEY` | *(none)* | AES-256-GCM key for token encryption at rest. Generate with `openssl rand -hex 32` |
+| `TITEN_REQUIRE_ENCRYPTION` | `false` | Set to `true` in production to fail-fast if encryption key is missing |
 | `TITEN_HOST` | `0.0.0.0` | Bind address |
 | `TITEN_PORT` | `7845` | Bind port |
 | `TITEN_URL` | `http://localhost:7845` | Base URL for CLI |
@@ -106,7 +108,7 @@ All config via environment variables:
 
 Base URL: `http://localhost:7845`
 
-All endpoints except `/health` require `X-API-Key` authentication when `TITEN_API_KEY` is set. **Not** Bearer — it's a plain header:
+All endpoints except `/health` require `X-API-Key` authentication when `TITEN_API_KEY` is set. Use a plain header (not Bearer):
 
 ```
 X-API-Key: your-key-here
@@ -244,7 +246,7 @@ titen media delete <id>
 
 ## MCP Server
 
-Titen ships an MCP (Model Context Protocol) server for AI agent integration. Communicates over stdio using JSON-RPC 2.0.
+Titen ships an MCP (Model Context Protocol) server for AI agent integration. It communicates over stdio using JSON-RPC 2.0.
 
 ### Setup
 
@@ -263,7 +265,7 @@ Titen ships an MCP (Model Context Protocol) server for AI agent integration. Com
 }
 ```
 
-**Cursor** — add to your MCP settings:
+**Cursor**: add to your MCP settings:
 
 ```json
 {
@@ -310,9 +312,18 @@ The platform enforces these per-account daily limits:
 
 ## Scheduler Behavior
 
-- **Engine**: tokio-cron with a 60-second tick interval
-- **Flow**: At scheduled time → create media container → wait for ready → publish
-- **Publish delays**: text posts publish immediately (0s), image posts wait 30s, video posts wait 60s for processing
+- Engine: tokio-cron with a 60-second tick interval
+- Flow: at scheduled time, create media container, wait for ready, publish
+- Publish delays: text posts publish immediately (0s), image posts wait 30s, video posts wait 60s for processing
+
+## Security
+
+- **Token encryption**: `access_token` and `app_secret` columns encrypted at rest with AES-256-GCM. Each value gets a random 96-bit nonce and a `enc:v1:` versioned prefix for future migration. Key is zeroized on drop.
+- **Fail-fast mode**: set `TITEN_REQUIRE_ENCRYPTION=true` in production to reject startup if the encryption key is missing.
+- **API key auth**: constant-time comparison against `TITEN_API_KEY`. Three credential sources: `X-API-Key` header, `api_key` query param, `titen_session` cookie.
+- **HTTP client timeouts**: all outbound calls to the Threads API and S3 have connect and total timeout limits.
+
+See [SECURITY.md](SECURITY.md) for the full policy and vulnerability reporting.
 
 ## Docker
 
