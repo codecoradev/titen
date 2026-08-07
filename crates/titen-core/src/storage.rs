@@ -65,6 +65,16 @@ impl S3Storage {
         let region = std::env::var("TITEN_S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
         let public_url = std::env::var("TITEN_S3_PUBLIC_URL").ok();
 
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| {
+                crate::error::TitenError::ConfigError(format!(
+                    "Failed to build S3 HTTP client: {e}"
+                ))
+            })?;
+
         Ok(Self {
             endpoint,
             bucket,
@@ -72,7 +82,7 @@ impl S3Storage {
             access_key,
             secret_key,
             public_url,
-            client: reqwest::Client::new(),
+            client,
         })
     }
 

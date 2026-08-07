@@ -21,10 +21,18 @@ pub struct ThreadsClient {
 
 impl ThreadsClient {
     pub fn new(store: std::sync::Arc<Store>) -> Self {
-        Self {
-            http: Client::new(),
-            store,
-        }
+        let http = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .build()
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "Failed to build HTTP client with timeouts, falling back to default: {e}"
+                );
+                Client::new()
+            });
+        Self { http, store }
     }
 
     // ─── Token Management ─────────────────────────────────────
