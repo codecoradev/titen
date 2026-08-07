@@ -23,7 +23,7 @@ struct LoginResponse {
 /// The cookie stores the API key itself (same as X-API-Key header would carry).
 /// This is acceptable because:
 /// 1. httpOnly prevents JS access (XSS-safe, unlike localStorage)
-/// 2. SameSite=Strict prevents CSRF
+/// 2. SameSite=Lax prevents CSRF on POST while allowing OAuth callback redirects
 /// 3. The API key is already a bearer-style secret
 pub async fn login(
     State(state): State<AppState>,
@@ -33,7 +33,7 @@ pub async fn login(
         Some(key) if !key.is_empty() => key,
         _ => {
             // Dev mode — no API key configured, accept anything
-            let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+            let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
             let mut headers = HeaderMap::new();
             // Safe: cookie is a hardcoded ASCII constant
             headers.insert(SET_COOKIE, HeaderValue::from_static(cookie));
@@ -51,7 +51,7 @@ pub async fn login(
             .unwrap_or(false);
         let secure_attr = if secure { "; Secure" } else { "" };
         let cookie_value = format!(
-            "titen_session={}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800{secure_attr}",
+            "titen_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{secure_attr}",
             input.api_key
         );
         let mut headers = HeaderMap::new();
@@ -124,7 +124,7 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
 
 /// POST /api/auth/logout — clear session cookie
 pub async fn logout() -> impl IntoResponse {
-    let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+    let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
     let mut headers = HeaderMap::new();
     // Safe: cookie is a hardcoded ASCII constant
     headers.insert(SET_COOKIE, HeaderValue::from_static(cookie));
