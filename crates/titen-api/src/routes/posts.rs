@@ -70,9 +70,52 @@ pub async fn create_post(
         );
     }
 
+    // Resolve media_ids → S3 URLs (if provided, merge with/replace image_urls for CAROUSEL)
+    let mut effective_input = input;
+    if let Some(ref media_ids) = effective_input.media_ids {
+        if !media_ids.is_empty() {
+            let mut resolved_urls = Vec::with_capacity(media_ids.len());
+            for mid in media_ids {
+                match state.store.get_media_asset(mid).await {
+                    Ok(asset) => {
+                        if let Some(url) = &asset.s3_url {
+                            resolved_urls.push(url.clone());
+                        } else {
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                Json(serde_json::json!({
+                                    "error": format!("Media asset {} has no S3 URL", mid),
+                                    "code": "MEDIA_NO_URL"
+                                })),
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({
+                                "error": format!("Media asset {} not found: {e}", mid),
+                                "code": "MEDIA_NOT_FOUND"
+                            })),
+                        );
+                    }
+                }
+            }
+            // media_ids takes precedence — replaces image_urls
+            effective_input.image_urls = Some(resolved_urls);
+            if effective_input.media_type.is_none() {
+                effective_input.media_type = Some("CAROUSEL".to_string());
+            }
+        }
+    }
+
     // Validate CAROUSEL before the match (early return for HTTP error)
-    if input.media_type.as_deref() == Some("CAROUSEL") {
-        let urls = match input.image_urls.as_ref().filter(|v| !v.is_empty()) {
+    if effective_input.media_type.as_deref() == Some("CAROUSEL") {
+        let urls = match effective_input
+            .image_urls
+            .as_ref()
+            .filter(|v| !v.is_empty())
+        {
             Some(u) => u,
             None => {
                 return (
@@ -96,11 +139,11 @@ pub async fn create_post(
     }
 
     // Publish via Threads API
-    let caption = input.caption.as_deref().unwrap_or("");
-    let threads_post_id = match input.media_type.as_deref().unwrap_or("TEXT") {
+    let caption = effective_input.caption.as_deref().unwrap_or("");
+    let threads_post_id = match effective_input.media_type.as_deref().unwrap_or("TEXT") {
         "TEXT" => state.threads_client.publish_text(&account, caption).await,
         "IMAGE" => {
-            let url = input.image_url.as_deref().unwrap_or("");
+            let url = effective_input.image_url.as_deref().unwrap_or("");
             if url.is_empty() {
                 Err(titen_core::TitenError::InvalidRequest(
                     "image_url is required for IMAGE posts".to_string(),
@@ -108,12 +151,17 @@ pub async fn create_post(
             } else {
                 state
                     .threads_client
-                    .publish_image(&account, Some(caption), url, input.alt_text.as_deref())
+                    .publish_image(
+                        &account,
+                        Some(caption),
+                        url,
+                        effective_input.alt_text.as_deref(),
+                    )
                     .await
             }
         }
         "VIDEO" => {
-            let url = input.video_url.as_deref().unwrap_or("");
+            let url = effective_input.video_url.as_deref().unwrap_or("");
             if url.is_empty() {
                 Err(titen_core::TitenError::InvalidRequest(
                     "video_url is required for VIDEO posts".to_string(),
@@ -127,7 +175,7 @@ pub async fn create_post(
         }
         "CAROUSEL" => {
             // Validation already done above — safe to unwrap
-            let urls = input.image_urls.as_ref().unwrap();
+            let urls = effective_input.image_urls.as_ref().unwrap();
             let mut children_ids = Vec::with_capacity(urls.len());
             let mut children_failed = None;
             for url in urls {
@@ -168,13 +216,17 @@ pub async fn create_post(
     match threads_post_id {
         Ok(post_id) => {
             // Track rate
-            if let Err(e) = state.store.track_rate(&input.account_id, "post").await {
+            if let Err(e) = state
+                .store
+                .track_rate(&effective_input.account_id, "post")
+                .await
+            {
                 tracing::warn!("Failed to track rate for post: {e}");
             }
 
             // Create post record
             let db_id = Uuid::now_v7().to_string();
-            match state.store.create_post(&db_id, &input).await {
+            match state.store.create_post(&db_id, &effective_input).await {
                 Ok(post) => (
                     StatusCode::CREATED,
                     Json(serde_json::json!({

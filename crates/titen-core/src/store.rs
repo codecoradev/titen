@@ -630,6 +630,15 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// Get a single media asset by ID.
+    pub async fn get_media_asset(&self, id: &str) -> Result<MediaAsset> {
+        sqlx::query_as::<_, MediaAsset>("SELECT * FROM media_assets WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn create_media_asset(
         &self,
         id: &str,

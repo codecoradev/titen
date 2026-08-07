@@ -385,13 +385,14 @@ fn handle_tool_call(
                 caption: Some(caption.to_string()),
                 media_type: Some(media_type.to_string()),
                 image_url: image_url.map(|s| s.to_string()),
+                text_attachment: None,
+                video_url: None,
+                image_urls: None,
+                media_ids: None,
                 alt_text: args
                     .get("alt_text")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
-                text_attachment: None,
-                video_url: None,
-                image_urls: None,
             };
 
             let id = uuid::Uuid::now_v7().to_string();

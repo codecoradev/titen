@@ -2,9 +2,9 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatSkeleton from '$lib/components/StatSkeleton.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
-	import { getHealth, listAccounts, listPosts, listSchedules, getUpcomingSchedules } from '$lib/api';
+	import { getHealth, listAccounts, listPosts, listSchedules, getUpcomingSchedules, getAccountInsights } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
-	import type { Account, Post, Schedule, HealthResponse } from '$lib/types';
+	import type { Account, Post, Schedule, HealthResponse, AccountInsights } from '$lib/types';
 
 	let loading = $state(true);
 	let health = $state<HealthResponse | null>(null);
@@ -12,6 +12,9 @@
 	let posts = $state<Post[]>([]);
 	let schedules = $state<Schedule[]>([]);
 	let upcoming = $state<Schedule[]>([]);
+	let insights = $state<AccountInsights | null>(null);
+	let insightsLoading = $state(false);
+	let insightsAccountId = $state('');
 
 	let activeAccounts = $derived(accounts.filter((a) => a.is_active).length);
 	let publishedPosts = $derived(posts.filter((p) => p.status === 'published').length);
@@ -54,10 +57,27 @@
 			posts = p;
 			schedules = s;
 			upcoming = u;
+			// Auto-load insights for first active account
+			if (a.length > 0) {
+				insightsAccountId = a[0].id;
+				await loadInsights();
+			}
 		} catch (e: any) {
 			toast('Failed to load dashboard data', 'error');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadInsights() {
+		if (!insightsAccountId) return;
+		insightsLoading = true;
+		try {
+			insights = await getAccountInsights(insightsAccountId);
+		} catch {
+			insights = null; // silently fail — insights are optional
+		} finally {
+			insightsLoading = false;
 		}
 	}
 
@@ -136,6 +156,43 @@
 		</section>
 	{/if}
 
+	<!-- Account insights -->
+	{#if accounts.length > 0}
+		<section style="margin-bottom: var(--space-lg);">
+			<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
+				<h2 style="font-size: var(--text-md); font-weight: 600; margin: 0;">Account Insights</h2>
+				<select class="select" style="width: auto; font-size: var(--text-sm);" bind:value={insightsAccountId} onchange={loadInsights}>
+					{#each accounts as account}
+						<option value={account.id}>@{account.username}</option>
+					{/each}
+				</select>
+			</div>
+			<div class="data-table-wrap">
+				{#if insightsLoading}
+					<div class="insights-grid">
+						{#each Array(6) as _}
+							<div class="insight-card"><div class="skeleton" style="height: 2rem;"></div></div>
+						{/each}
+					</div>
+				{:else if insights}
+					<div class="insights-grid">
+						{#each Object.entries(insights) as [key, value]}
+							<div class="insight-card">
+								<div class="insight-label">{key.replace(/_/g, ' ')}</div>
+								<div class="insight-value tabular-nums">{typeof value === 'number' ? value.toLocaleString() : value ?? '—'}</div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="empty-state" style="padding: var(--space-lg);">
+						<p class="empty-state-title" style="font-size: var(--text-sm);">No insights available</p>
+						<p class="empty-state-desc" style="font-size: var(--text-xs);">Insights may require a valid Threads API token.</p>
+					</div>
+				{/if}
+			</div>
+		</section>
+	{/if}
+
 	<!-- Two-column: Recent posts + Upcoming schedules -->
 	<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
 		<!-- Recent posts -->
@@ -193,6 +250,32 @@
 {/if}
 
 <style>
+	.insights-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+		gap: var(--space-sm);
+		padding: var(--space-md);
+	}
+
+	.insight-card {
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-bg-hover);
+		border-radius: var(--radius-sm);
+		text-align: center;
+	}
+
+	.insight-label {
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+		text-transform: capitalize;
+		margin-bottom: var(--space-3xs);
+	}
+
+	.insight-value {
+		font-size: var(--text-lg);
+		font-weight: 700;
+	}
+
 	.token-list {
 		display: flex;
 		flex-direction: column;

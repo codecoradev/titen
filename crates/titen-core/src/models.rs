@@ -79,6 +79,9 @@ pub struct CreatePost {
     pub image_url: Option<String>,
     pub video_url: Option<String>,
     pub image_urls: Option<Vec<String>>,
+    /// Media library asset IDs — resolved to S3 URLs for CAROUSEL posts.
+    /// Allows users to select from uploaded media instead of pasting URLs.
+    pub media_ids: Option<Vec<String>>,
     pub alt_text: Option<String>,
 }
 

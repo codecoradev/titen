@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
+### Added
+- **Account insights endpoint**: `GET /api/accounts/{id}/insights` exposes aggregate metrics (views, likes, replies, reposts, quotes, followers_count) from the Threads API — filterable via `?metrics=`, `?since=`, `?until=` query params
+- **Mentions page**: new admin route `/admin/mentions` — fetch posts where your account is mentioned and reply directly from the UI
+- **Insights dashboard panel**: dashboard now shows a per-account insights grid with account selector dropdown
+- **Carousel from media library**: `CreatePost` accepts `media_ids: Vec<String>` — resolves media asset IDs to S3 URLs automatically for carousel posts
+- **Reply from mentions**: mentions page includes a reply modal with inline text input
+- Nav sidebar now includes "Mentions" link
+
+### Changed
+- **Token auto-refresh on publish**: `process_due_schedules` now checks token validity before each publish attempt — if token is `expired` or `expiring_soon`, it refreshes automatically instead of failing the schedule
+- `CreatePost` struct extended with `media_ids`, `image_urls`, `video_url`, `alt_text` fields
+- API client (`api.ts`) now exports `fetchMentions`, `createReply`, `getAccountInsights`, and extended `createPost` with all new fields
+
+### Fixed
+- **Token refresh gap**: scheduler's `check_all_tokens()` already refreshed every 6h, but per-post publishing had no refresh check — schedules would fail if token expired between ticks. Now each publish attempt ensures a valid token first
+
 ## [0.2.6] - 2026-08-07
 
 ### Fixed
