@@ -430,6 +430,7 @@ fn handle_tool_call(
                     .and_then(|v| v.as_str())
                     .map(|s| vec![s.to_string()]),
                 scheduled_at: scheduled_at.to_string(),
+                auto_approve: false,
             };
 
             let id = uuid::Uuid::now_v7().to_string();

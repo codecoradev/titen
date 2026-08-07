@@ -101,6 +101,8 @@ pub struct Schedule {
     pub result_post_id: Option<String>,
     pub result_json: Option<String>,
     pub error: Option<String>,
+    pub approved_by: Option<String>,
+    pub approved_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -113,6 +115,20 @@ pub struct CreateSchedule {
     pub text_attachment: Option<String>,
     pub media_urls: Option<Vec<String>>,
     pub scheduled_at: String,
+    /// Skip draft state and go straight to 'pending' (auto-approve).
+    /// Default: false — all new schedules require human approval.
+    #[serde(default)]
+    pub auto_approve: bool,
+}
+
+/// Partial update for a schedule (HITL edit before approval).
+/// All fields optional — only provided fields are updated.
+#[derive(Debug, Deserialize)]
+pub struct UpdateSchedule {
+    pub caption: Option<String>,
+    pub media_type: Option<String>,
+    pub media_urls: Option<Vec<String>>,
+    pub scheduled_at: Option<String>,
 }
 
 // ─── Comment ──────────────────────────────────────────────
