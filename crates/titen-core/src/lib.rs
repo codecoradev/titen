@@ -19,6 +19,7 @@
 //! [`KeywordEngine`], [`StubEngine`], [`Storage`], [`S3Storage`].
 
 pub mod config;
+pub mod crypto;
 pub mod error;
 pub mod models;
 pub mod scheduler;
@@ -27,6 +28,7 @@ pub mod storage;
 pub mod store;
 pub mod threads_client;
 
+pub use crypto::Cipher;
 pub use error::{Result, TitenError};
 pub use scheduler::TitenScheduler;
 pub use sentiment::{KeywordEngine, SentimentEngine, StubEngine, build_engine, compute_summary};
