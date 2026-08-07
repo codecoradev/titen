@@ -47,6 +47,8 @@ These run via CI and block merge on findings.
 
 ## Token encryption
 
-`access_token` and `app_secret` are encrypted at rest with AES-256-GCM (since PR #48). Production deployments must set `TITEN_ENCRYPTION_KEY` (generate with `openssl rand -hex 32`). If the key is missing, the store runs in plaintext mode for development convenience.
+`access_token` and `app_secret` are encrypted at rest with AES-256-GCM (since PR #48). Production deployments **must** set `TITEN_ENCRYPTION_KEY` (generate with `openssl rand -hex 32`).
+
+> **Warning:** If `TITEN_ENCRYPTION_KEY` is missing, the store runs in plaintext mode. This is intended for local development only. Running without encryption in production is a security risk. Verify the key is set before deploying.
 
 See `.env.example` for configuration details.
