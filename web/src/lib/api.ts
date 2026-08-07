@@ -46,7 +46,7 @@ export class ApiError extends Error {
 		public statusText: string,
 		public body: string,
 	) {
-		super(`API ${status}: ${statusText}`);
+		super(body || `API ${status}: ${statusText}`);
 	}
 }
 

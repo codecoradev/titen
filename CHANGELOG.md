@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-08-07
+
+### Fixed
+- Threads API error responses (e.g. expired code, invalid credentials) now properly parsed and surfaced to the user instead of showing empty "API 400:" message
+- `ApiError` constructor now passes the real error message to `Error.message` instead of ignoring it
+- OAuth code exchange now checks for `{"error": {...}}` response from Threads API and returns the actual error message (message, type, code) instead of generic "No access_token" fallback
+
 ## [0.2.4] - 2026-08-07
 
 ### Fixed
