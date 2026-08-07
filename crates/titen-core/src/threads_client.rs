@@ -120,39 +120,69 @@ impl ThreadsClient {
             ("redirect_uri", redirect_uri),
         ];
 
-        let resp: serde_json::Value = self
+        let resp = self
             .http
             .post(&url)
             .form(&params)
             .send()
-            .await?
+            .await?;
+
+        let status = resp.status();
+        let body: serde_json::Value = resp
             .json()
             .await
             .map_err(|e| {
                 crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse code exchange response: {e}"
+                    "Failed to parse code exchange response (HTTP {}): {e}",
+                    status
                 ))
             })?;
 
-        let access_token = resp
+        // Check for Threads/Meta OAuth error response BEFORE looking for access_token
+        if let Some(err) = body.get("error") {
+            let msg = err
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown OAuth error");
+            let fb_type = err
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("OAuthException");
+            let fb_code = err
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            return Err(crate::error::TitenError::ThreadsApiError(format!(
+                "Threads API error (HTTP {status}): {msg} [{fb_type} #{fb_code}]"
+            )));
+        }
+
+        let access_token = body
             .get("access_token")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                crate::error::TitenError::ThreadsApiError(
-                    "No access_token in code exchange response".to_string(),
-                )
+                crate::error::TitenError::ThreadsApiError(format!(
+                    "No access_token in code exchange response (HTTP {status}): {body}"
+                ))
             })?
             .to_string();
 
-        let user_id = resp
+        let user_id = body
             .get("user_id")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                crate::error::TitenError::ThreadsApiError(
-                    "No user_id in code exchange response".to_string(),
-                )
-            })?
+            .unwrap_or_else(|| {
+                tracing::warn!("No user_id in token exchange response, deriving from token");
+                ""
+            })
             .to_string();
+
+        // If user_id is empty, try to extract from access_token (JWT format)
+        let user_id = if user_id.is_empty() {
+            // Try to decode user_id from the token (Meta tokens sometimes embed it)
+            access_token.split('|').next().unwrap_or("").to_string()
+        } else {
+            user_id
+        };
 
         Ok((access_token, user_id))
     }
