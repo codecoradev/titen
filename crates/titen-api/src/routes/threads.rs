@@ -173,3 +173,203 @@ pub struct PublishContainerInput {
 pub struct ContainerStatusInput {
     pub account_id: String,
 }
+
+#[derive(Deserialize)]
+pub struct CreateReplyInput {
+    pub account_id: String,
+    pub reply_to: String,
+    pub text: String,
+}
+
+#[derive(Deserialize)]
+pub struct HideReplyInput {
+    pub account_id: String,
+    pub hide: bool,
+}
+
+#[derive(Deserialize)]
+pub struct LookupProfileInput {
+    pub account_id: String,
+    pub username: String,
+}
+
+#[derive(Deserialize)]
+pub struct SearchKeywordInput {
+    pub account_id: String,
+    pub query: String,
+    pub search_type: Option<String>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
+pub struct FetchMentionsInput {
+    pub account_id: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
+pub struct ShareToInstagramInput {
+    pub account_id: String,
+    pub threads_post_id: String,
+}
+
+/// Create a reply to a Threads post
+pub async fn create_reply(
+    State(state): State<AppState>,
+    Json(input): Json<CreateReplyInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .create_reply(&account, &input.reply_to, &input.text)
+        .await
+    {
+        Ok(reply_id) => {
+            Json(serde_json::json!({ "data": { "reply_id": reply_id, "status": "published" } }))
+        }
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "REPLY_FAILED" })),
+    }
+}
+
+/// Hide or unhide a reply
+pub async fn hide_reply(
+    State(state): State<AppState>,
+    Path(reply_id): Path<String>,
+    Json(input): Json<HideReplyInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .hide_reply(&account, &reply_id, input.hide)
+        .await
+    {
+        Ok(success) => {
+            Json(serde_json::json!({ "data": { "reply_id": reply_id, "hidden": success } }))
+        }
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "HIDE_REPLY_FAILED" })),
+    }
+}
+
+/// Look up a public Threads profile by username
+pub async fn lookup_profile(
+    State(state): State<AppState>,
+    Json(input): Json<LookupProfileInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .lookup_profile(&account, &input.username)
+        .await
+    {
+        Ok(profile) => Json(serde_json::json!({ "data": profile })),
+        Err(e) => {
+            Json(serde_json::json!({ "error": e.to_string(), "code": "PROFILE_LOOKUP_FAILED" }))
+        }
+    }
+}
+
+/// Search for public Threads posts by keyword
+pub async fn search_keyword(
+    State(state): State<AppState>,
+    Json(input): Json<SearchKeywordInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    let params = titen_core::threads_client::SearchParams {
+        search_type: input.search_type,
+        limit: input.limit,
+        ..Default::default()
+    };
+
+    match state
+        .threads_client
+        .search_keyword(&account, &input.query, Some(&params))
+        .await
+    {
+        Ok(results) => Json(serde_json::json!({ "data": results, "count": results.len() })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "SEARCH_FAILED" })),
+    }
+}
+
+/// Fetch posts where the user is mentioned
+pub async fn fetch_mentions(
+    State(state): State<AppState>,
+    Json(input): Json<FetchMentionsInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .fetch_mentions(&account, input.limit)
+        .await
+    {
+        Ok(mentions) => Json(serde_json::json!({ "data": mentions, "count": mentions.len() })),
+        Err(e) => {
+            Json(serde_json::json!({ "error": e.to_string(), "code": "MENTIONS_FETCH_FAILED" }))
+        }
+    }
+}
+
+/// Crosspost a published Threads post to Instagram
+pub async fn share_to_instagram(
+    State(state): State<AppState>,
+    Json(input): Json<ShareToInstagramInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .share_to_instagram(&account, &input.threads_post_id)
+        .await
+    {
+        Ok(success) => Json(
+            serde_json::json!({ "data": { "threads_post_id": input.threads_post_id, "shared": success } }),
+        ),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "SHARE_FAILED" })),
+    }
+}

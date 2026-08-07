@@ -1068,6 +1068,64 @@ impl ThreadsClient {
 
         results
     }
+
+    // ─── Mentions ──────────────────────────────────────────────
+
+    /// Fetch Threads posts where the user is mentioned.
+    ///
+    /// Official: `GET /v1.0/{threads_user_id}/threads?where=MENTION`
+    ///
+    /// Requires `threads_manage_mentions` permission.
+    /// Returns posts that mention the authenticated user.
+    pub async fn fetch_mentions(
+        &self,
+        account: &crate::models::Account,
+        limit: Option<u32>,
+    ) -> Result<Vec<serde_json::Value>> {
+        let limit_val = limit.unwrap_or(25);
+        let url = format!(
+            "{THREADS_GRAPH_API}/v1.0/{}/threads?where=MENTION&fields=id,text,username,timestamp,media_type,permalink&limit={limit_val}&access_token={}",
+            account.user_id, account.access_token
+        );
+
+        let resp = self.threads_get(&url).await?;
+
+        let results = resp
+            .get("data")
+            .and_then(|d| d.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        Ok(results)
+    }
+
+    // ─── Share to Instagram ────────────────────────────────────
+
+    /// Crosspost a published Threads post to the user's linked Instagram account.
+    ///
+    /// Official: `POST /v1.0/{threads_post_id}/share_to_instagram`
+    ///
+    /// Requires `threads_share_to_instagram` permission.
+    /// The Threads post must already be published.
+    pub async fn share_to_instagram(
+        &self,
+        account: &crate::models::Account,
+        threads_post_id: &str,
+    ) -> Result<bool> {
+        let url = format!("{THREADS_GRAPH_API}/v1.0/{threads_post_id}/share_to_instagram");
+        let body = serde_json::json!({
+            "access_token": account.access_token,
+        });
+
+        let resp = self.threads_post(&url, &body).await?;
+
+        let success = resp
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        Ok(success)
+    }
 }
 
 // ─── Container Parameters ──────────────────────────────────────
