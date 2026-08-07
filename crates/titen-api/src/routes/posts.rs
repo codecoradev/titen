@@ -168,7 +168,9 @@ pub async fn create_post(
     match threads_post_id {
         Ok(post_id) => {
             // Track rate
-            let _ = state.store.track_rate(&input.account_id, "post").await;
+            if let Err(e) = state.store.track_rate(&input.account_id, "post").await {
+                tracing::warn!("Failed to track rate for post: {e}");
+            }
 
             // Create post record
             let db_id = Uuid::now_v7().to_string();
@@ -204,10 +206,15 @@ pub async fn delete_post(
 
     if let Some(threads_post_id) = &post.threads_post_id {
         if let Ok(account) = state.store.get_account(&post.account_id).await {
-            let _ = state
+            if let Err(e) = state
                 .threads_client
                 .delete_post(&account, threads_post_id)
-                .await;
+                .await
+            {
+                tracing::warn!(
+                    "Failed to delete Threads post {threads_post_id} for post {id}: {e}"
+                );
+            }
         }
     }
 
@@ -246,10 +253,13 @@ pub async fn get_insights(
                     // Store snapshot
                     let snap_id = Uuid::now_v7().to_string();
                     let insights_model: titen_core::models::Insights = insights.into();
-                    let _ = state
+                    if let Err(e) = state
                         .store
                         .insert_analytics_snap(&snap_id, &id, &insights_model)
-                        .await;
+                        .await
+                    {
+                        tracing::warn!("Failed to store analytics snapshot for post {id}: {e}");
+                    }
                     Json(serde_json::json!({ "data": insights_model }))
                 }
                 Err(e) => {
