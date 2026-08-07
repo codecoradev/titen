@@ -35,15 +35,15 @@ This guide covers production deployment options for **Titen**, a self-hosted Thr
 
 ### Architecture Reminder
 
-Titen is built as a **single self-contained binary** with three core components:
+Titen runs as **two containers** in production:
 
-| Component | Description |
+| Container | Description |
 |---|---|
-| **Rust binary** | HTTP server (Axum), scheduler, CLI, MCP server, all in one |
-| **Static web assets** | Pre-built SvelteKit dashboard served from `/app/web` inside Docker |
-| **SQLite database** | Single-file database at `/data/titen.db` (Docker) or `~/.codecora/titen/titen.db` (local) |
+| **titen-web** | SvelteKit SSR server (Bun + adapter-node). Serves the dashboard and proxies `/api/*` to the API container |
+| **titen-api** | Rust binary (Axum). HTTP API, scheduler, Threads integration, CLI, MCP server |
+| **SQLite database** | Single-file database at `/data/titen.db` inside the API container, bind-mounted to `./data/` on the host |
 
-No external database, Redis, or message queue is required. The binary is fully self-contained.
+No external database, Redis, or message queue is required.
 
 > **Default port:** `7845`. The binary listens on this port for HTTP traffic. In production, place it behind a reverse proxy.
 
@@ -94,122 +94,94 @@ Supported: **Caddy** (recommended for automatic HTTPS) or **Nginx**.
 
 ## 3. Quick Deploy (Docker, recommended)
 
-Docker is the fastest and most reliable way to deploy Titen.
+Docker is the fastest way to deploy Titen. Pre-built images are available on GHCR.
 
-### Step 1: Clone the Repository
-
-```bash
-git clone https://github.com/codecoradev/titen.git
-cd titen
-```
-
-### Step 2: Create a Production docker-compose.yml
-
-Create `docker-compose.yml` in your deployment directory:
-
-```yaml
-version: "3.9"
-
-services:
-  titen:
-    image: codecoradev/titen:latest
-    container_name: titen
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:7845:7845"  # Bind to localhost only; reverse proxy handles external traffic
-    volumes:
-      - titen-data:/data       # Persistent SQLite database + config
-    environment:
-      # ── Core ──
-      TITEN_DB_PATH: "/data/titen.db"
-      TITEN_API_KEY: "your-secure-api-key-here"       # MANDATORY in production
-      TITEN_ENCRYPTION_KEY: "your-encryption-key-here" # AES-256-GCM key for token encryption. Generate: openssl rand -hex 32
-      TITEN_REQUIRE_ENCRYPTION: "true"                 # Fail-fast if encryption key is missing
-      TITEN_HOST: "0.0.0.0"
-      TITEN_PORT: "7845"
-      TITEN_URL: "https://titen.yourdomain.com"       # Public-facing URL
-      TITEN_WEB_DIR: "/app/web"                        # Static assets path in container
-
-      # ── CORS ──
-      TITEN_CORS_ORIGINS: "https://titen.yourdomain.com"
-
-      # ── Scheduler ──
-      TITEN_SCHEDULER_INTERVAL_SECS: "60"
-
-      # ── Sentiment Engine ──
-      TITEN_SENTIMENT_ENGINE: "rule-based"             # or "ai" if configured
-
-      # ── S3 Media Storage (optional, uncomment if using) ──
-      # TITEN_S3_ENDPOINT: "https://s3.amazonaws.com"
-      # TITEN_S3_BUCKET: "titen-media"
-      # TITEN_S3_REGION: "us-east-1"
-      # TITEN_S3_ACCESS_KEY: "your-access-key"
-      # TITEN_S3_SECRET_KEY: "your-secret-key"
-      # TITEN_S3_PUBLIC_URL: "https://titen-media.s3.amazonaws.com"
-
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7845/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-volumes:
-  titen-data:
-```
-
-### Step 3: Set Your API Key
-
-Generate a secure API key and set it as `TITEN_API_KEY`:
+### Step 1: Set Up the Directory
 
 ```bash
-# Generate a random key
-openssl rand -hex 32
+mkdir -p ~/self-host/titen/data
+cd ~/self-host/titen
 ```
 
-Set this value in your `docker-compose.yml` or via a `.env` file:
+The `data/` directory holds the SQLite database. It persists across container restarts.
+
+### Step 2: Download Configuration Files
 
 ```bash
-# .env file (same directory as docker-compose.yml)
-TITEN_API_KEY=your-generated-key-here
+# Download docker-compose.yml and .env.example from the repo
+curl -LO https://raw.githubusercontent.com/codecoradev/titen/develop/docker-compose.yml
+curl -LO https://raw.githubusercontent.com/codecoradev/titen/develop/.env.example
+cp .env.example .env
 ```
 
-### Step 4: Start the Container
+### Step 3: Edit .env
 
 ```bash
+nano .env
+```
+
+Set these required variables:
+
+```bash
+# Pull pre-built images from GHCR (not build from source)
+WEB_IMAGE=ghcr.io/codecoradev/titen:latest-web
+API_IMAGE=ghcr.io/codecoradev/titen:latest-api
+
+# Your domain
+APP_URL=https://titen.yourdomain.com
+TITEN_HOST=titen.yourdomain.com
+
+# Generate API key
+TITEN_API_KEY=$(openssl rand -hex 24)
+
+# Generate encryption key for tokens at rest
+TITEN_ENCRYPTION_KEY=$(openssl rand -hex 32)
+TITEN_REQUIRE_ENCRYPTION=true
+
+# HTTPS settings
+TITEN_COOKIE_SECURE=true
+TITEN_CORS_ORIGINS=https://titen.yourdomain.com
+```
+
+### Step 4: Create the Data Directory
+
+```bash
+mkdir -p data
+chmod 777 data
+```
+
+SQLite needs write permission to this folder. The `chmod 777` ensures the container user can create and write the database file.
+
+### Step 5: Start the Containers
+
+```bash
+docker compose pull
 docker compose up -d
 ```
 
-### Step 5: Verify Health
+### Step 6: Verify
 
 ```bash
 # Check container status
 docker compose ps
 
-# Check health endpoint
-curl http://localhost:7845/api/health
+# Check health
+curl http://localhost:3000/health
 
 # View logs
-docker logs titen
+docker compose logs -f --tail=50
 ```
 
-You should see a `200 OK` response from the health endpoint and startup logs showing successful database initialization.
+You should see both containers running. The API container should log `titen-api listening on 0.0.0.0:7845`.
 
 ### Volume Persistence
 
-The `titen-data` volume is mounted at `/data` inside the container and stores:
+The `./data/` directory is bind-mounted to `/data` inside the API container and stores:
 
 - **SQLite database** (`/data/titen.db`): all posts, schedules, accounts, analytics
 - **Uploaded media** (if stored locally rather than S3)
-- **Configuration state**
 
-This volume **survives container restarts and updates**. Without it, all data would be lost when the container is recreated.
-
-To inspect the volume:
-
-```bash
-docker volume inspect titen_titen-data
-```
+This directory **survives container restarts and updates**. Without it, all data would be lost when containers are recreated.
 
 ---
 
