@@ -1,15 +1,76 @@
+use crate::crypto::Cipher;
 use crate::error::{Result, TitenError};
 use crate::models::*;
 use sqlx::SqlitePool;
 
-/// Main store — SQLite database access for all titen entities
+/// Main store — SQLite database access for all titen entities.
+///
+/// Holds an optional [`Cipher`] for encrypting sensitive fields (`access_token`,
+/// `app_secret`) at rest. When `cipher` is `None`, the store operates in
+/// plaintext mode (development only — production must provide a key via
+/// `TITEN_ENCRYPTION_KEY`).
 pub struct Store {
     pool: SqlitePool,
+    cipher: Option<Cipher>,
 }
 
 impl Store {
+    /// Create a store with encryption enabled.
+    /// The cipher is loaded from `TITEN_ENCRYPTION_KEY` env var.
+    /// If the env var is absent, the store runs in plaintext mode (dev).
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        let cipher = Cipher::from_env().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load encryption key, running in plaintext mode: {e}");
+            None
+        });
+        tracing::info!(
+            "Store initialized with {} mode",
+            if cipher.is_some() {
+                "encrypted"
+            } else {
+                "plaintext"
+            }
+        );
+        Self { pool, cipher }
+    }
+
+    /// Create a store with an explicit cipher (for testing).
+    pub fn with_cipher(pool: SqlitePool, cipher: Option<Cipher>) -> Self {
+        Self { pool, cipher }
+    }
+
+    /// Returns true if encryption is active.
+    pub fn is_encrypted(&self) -> bool {
+        self.cipher.is_some()
+    }
+
+    /// Encrypt a sensitive field before writing to DB.
+    /// If no cipher is configured, returns the plaintext as-is.
+    fn encrypt_field(&self, value: &str) -> Result<String> {
+        match &self.cipher {
+            Some(c) => c.encrypt(value),
+            None => Ok(value.to_string()),
+        }
+    }
+
+    /// Decrypt a sensitive field after reading from DB.
+    /// Handles both encrypted (`enc:v1:...`) and plaintext values (backward compat).
+    fn decrypt_field(&self, value: &str) -> Result<String> {
+        match &self.cipher {
+            Some(c) => c.decrypt(value),
+            None => Ok(value.to_string()),
+        }
+    }
+
+    /// Decrypt the `access_token` and `app_secret` fields of an account in-place.
+    fn decrypt_account_fields(&self, account: &mut Account) -> Result<()> {
+        account.access_token = self.decrypt_field(&account.access_token)?;
+        if let Some(ref mut secret) = account.app_secret {
+            if !secret.is_empty() {
+                *secret = self.decrypt_field(secret)?;
+            }
+        }
+        Ok(())
     }
 
     /// Run migrations from embedded SQL
@@ -54,45 +115,150 @@ impl Store {
             }
         }
 
+        // 004 — encryption metadata table
+        let sql_004 = include_str!("../../titen-api/migrations/004_encrypt_tokens.sql");
+        for statement in sql_004.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                sqlx::query(trimmed).execute(&self.pool).await?;
+            }
+        }
+
+        // 004 (Rust side) — encrypt existing plaintext tokens if cipher is available
+        self.migrate_encrypted_fields().await?;
+
+        Ok(())
+    }
+
+    /// Encrypt any plaintext `access_token` and `app_secret` values in the DB.
+    ///
+    /// This runs after SQL migrations on every startup. It is idempotent:
+    /// - If already encrypted (`enc:v1:` prefix), skips
+    /// - If cipher is not configured (dev mode), skips entirely
+    /// - If no accounts exist, no-op
+    ///
+    /// On first run with `TITEN_ENCRYPTION_KEY` set, this converts all
+    /// existing plaintext tokens to encrypted form.
+    async fn migrate_encrypted_fields(&self) -> Result<()> {
+        let cipher = match &self.cipher {
+            Some(c) => c,
+            None => return Ok(()), // Dev mode — no encryption
+        };
+
+        // Check if we already migrated (idempotency via metadata table)
+        let already: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM _encryption_meta WHERE key = 'tokens_encrypted_v1'")
+                .fetch_optional(&self.pool)
+                .await?;
+
+        if already.is_some() {
+            return Ok(()); // Already migrated
+        }
+
+        // Fetch all accounts with raw DB values (NOT decrypted)
+        let rows: Vec<(String, String, Option<String>)> =
+            sqlx::query_as("SELECT id, access_token, app_secret FROM accounts")
+                .fetch_all(&self.pool)
+                .await?;
+
+        if rows.is_empty() {
+            // No accounts — mark as done
+            sqlx::query("INSERT OR IGNORE INTO _encryption_meta (key, value) VALUES ('tokens_encrypted_v1', 'true')")
+                .execute(&self.pool)
+                .await?;
+            return Ok(());
+        }
+
+        let mut migrated = 0;
+        for (id, access_token, app_secret) in rows {
+            // Skip if already encrypted
+            if crate::crypto::is_encrypted(&access_token) {
+                continue;
+            }
+
+            let enc_token = cipher.encrypt(&access_token)?;
+            sqlx::query("UPDATE accounts SET access_token = ? WHERE id = ?")
+                .bind(&enc_token)
+                .bind(&id)
+                .execute(&self.pool)
+                .await?;
+
+            if let Some(secret) = app_secret {
+                if !secret.is_empty() && !crate::crypto::is_encrypted(&secret) {
+                    let enc_secret = cipher.encrypt(&secret)?;
+                    sqlx::query("UPDATE accounts SET app_secret = ? WHERE id = ?")
+                        .bind(&enc_secret)
+                        .bind(&id)
+                        .execute(&self.pool)
+                        .await?;
+                }
+            }
+
+            migrated += 1;
+        }
+
+        if migrated > 0 {
+            tracing::info!("Encrypted {migrated} account token(s) at rest");
+        }
+
+        // Mark migration complete
+        sqlx::query("INSERT OR IGNORE INTO _encryption_meta (key, value) VALUES ('tokens_encrypted_v1', 'true')")
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
     // ─── Accounts ───────────────────────────────────────────
 
     pub async fn list_accounts(&self) -> Result<Vec<Account>> {
-        let rows = sqlx::query_as::<_, Account>("SELECT * FROM accounts ORDER BY created_at DESC")
-            .fetch_all(&self.pool)
-            .await?;
+        let mut rows =
+            sqlx::query_as::<_, Account>("SELECT * FROM accounts ORDER BY created_at DESC")
+                .fetch_all(&self.pool)
+                .await?;
+        for account in &mut rows {
+            self.decrypt_account_fields(account)?;
+        }
         Ok(rows)
     }
 
     pub async fn get_account(&self, id: &str) -> Result<Account> {
-        sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = ?")
+        let mut account = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = ?")
             .bind(id)
             .fetch_one(&self.pool)
             .await
-            .map_err(|_| TitenError::AccountNotFound(id.to_string()))
+            .map_err(|_| TitenError::AccountNotFound(id.to_string()))?;
+        self.decrypt_account_fields(&mut account)?;
+        Ok(account)
     }
 
     pub async fn get_account_by_username(&self, username: &str) -> Result<Account> {
-        sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE username = ?")
+        let mut account = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE username = ?")
             .bind(username)
             .fetch_one(&self.pool)
             .await
-            .map_err(|_| TitenError::AccountNotFound(username.to_string()))
+            .map_err(|_| TitenError::AccountNotFound(username.to_string()))?;
+        self.decrypt_account_fields(&mut account)?;
+        Ok(account)
     }
 
     pub async fn create_account(&self, id: &str, input: &CreateAccount) -> Result<Account> {
+        let enc_token = self.encrypt_field(&input.access_token)?;
+        let enc_secret = match &input.app_secret {
+            Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
+            _ => None,
+        };
+
         sqlx::query(
             "INSERT INTO accounts (id, username, user_id, access_token, expires_at, app_id, app_secret)\n             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.username)
         .bind(&input.user_id)
-        .bind(&input.access_token)
+        .bind(&enc_token)
         .bind(&input.expires_at)
         .bind(&input.app_id)
-        .bind(&input.app_secret)
+        .bind(&enc_secret)
         .execute(&self.pool)
         .await
         .map_err(|e| {
@@ -109,14 +275,21 @@ impl Store {
     pub async fn update_account(&self, id: &str, input: &UpdateAccount) -> Result<Account> {
         let acc = self.get_account(id).await?;
 
-        let access_token = input.access_token.as_deref().unwrap_or(&acc.access_token);
+        // Encrypt new token if provided, otherwise keep existing (already encrypted in DB)
+        let access_token = match &input.access_token {
+            Some(new_token) => self.encrypt_field(new_token)?,
+            None => {
+                // Re-encrypt the existing (decrypted) token — get_account already decrypted it
+                self.encrypt_field(&acc.access_token)?
+            }
+        };
         let expires_at = input.expires_at.as_deref().unwrap_or(&acc.expires_at);
         let is_active = input.is_active.unwrap_or(acc.is_active);
 
         sqlx::query(
             "UPDATE accounts SET access_token = ?, expires_at = ?, is_active = ?, updated_at = datetime('now')\n             WHERE id = ?",
         )
-        .bind(access_token)
+        .bind(&access_token)
         .bind(expires_at)
         .bind(is_active)
         .bind(id)
