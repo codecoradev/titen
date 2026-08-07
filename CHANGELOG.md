@@ -7,13 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- CONTRIBUTING.md with full contribution guide, branch strategy, CI checks, and architecture overview
-- SECURITY.md with vulnerability reporting policy and supported versions table
-- CODE_OF_CONDUCT.md
-- PR template with Conventional Commits checklist, Rust + frontend testing checklist
-- Structured issue templates (YAML form-based bug report and feature request)
-- `TITEN_ENCRYPTION_KEY` env var for AES-256-GCM token encryption at rest
+## [0.2.1] - 2026-08-07
+
+### Fixed
+- Login redirect loop: `/api/auth/session` now validates the session cookie and returns an `authenticated` field, so the admin layout no longer bounces logged-in users back to `/login` (PR #57)
+- Missing `TITEN_DB_PATH` in `.env.example` caused SQLite "unable to open database file" errors on fresh Docker deploys (PR #56)
+- Docker deployment guide rewritten for two-container setup with correct `mkdir data/` step (PR #56)
 
 ### Security
 - Encrypt `access_token` and `app_secret` at rest with AES-256-GCM (PR #48, closes #47)
@@ -28,8 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Token logging audit: confirmed no access tokens or secrets appear in log output at any level (PR #51)
 - Integration test verifying encryption at rest: creates an account, reads raw SQLite, confirms ciphertext prefix `enc:v1:` is present and plaintext is absent (PR #52)
 
+### Added
+- CONTRIBUTING.md with full contribution guide, branch strategy, CI checks, and architecture overview
+- SECURITY.md with vulnerability reporting policy and supported versions table
+- CODE_OF_CONDUCT.md
+- PR template with Conventional Commits checklist, Rust + frontend testing checklist
+- Structured issue templates (YAML form-based bug report and feature request)
+- `TITEN_ENCRYPTION_KEY` env var for AES-256-GCM token encryption at rest
+- S3 storage and scheduler interval env vars in `.env.example` (PR #53)
+- All encryption, cookie, scheduler, and S3 env vars passed through to API container in docker-compose.yml (PR #55)
+
 ### Documentation
-- `.env.example` updated with S3 storage and scheduler interval variables (PR #53)
+- Encryption at rest documented in architecture.md, auth-flow.md, and README.md (PR #54)
+- Database schema updated to 8 tables and 4 migrations (PR #54)
 
 ## [0.2.0] - 2026-08-05
 
