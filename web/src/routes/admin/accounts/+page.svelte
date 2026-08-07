@@ -130,7 +130,18 @@
 		}
 		const redirectUri = `${window.location.origin}/auth/callback`;
 		localStorage.setItem('titen_oauth_redirect_uri', redirectUri);
-		const scopes = 'threads_basic,threads_content_publish';
+		const scopes = [
+			'threads_basic',
+			'threads_content_publish',
+			'threads_manage_insights',
+			'threads_read_replies',
+			'threads_delete',
+			'threads_manage_replies',
+			'threads_profile_discovery',
+			'threads_keyword_search',
+			'threads_manage_mentions',
+			'threads_share_to_instagram'
+		].join(',');
 		const url = `https://www.threads.net/oauth/authorize?client_id=${encodeURIComponent(appId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
 		window.location.href = url;
 	}

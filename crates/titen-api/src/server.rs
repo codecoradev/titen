@@ -234,6 +234,24 @@ pub async fn serve(
             "/api/threads/container/{id}/status",
             post(routes::threads::get_container_status),
         )
+        .route("/api/threads/reply", post(routes::threads::create_reply))
+        .route(
+            "/api/threads/reply/{id}/hide",
+            post(routes::threads::hide_reply),
+        )
+        .route(
+            "/api/threads/profile-lookup",
+            post(routes::threads::lookup_profile),
+        )
+        .route("/api/threads/search", post(routes::threads::search_keyword))
+        .route(
+            "/api/threads/mentions",
+            post(routes::threads::fetch_mentions),
+        )
+        .route(
+            "/api/threads/share-to-instagram",
+            post(routes::threads::share_to_instagram),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api_key_auth,
