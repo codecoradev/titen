@@ -259,7 +259,8 @@ pub struct UserProfile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishingLimit {
     pub quota_usage: i64,
-    pub config: PublishingLimitConfig,
+    #[serde(default)]
+    pub config: Option<PublishingLimitConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
