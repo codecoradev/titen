@@ -26,6 +26,7 @@ async fn create_and_list_posts() {
                 video_url: None,
                 image_urls: None,
                 alt_text: None,
+                media_ids: None,
             },
         )
         .await
@@ -69,6 +70,7 @@ async fn get_post_by_id() {
                 video_url: None,
                 image_urls: None,
                 alt_text: None,
+                media_ids: None,
             },
         )
         .await
@@ -111,6 +113,7 @@ async fn delete_post() {
                 video_url: None,
                 image_urls: None,
                 alt_text: None,
+                media_ids: None,
             },
         )
         .await
@@ -161,6 +164,7 @@ async fn list_posts_filters_by_account() {
                     video_url: None,
                     image_urls: None,
                     alt_text: None,
+                    media_ids: None,
                 },
             )
             .await

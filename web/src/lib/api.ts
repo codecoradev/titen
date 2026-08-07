@@ -10,6 +10,7 @@ import type {
 	Account, Post, Schedule, Comment, Insights,
 	MediaItem, AnalyticsSnap, AnalyticsTrend,
 	SentimentSummary, HealthResponse,
+	Mention, AccountInsights,
 } from './types';
 
 const BASE = import.meta.env.TITEN_API_BASE || '/api';
@@ -118,6 +119,11 @@ export const createPost = (data: {
 	caption?: string;
 	media_type?: string;
 	image_url?: string;
+	image_urls?: string[];
+	media_ids?: string[];
+	video_url?: string;
+	text_attachment?: string;
+	alt_text?: string;
 }): Promise<Post> =>
 	request<Post>('/posts', {
 		method: 'POST',
@@ -223,6 +229,41 @@ export const deleteMedia = (id: string): Promise<void> =>
 // ── Threads proxy ──
 export const checkTokens = (): Promise<unknown> =>
 	request<unknown>('/accounts/check-tokens');
+
+// ── Threads: Mentions & Reply ──
+export const fetchMentions = (accountId: string, limit?: number): Promise<Mention[]> =>
+	request<Mention[]>('/threads/mentions', {
+		method: 'POST',
+		body: JSON.stringify({ account_id: accountId, limit: limit ?? 25 }),
+	}).then((data: unknown) => {
+		// Backend wraps as { data: [...], count: N } — request() already unwraps .data
+		const arr = Array.isArray(data) ? data : (data as { data?: Mention[] })?.data ?? [];
+		return arr;
+	});
+
+export const createReply = (data: {
+	account_id: string;
+	reply_to_id: string;
+	text: string;
+}): Promise<unknown> =>
+	request<unknown>('/threads/reply', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+
+// ── Account Insights (aggregate) ──
+export const getAccountInsights = (accountId: string, params?: {
+	metrics?: string;
+	since?: number;
+	until?: number;
+}): Promise<AccountInsights> => {
+	const q = new URLSearchParams();
+	if (params?.metrics) q.set('metrics', params.metrics);
+	if (params?.since) q.set('since', String(params.since));
+	if (params?.until) q.set('until', String(params.until));
+	const qs = q.toString();
+	return request<AccountInsights>(`/accounts/${accountId}/insights${qs ? `?${qs}` : ''}`);
+};
 
 // ── OAuth ──
 export const oauthExchange = (data: {

@@ -1,4 +1,5 @@
 use crate::server::AppState;
+use axum::http::StatusCode;
 use axum::{
     Json,
     extract::{Path, State},
@@ -321,6 +322,55 @@ pub async fn search_keyword(
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "SEARCH_FAILED" })),
     }
 }
+
+/// Fetch account-level insights (aggregate metrics across all posts).
+///
+/// GET /api/accounts/{id}/insights?metrics=views,likes,replies,reposts,quotes&since=...&until=...
+pub async fn get_account_insights(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<AccountInsightsQuery>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let account = match state.store.get_account(&id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+            ));
+        }
+    };
+
+    let metrics = params
+        .metrics
+        .as_deref()
+        .unwrap_or("views,likes,replies,reposts,quotes,followers_count");
+
+    match state
+        .threads_client
+        .fetch_user_insights(&account, metrics, params.since, params.until)
+        .await
+    {
+        Ok(insights) => Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({ "data": insights })),
+        )),
+        Err(e) => Err((
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "INSIGHTS_FETCH_FAILED" })),
+        )),
+    }
+}
+
+/// Query parameters for account insights
+#[derive(serde::Deserialize)]
+pub struct AccountInsightsQuery {
+    pub metrics: Option<String>,
+    pub since: Option<i64>,
+    pub until: Option<i64>,
+}
+
+// ─── Mentions ──────────────────────────────────────────────
 
 /// Fetch posts where the user is mentioned
 pub async fn fetch_mentions(

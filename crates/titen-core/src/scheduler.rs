@@ -173,22 +173,39 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             }
         };
 
-        // Check token is still valid
-        if account.token_status() == "expired" {
-            let _ = store
-                .update_schedule_status(
-                    &schedule.id,
-                    "failed",
-                    None,
-                    Some("Token expired — needs reauth"),
-                )
-                .await;
-            warn!(
-                "Schedule {} skipped — token expired for @{}",
-                schedule.id, account.username
-            );
-            continue;
-        }
+        // Check token is still valid — auto-refresh if expiring
+        let account = match account.token_status() {
+            "valid" => account,
+            "expiring_soon" | "expired" => {
+                info!(
+                    "Token {} for @{} — auto-refreshing before publish",
+                    account.token_status(),
+                    account.username
+                );
+                match client.ensure_valid_token(&account).await {
+                    Ok(refreshed) => {
+                        info!("Token refreshed for @{}", refreshed.username);
+                        refreshed
+                    }
+                    Err(e) => {
+                        let _ = store
+                            .update_schedule_status(
+                                &schedule.id,
+                                "failed",
+                                None,
+                                Some(&format!("Token refresh failed: {e}")),
+                            )
+                            .await;
+                        warn!(
+                            "Schedule {} skipped — token refresh failed for @{}: {e}",
+                            schedule.id, account.username
+                        );
+                        continue;
+                    }
+                }
+            }
+            _ => account, // "unknown" — attempt anyway
+        };
 
         // Check rate limit
         let remaining = match store
@@ -345,6 +362,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     image_url: None,
                     video_url: None,
                     image_urls: None,
+                    media_ids: None,
                     alt_text: None,
                 };
                 let _ = store.create_post(&post_id_uuid, &create_post).await;
