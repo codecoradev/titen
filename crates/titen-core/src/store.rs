@@ -169,7 +169,10 @@ impl Store {
             return Ok(());
         }
 
+        // Wrap migration in a transaction so partial failure doesn't leave mixed state
+        let mut tx = self.pool.begin().await?;
         let mut migrated = 0;
+
         for (id, access_token, app_secret) in rows {
             // Skip if already encrypted
             if crate::crypto::is_encrypted(&access_token) {
@@ -180,7 +183,7 @@ impl Store {
             sqlx::query("UPDATE accounts SET access_token = ? WHERE id = ?")
                 .bind(&enc_token)
                 .bind(&id)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?;
 
             if let Some(secret) = app_secret {
@@ -189,7 +192,7 @@ impl Store {
                     sqlx::query("UPDATE accounts SET app_secret = ? WHERE id = ?")
                         .bind(&enc_secret)
                         .bind(&id)
-                        .execute(&self.pool)
+                        .execute(&mut *tx)
                         .await?;
                 }
             }
@@ -197,14 +200,16 @@ impl Store {
             migrated += 1;
         }
 
+        // Mark migration complete within the same transaction
+        sqlx::query("INSERT OR IGNORE INTO _encryption_meta (key, value) VALUES ('tokens_encrypted_v1', 'true')")
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
         if migrated > 0 {
             tracing::info!("Encrypted {migrated} account token(s) at rest");
         }
-
-        // Mark migration complete
-        sqlx::query("INSERT OR IGNORE INTO _encryption_meta (key, value) VALUES ('tokens_encrypted_v1', 'true')")
-            .execute(&self.pool)
-            .await?;
 
         Ok(())
     }
@@ -275,26 +280,30 @@ impl Store {
     pub async fn update_account(&self, id: &str, input: &UpdateAccount) -> Result<Account> {
         let acc = self.get_account(id).await?;
 
-        // Encrypt new token if provided, otherwise keep existing (already encrypted in DB)
-        let access_token = match &input.access_token {
-            Some(new_token) => self.encrypt_field(new_token)?,
-            None => {
-                // Re-encrypt the existing (decrypted) token — get_account already decrypted it
-                self.encrypt_field(&acc.access_token)?
-            }
-        };
         let expires_at = input.expires_at.as_deref().unwrap_or(&acc.expires_at);
         let is_active = input.is_active.unwrap_or(acc.is_active);
 
-        sqlx::query(
-            "UPDATE accounts SET access_token = ?, expires_at = ?, is_active = ?, updated_at = datetime('now')\n             WHERE id = ?",
-        )
-        .bind(&access_token)
-        .bind(expires_at)
-        .bind(is_active)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        if let Some(new_token) = &input.access_token {
+            let enc_token = self.encrypt_field(new_token)?;
+            sqlx::query(
+                "UPDATE accounts SET access_token = ?, expires_at = ?, is_active = ?, updated_at = datetime('now')\n                 WHERE id = ?",
+            )
+            .bind(&enc_token)
+            .bind(expires_at)
+            .bind(is_active)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        } else {
+            sqlx::query(
+                "UPDATE accounts SET expires_at = ?, is_active = ?, updated_at = datetime('now')\n                 WHERE id = ?",
+            )
+            .bind(expires_at)
+            .bind(is_active)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        }
 
         self.get_account(id).await
     }
