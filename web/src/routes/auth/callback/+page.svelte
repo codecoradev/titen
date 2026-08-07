@@ -18,7 +18,7 @@
 
 		// Check if user is authenticated via session cookie
 		const session = await checkSession();
-		if (session.requires_auth) {
+		if (!session.authenticated) {
 			const redirect = encodeURIComponent(`/auth/callback${url.search}`);
 			goto(`/login?redirect=${redirect}`);
 			return;
