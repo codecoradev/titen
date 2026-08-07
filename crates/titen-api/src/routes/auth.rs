@@ -78,16 +78,46 @@ pub async fn login(
     }
 }
 
-/// GET /api/auth/session — check if current session is valid
-pub async fn session(State(state): State<AppState>) -> impl IntoResponse {
+/// GET /api/auth/session — check auth state.
+///
+/// Returns `requires_auth` (whether TITEN_API_KEY is set) and `authenticated`
+/// (whether the request carries a valid session cookie).
+pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let is_configured = state
         .api_key
         .as_ref()
         .map(|k| !k.is_empty())
         .unwrap_or(false);
 
+    // Check if request has a valid session cookie
+    let authenticated = if !is_configured {
+        // Dev mode — no API key, always authenticated
+        true
+    } else {
+        // Extract titen_session cookie and compare against the configured API key
+        headers
+            .get(axum::http::header::COOKIE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cookies| {
+                cookies
+                    .split(';')
+                    .map(|c| c.trim())
+                    .find(|c| c.starts_with("titen_session="))
+                    .map(|c| c.trim_start_matches("titen_session=").to_string())
+            })
+            .map(|key| {
+                subtle::ConstantTimeEq::ct_eq(
+                    key.as_bytes(),
+                    state.api_key.as_deref().unwrap_or_default().as_bytes(),
+                )
+                .into()
+            })
+            .unwrap_or(false)
+    };
+
     Json(serde_json::json!({
         "requires_auth": is_configured,
+        "authenticated": authenticated,
         "version": env!("CARGO_PKG_VERSION"),
     }))
 }
