@@ -16,10 +16,22 @@ pub struct Store {
 
 impl Store {
     /// Create a store with encryption enabled.
+    ///
     /// The cipher is loaded from `TITEN_ENCRYPTION_KEY` env var.
     /// If the env var is absent, the store runs in plaintext mode (dev).
+    ///
+    /// Set `TITEN_REQUIRE_ENCRYPTION=true` to panic when the key is missing
+    /// or invalid. This prevents accidental plaintext mode in production.
     pub fn new(pool: SqlitePool) -> Self {
+        let require_encryption =
+            std::env::var("TITEN_REQUIRE_ENCRYPTION").is_ok_and(|v| v == "true");
+
         let cipher = Cipher::from_env().unwrap_or_else(|e| {
+            if require_encryption {
+                panic!(
+                    "TITEN_REQUIRE_ENCRYPTION is set but TITEN_ENCRYPTION_KEY is invalid: {e}"
+                );
+            }
             tracing::warn!("Failed to load encryption key, running in plaintext mode: {e}");
             None
         });
