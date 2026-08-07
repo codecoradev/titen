@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-07
+
+### Fixed
+- OAuth callback stuck at "Connecting your Threads account..." — `$effect` reactive loop when `goto()` triggers `$page` re-evaluation, causing `handleCallback()` to race with itself
+- Added `hasRun` guard to ensure single execution, switched to `window.location.href` for hard redirect
+
 ## [0.2.3] - 2026-08-07
 
 ### Added
