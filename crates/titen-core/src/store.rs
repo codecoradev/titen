@@ -28,9 +28,7 @@ impl Store {
 
         let cipher = Cipher::from_env().unwrap_or_else(|e| {
             if require_encryption {
-                panic!(
-                    "TITEN_REQUIRE_ENCRYPTION is set but TITEN_ENCRYPTION_KEY is invalid: {e}"
-                );
+                panic!("TITEN_REQUIRE_ENCRYPTION is set but TITEN_ENCRYPTION_KEY is invalid: {e}");
             }
             tracing::warn!("Failed to load encryption key, running in plaintext mode: {e}");
             None
