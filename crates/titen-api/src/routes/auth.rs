@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde::Deserialize;
+use tracing::{debug, info, warn};
 
 use crate::server::{AppState, ErrorResponse};
 
@@ -29,22 +30,20 @@ pub async fn login(
     State(state): State<AppState>,
     Json(input): Json<LoginRequest>,
 ) -> impl IntoResponse {
+    info!(target: "titen::auth", "LOGIN_ATTEMPT key_len={}", input.api_key.len());
+
     let required_key = match &state.api_key {
         Some(key) if !key.is_empty() => key,
         _ => {
-            // Dev mode — no API key configured, accept anything
+            warn!(target: "titen::auth", "LOGIN_DEV_MODE no API key configured, accepting all");
             let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
             let mut headers = HeaderMap::new();
-            // Safe: cookie is a hardcoded ASCII constant
             headers.insert(SET_COOKIE, HeaderValue::from_static(cookie));
             return (StatusCode::OK, headers, Json(LoginResponse { valid: true })).into_response();
         }
     };
 
     if subtle::ConstantTimeEq::ct_eq(input.api_key.as_bytes(), required_key.as_bytes()).into() {
-        // Set httpOnly cookie with the API key.
-        // Secure flag added only when TITEN_COOKIE_SECURE=true (production HTTPS).
-        // In dev (HTTP), the Secure attribute must be omitted entirely, not set to false.
         let secure = std::env::var("TITEN_COOKIE_SECURE")
             .unwrap_or_else(|_| "false".to_string())
             .parse::<bool>()
@@ -55,12 +54,10 @@ pub async fn login(
             input.api_key
         );
         let mut headers = HeaderMap::new();
-        // Safe unwrap: cookie_value contains only the API key (validated ASCII/UTF-8 by ct_eq
-        // against the configured key) plus standard cookie syntax characters.
         match HeaderValue::from_str(&cookie_value) {
             Ok(val) => headers.insert(SET_COOKIE, val),
             Err(_) => {
-                // Non-ASCII API key — reject rather than panic
+                warn!(target: "titen::auth", "LOGIN_REJECT invalid chars in API key for cookie");
                 let body = ErrorResponse {
                     error: "API key contains invalid characters for cookie storage".to_string(),
                     code: "INVALID_API_KEY".to_string(),
@@ -68,8 +65,10 @@ pub async fn login(
                 return (StatusCode::BAD_REQUEST, HeaderMap::new(), Json(body)).into_response();
             }
         };
+        info!(target: "titen::auth", "LOGIN_SUCCESS secure={} samesite=Lax max_age=604800", secure);
         (StatusCode::OK, headers, Json(LoginResponse { valid: true })).into_response()
     } else {
+        warn!(target: "titen::auth", "LOGIN_FAIL key mismatch");
         let body = ErrorResponse {
             error: "Invalid API key".to_string(),
             code: "INVALID_API_KEY".to_string(),
@@ -89,13 +88,24 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
         .map(|k| !k.is_empty())
         .unwrap_or(false);
 
-    // Check if request has a valid session cookie
+    // Log incoming cookie presence for debugging
+    let has_cookie_header = headers.get(axum::http::header::COOKIE).is_some();
+    let cookie_preview = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .map(|c| {
+            // Show cookie names only, not values (security)
+            let names: Vec<&str> = c.split(';').map(|s| s.trim().split('=').next().unwrap_or("?")).collect();
+            names.join(",")
+        })
+        .unwrap_or_else(|| "none".to_string());
+
+    debug!(target: "titen::auth", "SESSION_CHECK configured={} has_cookie_header={} cookies=[{}]", is_configured, has_cookie_header, cookie_preview);
+
     let authenticated = if !is_configured {
-        // Dev mode — no API key, always authenticated
         true
     } else {
-        // Extract titen_session cookie and compare against the configured API key
-        headers
+        let result = headers
             .get(axum::http::header::COOKIE)
             .and_then(|v| v.to_str().ok())
             .and_then(|cookies| {
@@ -112,8 +122,16 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
                 )
                 .into()
             })
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        if !result {
+            debug!(target: "titen::auth", "SESSION_FAIL no valid titen_session cookie or key mismatch");
+        }
+
+        result
     };
+
+    info!(target: "titen::auth", "SESSION_RESULT authenticated={} requires_auth={}", authenticated, is_configured);
 
     Json(serde_json::json!({
         "requires_auth": is_configured,
