@@ -3,20 +3,24 @@
 	import { page } from '$app/stores';
 	import { oauthExchange, checkSession } from '$lib/api';
 
-	let status: 'loading' | 'success' | 'error' = 'loading';
-	let errorMessage = '';
+	let status: 'loading' | 'success' | 'error' = $state('loading');
+	let errorMessage = $state('');
+	let hasRun = $state(false);
 
 	async function handleCallback() {
+		if (hasRun) return;
+		hasRun = true;
+
 		const url = new URL($page.url);
 		const code = url.searchParams.get('code');
 		const state_param = url.searchParams.get('state');
 
-		console.log('[TITEN CALLBACK] invoked', { 
-			hasCode: !!code, 
+		console.log('[TITEN CALLBACK] invoked', {
+			hasCode: !!code,
 			codeLen: code?.length || 0,
 			hasState: !!state_param,
 			url: url.toString().split('?')[0],
-			searchParams: url.search 
+			searchParams: url.search
 		});
 
 		if (!code) {
@@ -31,10 +35,10 @@
 		let session;
 		try {
 			session = await checkSession();
-			console.log('[TITEN CALLBACK] session result', { 
-				authenticated: session.authenticated, 
+			console.log('[TITEN CALLBACK] session result', {
+				authenticated: session.authenticated,
 				requiresAuth: session.requires_auth,
-				version: (session as Record<string, unknown>).version 
+				version: (session as Record<string, unknown>).version
 			});
 		} catch (e) {
 			console.error('[TITEN CALLBACK] session check threw', e);
@@ -44,7 +48,7 @@
 		if (!session.authenticated) {
 			console.warn('[TITEN CALLBACK] NOT authenticated, redirecting to login');
 			const redirect = encodeURIComponent(`/auth/callback${url.search}`);
-			goto(`/login?redirect=${redirect}`);
+			window.location.href = `/login?redirect=${redirect}`;
 			return;
 		}
 
@@ -60,12 +64,12 @@
 		} catch { /* ignore */ }
 		const redirectUri = localStorage.getItem('titen_oauth_redirect_uri') || `${window.location.origin}/auth/callback`;
 
-		console.log('[TITEN CALLBACK] oauth config', { 
-			hasAppId: !!appId, 
+		console.log('[TITEN CALLBACK] oauth config', {
+			hasAppId: !!appId,
 			appIdLen: appId.length,
-			hasAppSecret: !!appSecret, 
+			hasAppSecret: !!appSecret,
 			appSecretLen: appSecret.length,
-			redirectUri 
+			redirectUri
 		});
 
 		if (!appId || !appSecret) {
