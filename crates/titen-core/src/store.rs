@@ -174,18 +174,20 @@ impl Store {
         let mut migrated = 0;
 
         for (id, access_token, app_secret) in rows {
-            // Skip if already encrypted
-            if crate::crypto::is_encrypted(&access_token) {
-                continue;
+            let mut row_changed = false;
+
+            // Encrypt access_token if not already encrypted
+            if !crate::crypto::is_encrypted(&access_token) {
+                let enc_token = cipher.encrypt(&access_token)?;
+                sqlx::query("UPDATE accounts SET access_token = ? WHERE id = ?")
+                    .bind(&enc_token)
+                    .bind(&id)
+                    .execute(&mut *tx)
+                    .await?;
+                row_changed = true;
             }
 
-            let enc_token = cipher.encrypt(&access_token)?;
-            sqlx::query("UPDATE accounts SET access_token = ? WHERE id = ?")
-                .bind(&enc_token)
-                .bind(&id)
-                .execute(&mut *tx)
-                .await?;
-
+            // Encrypt app_secret if present and not already encrypted
             if let Some(secret) = app_secret {
                 if !secret.is_empty() && !crate::crypto::is_encrypted(&secret) {
                     let enc_secret = cipher.encrypt(&secret)?;
@@ -194,10 +196,13 @@ impl Store {
                         .bind(&id)
                         .execute(&mut *tx)
                         .await?;
+                    row_changed = true;
                 }
             }
 
-            migrated += 1;
+            if row_changed {
+                migrated += 1;
+            }
         }
 
         // Mark migration complete within the same transaction
