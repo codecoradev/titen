@@ -103,7 +103,7 @@
 		</nav>
 		<div class="sidebar-footer">
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
-			<span class="sidebar-version">v0.2.2 · admin</span>
+			<span class="sidebar-version">v0.2.3 · admin</span>
 		</div>
 	</aside>
 

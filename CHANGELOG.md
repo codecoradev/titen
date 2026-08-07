@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-07
+
+### Added
+- Detailed OAuth callback tracing across all layers (frontend, SSR proxy, backend auth, OAuth exchange) to diagnose session loss after Threads approval
+
 ## [0.2.2] - 2026-08-07
 
 ### Fixed

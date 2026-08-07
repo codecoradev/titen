@@ -1,5 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
+use tracing::{info, warn, error};
 use uuid::Uuid;
 
 use crate::server::{AppState, error_response};
@@ -23,7 +24,10 @@ pub async fn oauth_exchange(
     State(state): State<AppState>,
     Json(input): Json<OAuthExchangeRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    info!(target: "titen::oauth", "OAUTH_EXCHANGE_START code_len={} app_id_len={} redirect_uri={}", input.code.len(), input.app_id.len(), input.redirect_uri);
+
     // Step 1: code → short-lived token + user_id
+    info!(target: "titen::oauth", "OAUTH_STEP1 exchange code for short-lived token...");
     let (short_token, user_id) = match state
         .threads_client
         .exchange_code_for_token(
@@ -34,8 +38,12 @@ pub async fn oauth_exchange(
         )
         .await
     {
-        Ok(result) => result,
+        Ok(result) => {
+            info!(target: "titen::oauth", "OAUTH_STEP1_OK user_id={}", result.1);
+            result
+        }
         Err(e) => {
+            warn!(target: "titen::oauth", "OAUTH_STEP1_FAIL {}", e);
             let (status, body) = error_response(
                 StatusCode::BAD_REQUEST,
                 "OAUTH_EXCHANGE_FAILED",
@@ -49,13 +57,18 @@ pub async fn oauth_exchange(
     };
 
     // Step 2: short-lived → long-lived
+    info!(target: "titen::oauth", "OAUTH_STEP2 exchange for long-lived token...");
     let (long_token, expires_in) = match state
         .threads_client
         .exchange_long_lived_token(&short_token, &input.app_secret)
         .await
     {
-        Ok(result) => result,
+        Ok(result) => {
+            info!(target: "titen::oauth", "OAUTH_STEP2_OK expires_in={}s", result.1);
+            result
+        }
         Err(e) => {
+            warn!(target: "titen::oauth", "OAUTH_STEP2_FAIL {}", e);
             let (status, body) = error_response(
                 StatusCode::BAD_REQUEST,
                 "TOKEN_EXCHANGE_FAILED",
@@ -69,9 +82,14 @@ pub async fn oauth_exchange(
     };
 
     // Step 3: resolve username
+    info!(target: "titen::oauth", "OAUTH_STEP3 resolve account...");
     let (_resolved_id, username) = match state.threads_client.resolve_account(&long_token).await {
-        Ok(result) => result,
+        Ok(result) => {
+            info!(target: "titen::oauth", "OAUTH_STEP3_OK username={}", result.1);
+            result
+        }
         Err(e) => {
+            warn!(target: "titen::oauth", "OAUTH_STEP3_FAIL {}", e);
             let (status, body) = error_response(
                 StatusCode::BAD_REQUEST,
                 "RESOLVE_FAILED",
@@ -85,6 +103,7 @@ pub async fn oauth_exchange(
     };
 
     // Step 4: create account
+    info!(target: "titen::oauth", "OAUTH_STEP4 create account in DB...");
     let id = Uuid::now_v7().to_string();
     let expires_at = (chrono::Utc::now() + chrono::Duration::seconds(expires_in)).to_rfc3339();
 
@@ -98,21 +117,25 @@ pub async fn oauth_exchange(
     };
 
     match state.store.create_account(&id, &create_input).await {
-        Ok(account) => (
-            StatusCode::CREATED,
-            Json(serde_json::json!({
-                "data": {
-                    "id": account.id,
-                    "username": account.username,
-                    "user_id": account.user_id,
-                    "is_active": account.is_active,
-                    "expires_at": account.expires_at,
-                    "token_status": account.token_status(),
-                    "created_at": account.created_at,
-                }
-            })),
-        ),
+        Ok(account) => {
+            info!(target: "titen::oauth", "OAUTH_EXCHANGE_SUCCESS account_id={} username={}", account.id, account.username);
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "data": {
+                        "id": account.id,
+                        "username": account.username,
+                        "user_id": account.user_id,
+                        "is_active": account.is_active,
+                        "expires_at": account.expires_at,
+                        "token_status": account.token_status(),
+                        "created_at": account.created_at,
+                    }
+                })),
+            )
+        }
         Err(e) => {
+            error!(target: "titen::oauth", "OAUTH_STEP4_FAIL db error: {}", e);
             let (status, body) =
                 error_response(StatusCode::CONFLICT, "CREATE_FAILED", &e.to_string());
             (
