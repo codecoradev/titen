@@ -95,7 +95,10 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
         .and_then(|v| v.to_str().ok())
         .map(|c| {
             // Show cookie names only, not values (security)
-            let names: Vec<&str> = c.split(';').map(|s| s.trim().split('=').next().unwrap_or("?")).collect();
+            let names: Vec<&str> = c
+                .split(';')
+                .map(|s| s.trim().split('=').next().unwrap_or("?"))
+                .collect();
             names.join(",")
         })
         .unwrap_or_else(|| "none".to_string());

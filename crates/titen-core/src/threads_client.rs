@@ -93,11 +93,7 @@ impl ThreadsClient {
     }
 
     /// POST wrapper for threads_request.
-    async fn threads_post(
-        &self,
-        url: &str,
-        body: &serde_json::Value,
-    ) -> Result<serde_json::Value> {
+    async fn threads_post(&self, url: &str, body: &serde_json::Value) -> Result<serde_json::Value> {
         self.threads_request(reqwest::Method::POST, url, Some(body))
             .await
     }
@@ -187,23 +183,15 @@ impl ThreadsClient {
             ("redirect_uri", redirect_uri),
         ];
 
-        let resp = self
-            .http
-            .post(&url)
-            .form(&params)
-            .send()
-            .await?;
+        let resp = self.http.post(&url).form(&params).send().await?;
 
         let status = resp.status();
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse code exchange response (HTTP {}): {e}",
-                    status
-                ))
-            })?;
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            crate::error::TitenError::ThreadsApiError(format!(
+                "Failed to parse code exchange response (HTTP {}): {e}",
+                status
+            ))
+        })?;
 
         // Check for Threads/Meta OAuth error response BEFORE looking for access_token
         if let Some(err) = body.get("error") {
@@ -215,10 +203,7 @@ impl ThreadsClient {
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("OAuthException");
-            let fb_code = err
-                .get("code")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
+            let fb_code = err.get("code").and_then(|v| v.as_i64()).unwrap_or(0);
             return Err(crate::error::TitenError::ThreadsApiError(format!(
                 "Threads API error (HTTP {status}): {msg} [{fb_type} #{fb_code}]"
             )));
