@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-08-07
+
+### Fixed
+- **Systemic HTTP error handling**: all Threads API calls now check HTTP status before parsing response body. Previously, non-2xx responses (400, 401, 502, etc.) were silently parsed as JSON, producing cryptic errors or crashes instead of the actual API error message
+- **Publishing limit deserialize**: `get_publishing_limit()` now correctly extracts `data[0]` from the Threads API response (`{"data": [{...}]}`) instead of trying to deserialize the wrapper object directly
+- **`create_container` / `publish_container`**: return the real Threads API error on failure instead of crashing on `.json()` parse of an error response — this was the root cause of HTTP 502 when publishing posts
+- **`delete_post`**: now checks response status instead of silently succeeding on error
+- Added `threads_get()` and `threads_post()` helper methods that centralize HTTP status checking and error message extraction for all Threads Graph API calls
+
 ## [0.2.5] - 2026-08-07
 
 ### Fixed

@@ -35,6 +35,69 @@ impl ThreadsClient {
         Self { http, store }
     }
 
+    // ─── Internal Helpers ─────────────────────────────────────
+
+    /// Send a request and parse JSON, checking for Threads API errors.
+    ///
+    /// Threads API returns HTTP 4xx/5xx with a JSON error body like:
+    /// `{"error": {"message": "...", "type": "OAuthException", "code": 190}}`
+    ///
+    /// reqwest's `.send()` does NOT error on non-2xx responses, so we must
+    /// explicitly check the status and extract the error message.
+    async fn threads_request(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let mut req = self.http.request(method, url);
+        if let Some(json_body) = body {
+            req = req.json(json_body);
+        }
+        let resp = req.send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await.map_err(|e| {
+            crate::error::TitenError::ThreadsApiError(format!(
+                "Failed to parse Threads API response: {e}"
+            ))
+        })?;
+
+        if !status.is_success() {
+            // Extract error message from standard Threads/Meta error format
+            let msg = json
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown Threads API error");
+            let code = json
+                .get("error")
+                .and_then(|e| e.get("code"))
+                .and_then(|c| c.as_i64())
+                .unwrap_or(0);
+            let etype = json
+                .get("error")
+                .and_then(|e| e.get("type"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("Unknown");
+            return Err(crate::error::TitenError::ThreadsApiError(format!(
+                "{msg} [{etype} #{code}] (HTTP {status})"
+            )));
+        }
+
+        Ok(json)
+    }
+
+    /// GET wrapper for threads_request.
+    async fn threads_get(&self, url: &str) -> Result<serde_json::Value> {
+        self.threads_request(reqwest::Method::GET, url, None).await
+    }
+
+    /// POST wrapper for threads_request.
+    async fn threads_post(&self, url: &str, body: &serde_json::Value) -> Result<serde_json::Value> {
+        self.threads_request(reqwest::Method::POST, url, Some(body))
+            .await
+    }
+
     // ─── Token Management ─────────────────────────────────────
 
     /// Ensure the account's token is valid, refreshing if expiring.
@@ -120,23 +183,15 @@ impl ThreadsClient {
             ("redirect_uri", redirect_uri),
         ];
 
-        let resp = self
-            .http
-            .post(&url)
-            .form(&params)
-            .send()
-            .await?;
+        let resp = self.http.post(&url).form(&params).send().await?;
 
         let status = resp.status();
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse code exchange response (HTTP {}): {e}",
-                    status
-                ))
-            })?;
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            crate::error::TitenError::ThreadsApiError(format!(
+                "Failed to parse code exchange response (HTTP {}): {e}",
+                status
+            ))
+        })?;
 
         // Check for Threads/Meta OAuth error response BEFORE looking for access_token
         if let Some(err) = body.get("error") {
@@ -148,10 +203,7 @@ impl ThreadsClient {
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("OAuthException");
-            let fb_code = err
-                .get("code")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
+            let fb_code = err.get("code").and_then(|v| v.as_i64()).unwrap_or(0);
             return Err(crate::error::TitenError::ThreadsApiError(format!(
                 "Threads API error (HTTP {status}): {msg} [{fb_type} #{fb_code}]"
             )));
@@ -325,22 +377,12 @@ impl ThreadsClient {
         }
 
         let url = format!("{THREADS_GRAPH_API}/v1.0/{}/threads", account.user_id);
-        let resp: serde_json::Value = self
-            .http
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse container response: {e}"
-                ))
-            })?;
+        let resp = self.threads_post(&url, &body).await?;
 
         let container_id = resp.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
-            crate::error::TitenError::ThreadsApiError("No container id in response".to_string())
+            crate::error::TitenError::ThreadsApiError(format!(
+                "No container id in response: {resp}"
+            ))
         })?;
 
         Ok(container_id.to_string())
@@ -394,22 +436,12 @@ impl ThreadsClient {
         }
 
         let url = format!("{THREADS_GRAPH_API}/v1.0/{}/threads", account.user_id);
-        let resp: serde_json::Value = self
-            .http
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse container response: {e}"
-                ))
-            })?;
+        let resp = self.threads_post(&url, &body).await?;
 
         let container_id = resp.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
-            crate::error::TitenError::ThreadsApiError("No container id in response".to_string())
+            crate::error::TitenError::ThreadsApiError(format!(
+                "No container id in response: {resp}"
+            ))
         })?;
 
         Ok(container_id.to_string())
@@ -436,22 +468,12 @@ impl ThreadsClient {
             "creation_id": creation_id,
         });
 
-        let resp: serde_json::Value = self
-            .http
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse publish response: {e}"
-                ))
-            })?;
+        let resp = self.threads_post(&url, &body).await?;
 
         let post_id = resp.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
-            crate::error::TitenError::ThreadsApiError("No post id in publish response".to_string())
+            crate::error::TitenError::ThreadsApiError(format!(
+                "No post id in publish response: {resp}"
+            ))
         })?;
 
         Ok(post_id.to_string())
@@ -472,18 +494,7 @@ impl ThreadsClient {
             account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse container status response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         Ok(ContainerStatus {
             id: container_id.to_string(),
@@ -661,7 +672,8 @@ impl ThreadsClient {
             "access_token": account.access_token,
         });
 
-        self.http
+        let resp = self
+            .http
             .delete(&url)
             .query(&body)
             .send()
@@ -669,6 +681,14 @@ impl ThreadsClient {
             .map_err(|e| {
                 crate::error::TitenError::ThreadsApiError(format!("Failed to delete post: {e}"))
             })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(crate::error::TitenError::ThreadsApiError(format!(
+                "Delete post failed: HTTP {status} — {body}"
+            )));
+        }
 
         Ok(())
     }
@@ -695,18 +715,7 @@ impl ThreadsClient {
             account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse insights response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         let metrics = resp
             .get("data")
@@ -748,18 +757,7 @@ impl ThreadsClient {
             url.push_str(&format!("&until={u}"));
         }
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse user insights response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         let insights = resp
             .get("data")
@@ -790,18 +788,7 @@ impl ThreadsClient {
             account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse comments response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         let mut comments = Vec::new();
 
@@ -887,19 +874,7 @@ impl ThreadsClient {
             "access_token": account.access_token,
         });
 
-        let resp: serde_json::Value = self
-            .http
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await
-            .map_err(|e| {
-                crate::error::TitenError::ThreadsApiError(format!(
-                    "Failed to parse manage_reply response: {e}"
-                ))
-            })?;
+        let resp = self.threads_post(&url, &body).await?;
 
         let success = resp
             .get("success")
@@ -923,18 +898,7 @@ impl ThreadsClient {
             account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse profile response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         let profile: UserProfile = serde_json::from_value(resp.clone()).map_err(|e| {
             crate::error::TitenError::ThreadsApiError(format!("Failed to deserialize profile: {e}"))
@@ -959,18 +923,7 @@ impl ThreadsClient {
             account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse profile lookup response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         Ok(resp)
     }
@@ -991,20 +944,20 @@ impl ThreadsClient {
             account.user_id, account.access_token
         );
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse publishing limit response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
-        let limit: PublishingLimit = serde_json::from_value(resp).map_err(|e| {
+        // Threads API returns: { "data": [{ "quota_usage": N, "config": { "quota_total": N } }] }
+        let entry = resp
+            .get("data")
+            .and_then(|d| d.as_array())
+            .and_then(|arr| arr.first())
+            .ok_or_else(|| {
+                crate::error::TitenError::ThreadsApiError(
+                    "Publishing limit response missing 'data' array".to_string(),
+                )
+            })?;
+
+        let limit: PublishingLimit = serde_json::from_value(entry.clone()).map_err(|e| {
             crate::error::TitenError::ThreadsApiError(format!(
                 "Failed to deserialize publishing limit: {e}"
             ))
@@ -1047,18 +1000,7 @@ impl ThreadsClient {
             url.push_str(&format!("&media_type={mt}"));
         }
 
-        let resp: serde_json::Value =
-            self.http
-                .get(&url)
-                .send()
-                .await?
-                .json()
-                .await
-                .map_err(|e| {
-                    crate::error::TitenError::ThreadsApiError(format!(
-                        "Failed to parse search response: {e}"
-                    ))
-                })?;
+        let resp = self.threads_get(&url).await?;
 
         let results = resp
             .get("data")
