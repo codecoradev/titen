@@ -124,6 +124,21 @@ export interface HealthResponse {
 	db: string;
 }
 
+// ─── Mention (from Threads mentions API) ───
+export interface Mention {
+	id: string;
+	text: string;
+	username?: string;
+	timestamp?: string;
+	permalink?: string;
+	media_url?: string;
+}
+
+// ─── Account Insights (aggregate metrics) ───
+export interface AccountInsights {
+	[key: string]: number | string | null;
+}
+
 // ─── Dashboard Summary (computed client-side from list endpoints) ───
 export interface DashboardSummary {
 	total_accounts: number;

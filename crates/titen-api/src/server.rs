@@ -172,6 +172,10 @@ pub async fn serve(
             get(routes::threads::get_publishing_limit),
         )
         .route(
+            "/api/accounts/{id}/insights",
+            get(routes::threads::get_account_insights),
+        )
+        .route(
             "/api/accounts/check-tokens",
             get(routes::threads::check_all_tokens),
         )
