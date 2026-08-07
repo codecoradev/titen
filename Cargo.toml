@@ -54,3 +54,9 @@ tokio-cron-scheduler = "0.13"
 
 # Security
 subtle = "2.6"
+
+# Encryption (AES-256-GCM for token at-rest encryption)
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+hex = "0.4"
