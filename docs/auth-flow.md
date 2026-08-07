@@ -1,6 +1,6 @@
 # Authentication & Authorization Flow
 
-This document describes how authentication and authorization work in Titen. There are two distinct concepts that are often confused — understanding the difference is critical.
+This document describes how authentication and authorization work in Titen. There are two distinct concepts that are often confused. Understanding the difference is critical.
 
 ---
 
@@ -51,8 +51,8 @@ POST /api/auth/logout → clears titen_session cookie
 3. **Backend compares** the supplied key against the server's `TITEN_API_KEY` environment variable.
 4. **On match**, the backend generates a session and sets the `titen_session` cookie.
 5. **Subsequent requests** from the browser automatically include the cookie (standard browser behavior for same-origin requests).
-6. **Session validation** — `GET /api/auth/session` checks the cookie and returns session status.
-7. **Logout** — `POST /api/auth/logout` clears the cookie.
+6. **Session validation**: `GET /api/auth/session` checks the cookie and returns session status.
+7. **Logout**: `POST /api/auth/logout` clears the cookie.
 
 ---
 
@@ -90,9 +90,9 @@ The `titen_session` cookie is configured with strict security defaults:
 
 | Attribute | Value | Rationale |
 |---|---|---|
-| `HttpOnly` | `true` | Prevents JavaScript (`document.cookie`) from reading the cookie — mitigates XSS token theft |
+| `HttpOnly` | `true` | Prevents JavaScript (`document.cookie`) from reading the cookie, mitigating XSS token theft |
 | `Secure` | `true` *(production)* | Cookie only sent over HTTPS. **Must** be enabled in production behind a TLS reverse proxy. Omitted in dev (HTTP localhost). |
-| `SameSite` | `Strict` | Cookie is never sent on cross-site requests — mitigates CSRF |
+| `SameSite` | `Strict` | Cookie is never sent on cross-site requests, mitigating CSRF |
 | `Max-Age` | `604800` (7 days) | Session expires after one week; user must re-authenticate |
 | `Path` | `/` | Cookie is sent on all routes |
 
@@ -140,10 +140,13 @@ Scheduler uses stored token to publish on behalf of this account
 
 | Concern | Implementation |
 |---|---|
-| **Storage** | `access_token` stored in the `accounts` table, encrypted at rest |
-| **Refresh flow** | When a token is near expiry, the scheduler refreshes it using the Threads refresh endpoint before publishing |
-| **Expiry checking** | The scheduler checks token validity before each publish attempt; expired tokens trigger a refresh or are marked for re-auth |
-| **Batch check** | `POST /api/auth/check_tokens` endpoint validates all stored tokens in a single batch call — useful for diagnostics and dashboard status display |
+| **Storage** | `access_token` and `app_secret` stored in the `accounts` table, encrypted at rest with AES-256-GCM |
+| **Encryption key** | `TITEN_ENCRYPTION_KEY` environment variable (32-byte hex). Generate with `openssl rand -hex 32`. Key material is zeroized on drop. |
+| **Ciphertext format** | `enc:v1:<nonce_hex>:<ciphertext_hex>` with a versioned prefix for forward-compatible key rotation |
+| **Fail-fast mode** | Set `TITEN_REQUIRE_ENCRYPTION=true` in production to reject startup if the key is missing |
+| **Refresh flow** | When a token is near expiry, the scheduler refreshes it via the Threads refresh endpoint before publishing. The refreshed token is re-encrypted before storage. |
+| **Expiry checking** | The scheduler checks token validity before each publish attempt. Expired tokens trigger a refresh or are marked for re-auth. |
+| **Batch check** | `POST /api/auth/check_tokens` endpoint validates all stored tokens in a single batch call, useful for diagnostics and dashboard status display. |
 
 ### Token lifecycle
 
@@ -171,11 +174,11 @@ Scheduler tick → check token expiry
 
 When the `TITEN_API_KEY` environment variable is **not set**, Titen runs in **dev mode**:
 
-- **All endpoints are open** — no authentication is required.
+- **All endpoints are open**: no authentication is required.
 - The `api_key_auth` middleware passes through all requests without checking credentials.
 - The `/login` page and session endpoints are effectively no-ops.
 
-> **Warning:** Dev mode is intended for local development only. Never deploy to production without setting `TITEN_API_KEY`. If you accidentally deploy without it, **every endpoint is fully exposed** — including account creation, token management, and post publishing. Always verify `TITEN_API_KEY` is set in your production environment variables before starting the server.
+> **Warning:** Dev mode is intended for local development only. Never deploy to production without setting `TITEN_API_KEY`. If you accidentally deploy without it, **every endpoint is fully exposed**, including account creation, token management, and post publishing. Always verify `TITEN_API_KEY` is set in your production environment variables before starting the server.
 >
 > **Recommendation:** Add a startup check in production that refuses to boot if `TITEN_API_KEY` is unset and `TITEN_ENV=production`.
 
