@@ -35,7 +35,8 @@ pub async fn login(
             // Dev mode — no API key configured, accept anything
             let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
             let mut headers = HeaderMap::new();
-            headers.insert(SET_COOKIE, HeaderValue::from_str(cookie).unwrap());
+            // Safe: cookie is a hardcoded ASCII constant
+            headers.insert(SET_COOKIE, HeaderValue::from_static(cookie));
             return (StatusCode::OK, headers, Json(LoginResponse { valid: true })).into_response();
         }
     };
@@ -95,7 +96,8 @@ pub async fn session(State(state): State<AppState>) -> impl IntoResponse {
 pub async fn logout() -> impl IntoResponse {
     let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
     let mut headers = HeaderMap::new();
-    headers.insert(SET_COOKIE, HeaderValue::from_str(cookie).unwrap());
+    // Safe: cookie is a hardcoded ASCII constant
+    headers.insert(SET_COOKIE, HeaderValue::from_static(cookie));
     (
         StatusCode::OK,
         headers,
