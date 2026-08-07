@@ -16,11 +16,12 @@
 		(async () => {
 			try {
 				const session = await checkSession();
-				if (session.requires_auth) {
+				if (session.authenticated) {
+					authed = true;
+				} else {
+					// Not authenticated — redirect to login
 					const currentPath = page.url.pathname + page.url.search;
 					goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
-				} else {
-					authed = true;
 				}
 			} catch {
 				// Network error — redirect to login as safe fallback

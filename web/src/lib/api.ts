@@ -244,12 +244,12 @@ export async function loginWithApiKey(apiKey: string): Promise<{ valid: boolean 
 	});
 }
 
-export async function checkSession(): Promise<{ requires_auth: boolean; version?: string }> {
+export async function checkSession(): Promise<{ requires_auth: boolean; authenticated: boolean; version?: string }> {
 	try {
-		return await request<{ requires_auth: boolean; version: string }>('/auth/session');
+		return await request<{ requires_auth: boolean; authenticated: boolean; version: string }>('/auth/session');
 	} catch {
-		// Backend unreachable — treat as requiring auth (safe default)
-		return { requires_auth: true };
+		// Backend unreachable — treat as unauthenticated (safe default)
+		return { requires_auth: true, authenticated: false };
 	}
 }
 
