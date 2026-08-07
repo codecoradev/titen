@@ -116,10 +116,16 @@ pub async fn get_sentiment(
             Ok(results) => {
                 for (comment, result) in comments.iter().zip(results.iter()) {
                     if comment.sentiment.is_none() {
-                        let _ = state
+                        if let Err(e) = state
                             .store
                             .update_comment_sentiment(&comment.id, &result.label, result.score)
-                            .await;
+                            .await
+                        {
+                            tracing::debug!(
+                                "Failed to update sentiment for comment {}: {e}",
+                                comment.id
+                            );
+                        }
                     }
                 }
             }

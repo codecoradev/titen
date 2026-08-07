@@ -109,7 +109,9 @@ pub async fn delete_media(
     if let Some(media) = media_list.iter().find(|m| m.id == id) {
         // Try to delete from S3 (best effort)
         if let Ok(s3) = S3Storage::from_env() {
-            let _ = s3.delete(&media.s3_key).await;
+            if let Err(e) = s3.delete(&media.s3_key).await {
+                tracing::warn!("Failed to delete S3 object {}: {e}", media.s3_key);
+            }
         }
     }
 
