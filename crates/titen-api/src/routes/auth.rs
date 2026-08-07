@@ -82,10 +82,7 @@ pub async fn login(
 ///
 /// Returns `requires_auth` (whether TITEN_API_KEY is set) and `authenticated`
 /// (whether the request carries a valid session cookie).
-pub async fn session(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let is_configured = state
         .api_key
         .as_ref()
