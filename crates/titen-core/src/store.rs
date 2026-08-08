@@ -137,6 +137,22 @@ impl Store {
         // 004 (Rust side) — encrypt existing plaintext tokens if cipher is available
         self.migrate_encrypted_fields().await?;
 
+        // 005 — HITL scheduling: add approved_by, approved_at columns
+        let sql_005 = include_str!("../../titen-api/migrations/005_hitl_scheduling.sql");
+        for statement in sql_005.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                let result = sqlx::query(trimmed).execute(&self.pool).await;
+                if let Err(e) = result {
+                    let msg = e.to_string();
+                    // SQLite error: "duplicate column" means already migrated (fresh install)
+                    if !msg.contains("duplicate column") {
+                        return Err(TitenError::DatabaseError(msg));
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -444,9 +460,17 @@ impl Store {
             .as_ref()
             .map(|urls| serde_json::to_string(urls).unwrap_or_default());
 
+        // HITL: new schedules default to 'draft' (requires human approval).
+        // If auto_approve=true, skip directly to 'pending' for backward compat.
+        let status = if input.auto_approve {
+            "pending"
+        } else {
+            "draft"
+        };
+
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -455,6 +479,7 @@ impl Store {
         .bind(&input.text_attachment)
         .bind(&media_urls)
         .bind(&input.scheduled_at)
+        .bind(status)
         .execute(&self.pool)
         .await?;
 
@@ -532,6 +557,106 @@ impl Store {
             return Err(TitenError::ScheduleNotFound(id.to_string()));
         }
         Ok(())
+    }
+
+    /// Approve a draft schedule → transitions `draft → pending`.
+    /// Only schedules with status 'draft' can be approved.
+    /// Returns the updated schedule.
+    pub async fn approve_schedule(&self, id: &str, approved_by: Option<&str>) -> Result<Schedule> {
+        let result = sqlx::query(
+            "UPDATE schedules
+             SET status = 'pending', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now')
+             WHERE id = ? AND status = 'draft'",
+        )
+        .bind(approved_by)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            // Either not found or not in draft state
+            let schedule = self.get_schedule(id).await?;
+            return Err(TitenError::InvalidRequest(format!(
+                "Schedule {} is in '{}' state, can only approve from 'draft'",
+                id, schedule.status
+            )));
+        }
+
+        self.get_schedule(id).await
+    }
+
+    /// Reject a draft schedule → transitions `draft → rejected`.
+    /// Only schedules with status 'draft' can be rejected.
+    /// Returns the updated schedule.
+    pub async fn reject_schedule(&self, id: &str, reason: Option<&str>) -> Result<Schedule> {
+        let result = sqlx::query(
+            "UPDATE schedules
+             SET status = 'rejected', error = ?, updated_at = datetime('now')
+             WHERE id = ? AND status = 'draft'",
+        )
+        .bind(reason)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            let schedule = self.get_schedule(id).await?;
+            return Err(TitenError::InvalidRequest(format!(
+                "Schedule {} is in '{}' state, can only reject from 'draft'",
+                id, schedule.status
+            )));
+        }
+
+        self.get_schedule(id).await
+    }
+
+    /// Update editable fields of a schedule (caption, media_urls, scheduled_at, media_type).
+    /// Only schedules in 'draft' or 'pending' state can be edited.
+    pub async fn update_schedule_fields(
+        &self,
+        id: &str,
+        caption: Option<&str>,
+        media_type: Option<&str>,
+        media_urls: Option<Vec<String>>,
+        scheduled_at: Option<&str>,
+    ) -> Result<Schedule> {
+        // Serialize media_urls if provided
+        let media_urls_str = media_urls
+            .as_ref()
+            .map(|urls| serde_json::to_string(urls).unwrap_or_default());
+
+        // Use COALESCE in SQL: None → keep existing, Some(v) → set new value
+        // This allows callers to explicitly clear a field by passing Some("")
+        let result = sqlx::query(
+            "UPDATE schedules
+             SET caption = COALESCE(?, caption),
+                 media_type = COALESCE(?, media_type),
+                 media_urls = COALESCE(?, media_urls),
+                 scheduled_at = COALESCE(?, scheduled_at),
+                 updated_at = datetime('now')
+             WHERE id = ? AND status IN ('draft', 'pending')",
+        )
+        .bind(caption)
+        .bind(media_type)
+        .bind(media_urls_str)
+        .bind(scheduled_at)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            // Re-fetch to determine cause: not found vs wrong status
+            return match self.get_schedule(id).await {
+                Ok(current) => Err(TitenError::InvalidRequest(format!(
+                    "Schedule {} is in '{}' state, can only edit 'draft' or 'pending'",
+                    id, current.status
+                ))),
+                Err(e) if matches!(e, TitenError::ScheduleNotFound(_)) => Err(e),
+                Err(e) => Err(e),
+            };
+        }
+
+        self.get_schedule(id).await
     }
 
     // ─── Comments ───────────────────────────────────────────

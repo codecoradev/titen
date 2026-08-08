@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-08
+
+### Added
+- **Human-in-the-Loop (HITL) scheduling**: new schedules default to `draft` status — they will NOT auto-publish until a human reviews and approves them
+- **Approve workflow**: `POST /api/schedules/{id}/approve` transitions a draft to `pending` (ready for scheduler)
+- **Reject workflow**: `POST /api/schedules/{id}/reject` transitions a draft to `rejected` with optional reason
+- **Schedule editing**: `PATCH /api/schedules/{id}` allows editing caption, media_type, media_urls, and scheduled_at on drafts and pending items
+- **Auto-approve flag**: `CreateSchedule.auto_approve` (default: `false`) — set to `true` to skip draft and go straight to pending (backward-compatible for API integrations)
+- **Audit columns**: `approved_by` and `approved_at` columns track who approved each schedule and when
+- Dashboard now shows a "Drafts (Needs Review)" stat card when drafts exist
+- Schedules page shows draft count badge and contextual action buttons (Approve, Edit, Reject for drafts; Edit, Cancel for pending)
+
+### Changed
+- **New schedule lifecycle**: `draft → pending (approved) → processing → published/failed` — replaces the old `pending → processing → published/failed` where pending meant both "scheduled" and "ready"
+- Existing schedules from pre-0.4.0 with `pending` status remain `pending` — they will continue to auto-publish normally
+- Status filter dropdown updated with new states: Draft, Pending (Approved), Rejected
+- MCP tool `schedule_post` defaults to `auto_approve: false` — MCP-created schedules also start as drafts
+
+### Migration
+- `005_hitl_scheduling.sql` adds `approved_by` and `approved_at` columns to the `schedules` table
+
 ## [0.3.0] - 2026-08-07
 
 ### Added

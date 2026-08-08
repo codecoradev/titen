@@ -19,6 +19,7 @@
 	let activeAccounts = $derived(accounts.filter((a) => a.is_active).length);
 	let publishedPosts = $derived(posts.filter((p) => p.status === 'published').length);
 	let pendingSchedules = $derived(schedules.filter((s) => s.status === 'pending').length);
+	let draftSchedules = $derived(schedules.filter((s) => s.status === 'draft').length);
 
 	let recentPosts = $derived(
 		[...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5),
@@ -110,8 +111,14 @@
 			<div class="stat-card-label">Published</div>
 			<div class="stat-card-value tabular-nums">{publishedPosts.toLocaleString()}</div>
 		</div>
+		{#if draftSchedules > 0}
+			<div class="stat-card" style="border-color: var(--color-warning-border, #fcd34d);">
+				<div class="stat-card-label">Drafts (Needs Review)</div>
+				<div class="stat-card-value tabular-nums">{draftSchedules.toLocaleString()}</div>
+			</div>
+		{/if}
 		<div class="stat-card">
-			<div class="stat-card-label">Pending Schedules</div>
+			<div class="stat-card-label">Approved (Pending)</div>
 			<div class="stat-card-value tabular-nums">{pendingSchedules.toLocaleString()}</div>
 		</div>
 		{#if health}

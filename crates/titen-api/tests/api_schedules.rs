@@ -33,7 +33,7 @@ async fn create_schedule() {
     let body = body_to_json(resp).await;
     assert_eq!(body["data"]["account_id"], account_id);
     assert_eq!(body["data"]["caption"], "Scheduled hello");
-    assert_eq!(body["data"]["status"], "pending");
+    assert_eq!(body["data"]["status"], "draft");
     assert!(!body["data"]["id"].as_str().unwrap().is_empty());
 }
 
@@ -59,6 +59,7 @@ async fn list_schedules() {
                     text_attachment: None,
                     media_urls: None,
                     scheduled_at: format!("2099-07-{:02}T12:00:00Z", i + 10),
+                    auto_approve: true,
                 },
             )
             .await
@@ -99,6 +100,7 @@ async fn list_schedules_filters_by_account() {
                 text_attachment: None,
                 media_urls: None,
                 scheduled_at: "2099-08-01T12:00:00Z".to_string(),
+                auto_approve: true,
             },
         )
         .await

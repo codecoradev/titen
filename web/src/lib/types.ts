@@ -46,6 +46,8 @@ export interface Schedule {
 	result_post_id: string | null;
 	result_json: string | null;
 	error: string | null;
+	approved_by: string | null;
+	approved_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
