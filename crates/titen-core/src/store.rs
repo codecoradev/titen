@@ -771,7 +771,7 @@ impl Store {
         if filter.search.is_some() {
             query.push_str(" AND text LIKE ? COLLATE NOCASE");
         }
-        query.push_str(" ORDER BY fetched_at DESC LIMIT ? OFFSET ?");
+        query.push_str(" ORDER BY fetched_at ASC LIMIT ? OFFSET ?");
 
         let mut q = sqlx::query_as::<_, Comment>(&query).bind(post_id);
         if let Some(ref s) = filter.sentiment {
