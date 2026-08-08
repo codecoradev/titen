@@ -391,7 +391,7 @@ pub async fn list_mentions_handler(
         offset: params.offset.map(|v| v as i64),
         ..Default::default()
     };
-    let limit = filter.limit.unwrap_or(50);
+    let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
     let offset = filter.offset.unwrap_or(0);
 
     match state.store.list_mentions(&filter).await {
