@@ -248,15 +248,16 @@ impl S3Storage {
             "/".to_string()
         } else {
             // URI-encode path components per SigV4 spec (encode each segment,
-            // preserve '/' as path separator)
+            // preserve '/' as path separator). Handle multi-byte UTF-8 safely.
             uri.split('/')
                 .map(|seg| {
-                    seg.chars()
-                        .map(|c| match c {
-                            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
-                                c.to_string()
+                    seg.as_bytes()
+                        .iter()
+                        .map(|&b| match b {
+                            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                                char::from(b).to_string()
                             }
-                            _ => format!("%{:02X}", c as u8),
+                            _ => format!("%{:02X}", b),
                         })
                         .collect::<String>()
                 })
