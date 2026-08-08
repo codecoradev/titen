@@ -38,19 +38,23 @@
 			: null
 	);
 
-	// Load insights + trend
+	// Load insights + trend once on mount with cleanup
 	$effect(() => {
+		let cancelled = false;
+
 		loadingInsights = true;
 		getPostInsights(post.id)
-			.then((data) => (insights = data))
+			.then((data) => { if (!cancelled) insights = data; })
 			.catch(() => {})
-			.finally(() => (loadingInsights = false));
+			.finally(() => { if (!cancelled) loadingInsights = false; });
 
 		loadingTrend = true;
 		getAnalyticsTrend(post.id)
-			.then((data) => (trend = data))
+			.then((data) => { if (!cancelled) trend = data; })
 			.catch(() => {})
-			.finally(() => (loadingTrend = false));
+			.finally(() => { if (!cancelled) loadingTrend = false; });
+
+		return () => { cancelled = true; };
 	});
 
 	function handleKeydown(e: KeyboardEvent) {
