@@ -104,9 +104,15 @@
 				profileError: false,
 			}));
 
-			// Load profiles + insights in parallel (best-effort, don't block)
-			for (let i = 0; i < cards.length; i++) {
-				loadCardData(i);
+			// Load profiles + insights in parallel batches (avoid overwhelming API)
+			// Process up to 3 accounts concurrently
+			const batchSize = 3;
+			for (let i = 0; i < cards.length; i += batchSize) {
+				const batch = Array.from(
+					{ length: Math.min(batchSize, cards.length - i) },
+					(_, j) => loadCardData(i + j),
+				);
+				await Promise.all(batch);
 			}
 		} catch (e: any) {
 			toast('Failed to load dashboard data', 'error');
@@ -119,23 +125,24 @@
 		if (!cards[index]) return;
 		const accountId = cards[index].account.id;
 
-		// Load profile
-		cards[index] = { ...cards[index], profileLoading: true };
-		try {
-			const profile = await getThreadsProfile(accountId);
-			cards[index] = { ...cards[index], profile, profileLoading: false };
-		} catch {
-			cards[index] = { ...cards[index], profileLoading: false, profileError: true };
-		}
+		// Set loading states
+		cards[index] = { ...cards[index], profileLoading: true, insightsLoading: true };
 
-		// Load insights
-		cards[index] = { ...cards[index], insightsLoading: true };
-		try {
-			const insights = await getAccountInsights(accountId);
-			cards[index] = { ...cards[index], insights, insightsLoading: false };
-		} catch {
-			cards[index] = { ...cards[index], insightsLoading: false };
-		}
+		// Fetch profile + insights concurrently
+		const [profileResult, insightsResult] = await Promise.allSettled([
+			getThreadsProfile(accountId),
+			getAccountInsights(accountId),
+		]);
+
+		// Apply results in a single mutation (no race)
+		cards[index] = {
+			...cards[index],
+			profile: profileResult.status === 'fulfilled' ? profileResult.value : null,
+			profileLoading: false,
+			profileError: profileResult.status === 'rejected',
+			insights: insightsResult.status === 'fulfilled' ? insightsResult.value : null,
+			insightsLoading: false,
+		};
 	}
 
 	$effect(() => {
