@@ -104,16 +104,13 @@
 				profileError: false,
 			}));
 
-			// Load profiles + insights in parallel batches (avoid overwhelming API)
-			// Process up to 3 accounts concurrently
-			const batchSize = 3;
-			for (let i = 0; i < cards.length; i += batchSize) {
-				const batch = Array.from(
-					{ length: Math.min(batchSize, cards.length - i) },
-					(_, j) => loadCardData(i + j),
-				);
-				await Promise.all(batch);
-			}
+			// Load profiles + insights for all accounts concurrently.
+			// Each loadCardData fires 2 requests (profile + insights) via
+			// Promise.allSettled — browser limits concurrent connections
+			// per host automatically (typically 6).
+			await Promise.all(
+				cards.map((_, i) => loadCardData(i)),
+			);
 		} catch (e: any) {
 			toast('Failed to load dashboard data', 'error');
 		} finally {
