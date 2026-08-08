@@ -40,6 +40,9 @@
 
 	// Load insights + trend once on mount with cleanup
 	$effect(() => {
+		// Reset state when post changes to avoid stale data flash
+		insights = null;
+		trend = [];
 		let cancelled = false;
 
 		loadingInsights = true;
