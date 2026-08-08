@@ -821,7 +821,7 @@ textarea.form-input {
 
 	.admin-content {
 		padding: var(--space-md);
-		padding-block-start: calc(var(--space-md) + var(--space-xl));
+		padding-block-start: calc(2.5rem + var(--space-md) + var(--space-sm));
 	}
 
 	.data-table {
