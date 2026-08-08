@@ -1047,14 +1047,7 @@ fn handle_tool_call(
                 }
             };
 
-            // Check content-length before downloading body
-            if let Some(len) = resp.content_length() {
-                if len > 50 * 1024 * 1024 {
-                    return Err("File too large. Maximum 50MB.".to_string());
-                }
-            }
-
-            // Stream body with hard cap (prevents chunked-encoding OOM bypass)
+            // Stream body with hard cap (handles both Content-Length and chunked encoding)
             const MAX_SIZE: usize = 50 * 1024 * 1024;
             let mut buf: Vec<u8> = Vec::with_capacity(1024 * 1024);
             loop {
@@ -1353,14 +1346,27 @@ fn handle_tool_call(
                 .exchange_code_for_token(code, &client_id, &client_secret, &redirect_uri)
                 .await
             {
-                Ok((access_token, _token_type)) => {
+                Ok((short_token, _token_type)) => {
+                    // Exchange short-lived → long-lived token (gets real expiry)
+                    let (access_token, expires_in) = match threads_client
+                        .exchange_long_lived_token(&short_token, &client_secret)
+                        .await
+                    {
+                        Ok((token, exp)) => (token, exp),
+                        Err(e) => {
+                            return Err(format!(
+                                "Failed to exchange for long-lived token: {e}"
+                            ));
+                        }
+                    };
                     // Resolve user identity from token
                     match threads_client.resolve_account(&access_token).await {
                         Ok((user_id, username)) => {
                             let id = uuid::Uuid::now_v7().to_string();
+                            // Use actual expiry from API response
                             let expires_at = (chrono::Utc::now()
-                                + chrono::Duration::seconds(5184000))
-                            .to_rfc3339(); // ~60 days
+                                + chrono::Duration::seconds(expires_in))
+                            .to_rfc3339();
                             let input = titen_core::models::CreateAccount {
                                 username: Some(username.clone()),
                                 user_id: Some(user_id.clone()),
