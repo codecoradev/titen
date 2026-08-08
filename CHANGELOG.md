@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-08
+
+### Fixed
+- **Sidebar version display**: hardcoded `v0.3.0` → correct `v0.4.0`
+- **Insights dropdown**: used non-existent `.select` CSS class → switched to `.form-input` (proper styling)
+- **Dashboard grid responsive**: fragile `div[style*="grid-template-columns"]` attribute selector → proper `.dashboard-grid` class
+
+### Changed
+- **Mobile sidebar overlay**: click-outside backdrop to close sidebar (standard mobile pattern)
+- **Mobile content padding**: top offset so hamburger button doesn't overlap page content
+- **Insights header responsive**: stacks vertically + select full-width on screens ≤480px
+- **Token & compact rows**: flex-wrap and column layout on narrow screens
+- **Toast container**: max-width constrained to viewport to prevent overflow
+- **Stat cards**: subtle border + shadow hover transition for interactive feel
+- **Section headings**: `.section-heading` class replaces repeated inline styles (4 occurrences)
+- **Accessibility**: `aria-expanded` attribute on hamburger menu button
+
 ## [0.4.0] - 2026-08-08
 
 ### Added
