@@ -124,6 +124,7 @@ export interface HealthResponse {
 	status: string;
 	version: string;
 	db: string;
+	timezone: string;
 }
 
 // ─── Mention (from Threads mentions API) ───

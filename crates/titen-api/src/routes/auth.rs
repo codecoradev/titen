@@ -140,6 +140,7 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
         "requires_auth": is_configured,
         "authenticated": authenticated,
         "version": env!("CARGO_PKG_VERSION"),
+        "timezone": titen_core::config::timezone(),
     }))
 }
 
