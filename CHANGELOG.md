@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-08
+
+### Added
+- **Mentions persistence (P0)**: mentions from Threads API are now persisted to a dedicated `mentions` table, preventing data loss on every fetch. New endpoints: `GET /api/threads/mentions` (list from DB) and `POST /api/threads/mentions` (fetch + persist from API). [#78]
+- **GET /api/schedules/{id}**: single schedule retrieval via GET method (previously only PUT/PATCH/DELETE). [#81]
+- **Caption sanitizer**: multiline captions are now normalized (`\r\n` → `\n`, null bytes stripped) on both create and update paths, preventing broken JSON parsing from raw curl. [#82]
+- Migration `006_mentions_table.sql`: new `mentions` table with `account_id` FK, `threads_mention_id` unique constraint, and full mention metadata.
+- Migration `007_media_urls_doc.sql`: marker migration documenting `media_urls` TEXT column as JSON-encoded array convention. [#80]
+
+### Changed
+- **Schedule.media_urls documentation**: added rustdoc clarifying that `media_urls` is a TEXT column storing a JSON-encoded array (SQLite has no native JSON type). Consumer code uses `serde_json::from_str` to decode. [#80]
+
 ## [0.4.2] - 2026-08-08
 
 ### Fixed
