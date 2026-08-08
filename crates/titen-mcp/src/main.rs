@@ -994,20 +994,63 @@ fn handle_tool_call(
                 .and_then(|v| v.as_str())
                 .unwrap_or("upload");
 
-            // Download the image from URL
-            let resp = match reqwest::get(url).await {
+            // Validate URL scheme — prevent SSRF and file:// attacks
+            let parsed = match reqwest::Url::parse(url) {
+                Ok(u) => u,
+                Err(_) => return Err("Invalid URL format".to_string()),
+            };
+            if parsed.scheme() != "https" && parsed.scheme() != "http" {
+                return Err(format!(
+                    "URL scheme '{}' not allowed. Only http/https.",
+                    parsed.scheme()
+                ));
+            }
+
+            // Download with redirect policy + timeout + size limit (50MB)
+            let client = match reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+            {
+                Ok(c) => c,
+                Err(e) => return Err(format!("Failed to create HTTP client: {e}")),
+            };
+            let resp = match client.get(url).send().await {
                 Ok(r) => r,
                 Err(e) => return Err(format!("Failed to download image: {e}")),
             };
+            if !resp.status().is_success() {
+                return Err(format!("Download failed: HTTP {}", resp.status()));
+            }
             let content_type = resp
                 .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("image/jpeg")
                 .to_string();
+
+            // Check content-length before downloading body
+            if let Some(len) = resp.content_length() {
+                if len > 50 * 1024 * 1024 {
+                    return Err("File too large. Maximum 50MB.".to_string());
+                }
+            }
+
             let bytes = match resp.bytes().await {
                 Ok(b) => b,
                 Err(e) => return Err(format!("Failed to read image bytes: {e}")),
+            };
+            if bytes.len() > 50 * 1024 * 1024 {
+                return Err("File too large. Maximum 50MB.".to_string());
+            }
+
+            // Determine file extension from content-type
+            let ext = match content_type.as_str() {
+                "image/jpeg" | "image/jpg" => "jpg",
+                "image/png" => "png",
+                "image/gif" => "gif",
+                "image/webp" => "webp",
+                _ => "bin",
             };
 
             // Upload to S3
@@ -1016,13 +1059,14 @@ fn handle_tool_call(
                 Ok(s) => s,
                 Err(_) => return Err("S3 storage not configured. Set S3_* env vars.".to_string()),
             };
-            let s3_key = format!("uploads/{}", uuid::Uuid::now_v7());
+            let asset_id = uuid::Uuid::now_v7();
+            let s3_key = format!("uploads/{asset_id}.{ext}");
             let s3_url = match s3.upload(&s3_key, &bytes, &content_type).await {
                 Ok(u) => u,
                 Err(e) => return Err(format!("Failed to upload to S3: {e}")),
             };
 
-            let id = uuid::Uuid::now_v7().to_string();
+            let id = asset_id.to_string();
             match store
                 .create_media_asset(
                     &id,
@@ -1043,7 +1087,11 @@ fn handle_tool_call(
                     "size_bytes": asset.size_bytes,
                     "uploaded_at": asset.uploaded_at,
                 })),
-                Err(e) => Err(format!("Failed to create media asset: {e}")),
+                Err(e) => {
+                    // Best-effort S3 cleanup on DB insert failure
+                    let _ = s3.delete(&s3_key).await;
+                    Err(format!("Failed to create media asset: {e}"))
+                }
             }
         }),
         "list_media" => rt.block_on(async {
