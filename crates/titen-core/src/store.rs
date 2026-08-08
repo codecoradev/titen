@@ -460,6 +460,12 @@ impl Store {
             .as_ref()
             .map(|urls| serde_json::to_string(urls).unwrap_or_default());
 
+        // Sanitize caption: normalize line endings (#82)
+        let caption = input
+            .caption
+            .as_deref()
+            .map(crate::models::sanitize_caption);
+
         // HITL: new schedules default to 'draft' (requires human approval).
         // If auto_approve=true, skip directly to 'pending' for backward compat.
         let status = if input.auto_approve {
@@ -475,7 +481,7 @@ impl Store {
         .bind(id)
         .bind(&input.account_id)
         .bind(media_type)
-        .bind(&input.caption)
+        .bind(&caption)
         .bind(&input.text_attachment)
         .bind(&media_urls)
         .bind(&input.scheduled_at)
@@ -625,6 +631,9 @@ impl Store {
             .as_ref()
             .map(|urls| serde_json::to_string(urls).unwrap_or_default());
 
+        // Sanitize caption: normalize line endings (#82)
+        let caption_sanitized = caption.map(crate::models::sanitize_caption);
+
         // Use COALESCE in SQL: None → keep existing, Some(v) → set new value
         // This allows callers to explicitly clear a field by passing Some("")
         let result = sqlx::query(
@@ -636,7 +645,7 @@ impl Store {
                  updated_at = datetime('now')
              WHERE id = ? AND status IN ('draft', 'pending')",
         )
-        .bind(caption)
+        .bind(caption_sanitized.as_deref())
         .bind(media_type)
         .bind(media_urls_str)
         .bind(scheduled_at)
@@ -705,6 +714,57 @@ impl Store {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    // ─── Mentions ───────────────────────────────────────────
+
+    pub async fn upsert_mention(&self, mention: &Mention) -> Result<Mention> {
+        sqlx::query(
+            "INSERT INTO mentions (id, account_id, threads_mention_id, author_username, author_user_id, text, media_type, permalink, mentioned_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(account_id, threads_mention_id) DO UPDATE SET
+               author_username = excluded.author_username,
+               text = excluded.text,
+               permalink = excluded.permalink,
+               fetched_at = datetime('now')",
+        )
+        .bind(&mention.id)
+        .bind(&mention.account_id)
+        .bind(&mention.threads_mention_id)
+        .bind(&mention.author_username)
+        .bind(&mention.author_user_id)
+        .bind(&mention.text)
+        .bind(&mention.media_type)
+        .bind(&mention.permalink)
+        .bind(&mention.mentioned_at)
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query_as::<_, Mention>(
+            "SELECT * FROM mentions WHERE account_id = ? AND threads_mention_id = ?",
+        )
+        .bind(&mention.account_id)
+        .bind(&mention.threads_mention_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn list_mentions(
+        &self,
+        account_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Mention>> {
+        sqlx::query_as::<_, Mention>(
+            "SELECT * FROM mentions WHERE account_id = ? ORDER BY fetched_at DESC LIMIT ? OFFSET ?",
+        )
+        .bind(account_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     // ─── Analytics ───────────────────────────────────────────

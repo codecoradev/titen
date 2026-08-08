@@ -194,7 +194,8 @@ pub async fn serve(
         )
         .route(
             "/api/schedules/{id}",
-            put(routes::schedules::update_schedule)
+            get(routes::schedules::get_schedule_by_id)
+                .put(routes::schedules::update_schedule)
                 .patch(routes::schedules::patch_schedule)
                 .delete(routes::schedules::delete_schedule),
         )
@@ -260,7 +261,7 @@ pub async fn serve(
         .route("/api/threads/search", post(routes::threads::search_keyword))
         .route(
             "/api/threads/mentions",
-            post(routes::threads::fetch_mentions),
+            get(routes::threads::list_mentions_handler).post(routes::threads::fetch_mentions),
         )
         .route(
             "/api/threads/share-to-instagram",

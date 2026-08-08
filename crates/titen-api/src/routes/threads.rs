@@ -4,6 +4,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use titen_core::models::Mention;
 
 /// Fetch the Threads user profile for an account
 pub async fn get_user_profile(
@@ -209,6 +210,13 @@ pub struct FetchMentionsInput {
 }
 
 #[derive(Deserialize)]
+pub struct MentionListQuery {
+    pub account_id: String,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+#[derive(Deserialize)]
 pub struct ShareToInstagramInput {
     pub account_id: String,
     pub threads_post_id: String,
@@ -372,7 +380,27 @@ pub struct AccountInsightsQuery {
 
 // ─── Mentions ──────────────────────────────────────────────
 
-/// Fetch posts where the user is mentioned
+/// List persisted mentions for an account (from DB, not Threads API)
+pub async fn list_mentions_handler(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<MentionListQuery>,
+) -> Json<serde_json::Value> {
+    let account_id = params.account_id.as_str();
+    let limit = params.limit.unwrap_or(25).clamp(1, 100) as i64;
+    let offset = params.offset.unwrap_or(0) as i64;
+
+    match state.store.list_mentions(account_id, limit, offset).await {
+        Ok(mentions) => Json(serde_json::json!({
+            "data": mentions,
+            "count": mentions.len(),
+            "limit": limit,
+            "offset": offset,
+        })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
+    }
+}
+
+/// Fetch posts where the user is mentioned — persists to DB
 pub async fn fetch_mentions(
     State(state): State<AppState>,
     Json(input): Json<FetchMentionsInput>,
@@ -391,7 +419,50 @@ pub async fn fetch_mentions(
         .fetch_mentions(&account, input.limit)
         .await
     {
-        Ok(mentions) => Json(serde_json::json!({ "data": mentions, "count": mentions.len() })),
+        Ok(mentions) => {
+            // Persist each mention to DB (upsert by threads_mention_id)
+            let mut stored = Vec::new();
+            for m in &mentions {
+                let threads_id = m
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if threads_id.is_empty() {
+                    continue;
+                }
+                let mention = Mention {
+                    id: uuid::Uuid::now_v7().to_string(),
+                    account_id: account.id.clone(),
+                    threads_mention_id: Some(threads_id.clone()),
+                    author_username: m.get("username").and_then(|v| v.as_str()).map(String::from),
+                    author_user_id: None,
+                    text: m.get("text").and_then(|v| v.as_str()).map(String::from),
+                    media_type: m
+                        .get("media_type")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    permalink: m
+                        .get("permalink")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    mentioned_at: m
+                        .get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    fetched_at: chrono::Utc::now().to_rfc3339(),
+                };
+                match state.store.upsert_mention(&mention).await {
+                    Ok(persisted) => stored.push(persisted),
+                    Err(e) => {
+                        tracing::warn!("Failed to persist mention {threads_id}: {e}");
+                    }
+                }
+            }
+            Json(
+                serde_json::json!({ "data": stored, "fetched": mentions.len(), "stored": stored.len() }),
+            )
+        }
         Err(e) => {
             Json(serde_json::json!({ "error": e.to_string(), "code": "MENTIONS_FETCH_FAILED" }))
         }

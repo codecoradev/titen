@@ -29,6 +29,29 @@ pub async fn list_schedules(
     }
 }
 
+pub async fn get_schedule_by_id(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state.store.get_schedule(&id).await {
+        Ok(schedule) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "data": schedule })),
+        ),
+        Err(e) => {
+            let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (
+                code,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+            )
+        }
+    }
+}
+
 pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_schedules(None, Some("pending")).await {
         Ok(schedules) => {
