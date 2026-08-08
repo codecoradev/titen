@@ -153,6 +153,30 @@ impl Store {
             }
         }
 
+        // 006 — mentions table
+        let sql_006 = include_str!("../../titen-api/migrations/006_mentions_table.sql");
+        for statement in sql_006.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                let result = sqlx::query(trimmed).execute(&self.pool).await;
+                if let Err(e) = result {
+                    let msg = e.to_string();
+                    if !msg.contains("already exists") {
+                        return Err(TitenError::DatabaseError(msg));
+                    }
+                }
+            }
+        }
+
+        // 007 — media_urls documentation (no-op marker)
+        let sql_007 = include_str!("../../titen-api/migrations/007_media_urls_doc.sql");
+        for statement in sql_007.split(';') {
+            let trimmed = statement.trim();
+            if !trimmed.is_empty() {
+                let _ = sqlx::query(trimmed).execute(&self.pool).await;
+            }
+        }
+
         Ok(())
     }
 
