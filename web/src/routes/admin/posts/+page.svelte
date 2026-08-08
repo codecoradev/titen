@@ -2,6 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import PostDetail from '$lib/components/PostDetail.svelte';
 	import { listPosts, deletePost, getPostInsights, listAccounts } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
 	import type { Post, Account } from '$lib/types';
@@ -15,6 +16,18 @@
 	let insights: Record<string, any> = $state({});
 	let insightsLoading = $state<string | null>(null);
 	let confirmDelete = $state<{ open: boolean; post: Post | null }>({ open: false, post: null });
+
+	// Detail modal
+	let detailPost = $state<Post | null>(null);
+
+	function openDetail(post: Post) {
+		// Enrich with account info for permalink
+		const enriched = { ...post, account: accounts.find(a => a.id === post.account_id) };
+		detailPost = enriched;
+	}
+	function closeDetail() {
+		detailPost = null;
+	}
 
 	const filtered = $derived.by(() => {
 		let result = posts;
@@ -131,21 +144,17 @@
 			</thead>
 			<tbody>
 				{#each filtered as post (post.id)}
-					<tr>
+					<tr class="row-clickable" onclick={() => openDetail(post)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openDetail(post)}>
 						<td class="truncate" style="max-width:40ch;">
-							<button class="btn-ghost" style="text-align:left;padding:0;" onclick={() => toggleInsights(post.id)}>
-								{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
-							</button>
+							{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
 						</td>
 						<td><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></td>
 						<td>{post.media_type}</td>
 						<td><StatusBadge status={post.status} /></td>
 						<td><span class="tabular-nums">{formatDate(post.published_at)}</span></td>
-						<td>
+						<td onclick={(e) => e.stopPropagation()}>
 							<div style="display:flex;gap:var(--space-2xs);">
-								<button class="btn-outline btn-sm" onclick={() => toggleInsights(post.id)}>
-									{insightsLoading === post.id ? '…' : 'Insights'}
-								</button>
+								<button class="btn-outline btn-sm" onclick={() => openDetail(post)}>Detail</button>
 								<button class="btn-ghost btn-sm" onclick={() => (confirmDelete = { open: true, post })}>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
 										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
@@ -160,25 +169,10 @@
 	{/if}
 </div>
 
-<!-- Insights panel -->
-{#if expandedPostId && insights[expandedPostId]}
-	<div class="insights-panel" style="margin-top: var(--space-md);">
-		<h3 style="font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-sm);">Insights</h3>
-		<div class="stat-grid" style="grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));">
-			{#each [
-				{ label: 'Likes', value: insights[expandedPostId]?.likes ?? 0 },
-				{ label: 'Replies', value: insights[expandedPostId]?.replies ?? 0 },
-				{ label: 'Reposts', value: insights[expandedPostId]?.reposts ?? 0 },
-				{ label: 'Views', value: insights[expandedPostId]?.views ?? 0 },
-				{ label: 'Quotes', value: insights[expandedPostId]?.quotes ?? 0 },
-			] as stat}
-				<div class="stat-card">
-					<div class="stat-card-label">{stat.label}</div>
-					<div class="stat-card-value tabular-nums">{stat.value.toLocaleString()}</div>
-				</div>
-			{/each}
-		</div>
-	</div>
+<!-- Post Detail Modal -->
+{#if detailPost}
+	{@const postWithAccount = { ...detailPost, account: accounts.find(a => a.id === detailPost.account_id) }}
+	<PostDetail post={postWithAccount} onClose={closeDetail} />
 {/if}
 
 <ConfirmDialog
@@ -190,3 +184,18 @@
 	onconfirm={handleDelete}
 	oncancel={() => (confirmDelete = { open: false, post: null })}
 />
+
+<svelte:window onkeydown={(e) => {
+	if (e.key === 'Escape' && detailPost) closeDetail();
+}} />
+
+<style>
+	.row-clickable {
+		cursor: pointer;
+		transition: background-color 0.1s ease;
+	}
+
+	.row-clickable:hover {
+		background: var(--color-bg-hover, rgba(0, 0, 0, 0.03));
+	}
+</style>
