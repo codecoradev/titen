@@ -142,6 +142,9 @@ export const getPostInsights = (id: string): Promise<Insights> =>
 	request<Insights>(`/posts/${id}/insights`);
 
 // ── Schedules ──
+export const getSchedule = (id: string): Promise<Schedule> =>
+	request<Schedule>(`/schedules/${id}`);
+
 export const listSchedules = (params?: {
 	account_id?: string;
 	status?: string;

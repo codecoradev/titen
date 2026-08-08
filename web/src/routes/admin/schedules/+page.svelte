@@ -3,6 +3,7 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import ScheduleDetail from '$lib/components/ScheduleDetail.svelte';
 	import {
 		listSchedules,
 		createSchedule,
@@ -22,6 +23,19 @@
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
 	let creating = $state(false);
+
+	// Detail modal
+	let detailSchedule = $state<Schedule | null>(null);
+
+	function openDetail(s: Schedule) {
+		detailSchedule = s;
+	}
+	function closeDetail() {
+		detailSchedule = null;
+	}
+	async function onDetailAction() {
+		await loadSchedules();
+	}
 
 	let filterAccountId = $state('');
 	let filterStatus = $state<StatusFilter>('all');
@@ -342,13 +356,19 @@
 						{/each}
 					{:else}
 						{#each schedules as schedule (schedule.id)}
-							<tr class={schedule.status === 'draft' ? 'row-draft' : ''}>
-								<td class="truncate" title={schedule.caption || '—'}>
-									{#if schedule.media_urls}
-										<span class="media-tag">{schedule.media_type || 'MEDIA'}</span>
-									{/if}
-									{truncate(schedule.caption || '—', 60)}
-								</td>
+							<tr
+								class={schedule.status === 'draft' ? 'row-draft row-clickable' : 'row-clickable'}
+								onclick={() => openDetail(schedule)}
+								onkeydown={(e) => e.key === 'Enter' && openDetail(schedule)}
+								role="button"
+								tabindex="0"
+							>
+							<td class="truncate" title={schedule.caption || '—'}>
+								{#if schedule.media_urls}
+									<span class="media-tag">{schedule.media_type || 'MEDIA'}</span>
+								{/if}
+								{truncate(schedule.caption || '—', 60)}
+							</td>
 								<td>
 									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
 								</td>
@@ -361,7 +381,7 @@
 								<td class="col-error" title={schedule.error ?? ''}>
 									{schedule.error ?? '—'}
 								</td>
-								<td class="col-actions">
+								<td class="col-actions" onclick={(e) => e.stopPropagation()}>
 									{#if schedule.status === 'draft'}
 										<button
 											class="btn-success btn-sm"
@@ -620,8 +640,18 @@
 	oncancel={cancelDelete}
 />
 
+<!-- Schedule Detail Modal -->
+{#if detailSchedule}
+	<ScheduleDetail
+		schedule={detailSchedule}
+		onClose={closeDetail}
+		onAction={onDetailAction}
+	/>
+{/if}
+
 <svelte:window onkeydown={(e) => {
 	if (e.key === 'Escape') {
+		if (detailSchedule) closeDetail();
 		if (modalOpen) closeCreateModal();
 		if (editTarget) closeEditModal();
 		if (rejectTarget) closeRejectModal();
@@ -630,6 +660,15 @@
 }} />
 
 <style>
+	.row-clickable {
+		cursor: pointer;
+		transition: background-color 0.1s ease;
+	}
+
+	.row-clickable:hover {
+		background: var(--color-bg-hover, rgba(0, 0, 0, 0.03));
+	}
+
 	.badge-draft {
 		background: var(--color-warning-bg, #fef3c7);
 		color: var(--color-warning-text, #92400e);
