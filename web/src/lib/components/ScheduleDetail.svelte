@@ -223,9 +223,11 @@
 					{acting ? '...' : showRejectInput ? 'Confirm reject' : 'Reject'}
 				</button>
 			{/if}
-			<button class="btn btn-ghost" onclick={handleDelete} disabled={acting}>
-				Delete
-			</button>
+			{#if ['draft', 'rejected', 'failed'].includes(schedule.status)}
+				<button class="btn btn-ghost" onclick={handleDelete} disabled={acting}>
+					Delete
+				</button>
+			{/if}
 			<button class="btn btn-secondary" onclick={onClose}>Close</button>
 		</div>
 	</div>
