@@ -380,6 +380,7 @@ fn tools_list() -> serde_json::Value {
                     "type": "object",
                     "properties": {
                         "url": { "type": "string", "description": "Source URL of the image to upload" },
+                        "filename": { "type": "string", "description": "Base filename for the uploaded asset (without extension)" },
                         "alt_text": { "type": "string", "description": "Alt text for accessibility" }
                     },
                     "required": ["url"]
@@ -1123,7 +1124,7 @@ fn handle_tool_call(
             match store
                 .list_media(&titen_core::models::MediaFilter {
                     content_type: args
-                        .get("content_type")
+                        .get("media_type")
                         .and_then(|v| v.as_str())
                         .map(String::from),
                     limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as i64),
