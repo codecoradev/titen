@@ -384,28 +384,49 @@ impl Store {
 
     // ─── Posts ─────────────────────────────────────────────
 
-    pub async fn list_posts(
-        &self,
-        account_id: Option<&str>,
-        status: Option<&str>,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<Post>> {
+    pub async fn list_posts(&self, filter: &PostFilter) -> Result<Vec<Post>> {
+        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let offset = filter.offset.unwrap_or(0).max(0);
+
         let mut query = String::from("SELECT * FROM posts WHERE 1=1");
-        if account_id.is_some() {
+        if filter.account_id.is_some() {
             query.push_str(" AND account_id = ?");
         }
-        if status.is_some() {
+        if filter.status.is_some() {
             query.push_str(" AND status = ?");
+        }
+        if filter.media_type.is_some() {
+            query.push_str(" AND media_type = ?");
+        }
+        if filter.from.is_some() {
+            query.push_str(" AND created_at >= ?");
+        }
+        if filter.to.is_some() {
+            query.push_str(" AND created_at <= ?");
+        }
+        if filter.search.is_some() {
+            query.push_str(" AND caption LIKE ? COLLATE NOCASE");
         }
         query.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
 
         let mut q = sqlx::query_as::<_, Post>(&query);
-        if let Some(aid) = account_id {
+        if let Some(ref aid) = filter.account_id {
             q = q.bind(aid);
         }
-        if let Some(s) = status {
+        if let Some(ref s) = filter.status {
             q = q.bind(s);
+        }
+        if let Some(ref mt) = filter.media_type {
+            q = q.bind(mt);
+        }
+        if let Some(ref f) = filter.from {
+            q = q.bind(f);
+        }
+        if let Some(ref t) = filter.to {
+            q = q.bind(t);
+        }
+        if let Some(ref search) = filter.search {
+            q = q.bind(format!("%{search}%"));
         }
         q.bind(limit)
             .bind(offset)
@@ -452,28 +473,55 @@ impl Store {
 
     // ─── Schedules ──────────────────────────────────────────
 
-    pub async fn list_schedules(
-        &self,
-        account_id: Option<&str>,
-        status: Option<&str>,
-    ) -> Result<Vec<Schedule>> {
+    pub async fn list_schedules(&self, filter: &ScheduleFilter) -> Result<Vec<Schedule>> {
+        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let offset = filter.offset.unwrap_or(0).max(0);
+
         let mut query = String::from("SELECT * FROM schedules WHERE 1=1");
-        if account_id.is_some() {
+        if filter.account_id.is_some() {
             query.push_str(" AND account_id = ?");
         }
-        if status.is_some() {
+        if filter.status.is_some() {
             query.push_str(" AND status = ?");
         }
-        query.push_str(" ORDER BY scheduled_at ASC");
+        if filter.media_type.is_some() {
+            query.push_str(" AND media_type = ?");
+        }
+        if filter.from.is_some() {
+            query.push_str(" AND scheduled_at >= ?");
+        }
+        if filter.to.is_some() {
+            query.push_str(" AND scheduled_at <= ?");
+        }
+        if filter.search.is_some() {
+            query.push_str(" AND caption LIKE ? COLLATE NOCASE");
+        }
+        query.push_str(" ORDER BY scheduled_at ASC LIMIT ? OFFSET ?");
 
         let mut q = sqlx::query_as::<_, Schedule>(&query);
-        if let Some(aid) = account_id {
+        if let Some(ref aid) = filter.account_id {
             q = q.bind(aid);
         }
-        if let Some(s) = status {
+        if let Some(ref s) = filter.status {
             q = q.bind(s);
         }
-        q.fetch_all(&self.pool).await.map_err(Into::into)
+        if let Some(ref mt) = filter.media_type {
+            q = q.bind(mt);
+        }
+        if let Some(ref f) = filter.from {
+            q = q.bind(f);
+        }
+        if let Some(ref t) = filter.to {
+            q = q.bind(t);
+        }
+        if let Some(ref search) = filter.search {
+            q = q.bind(format!("%{search}%"));
+        }
+        q.bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_due_schedules(&self) -> Result<Vec<Schedule>> {
@@ -702,14 +750,47 @@ impl Store {
 
     // ─── Comments ───────────────────────────────────────────
 
-    pub async fn list_comments(&self, post_id: &str) -> Result<Vec<Comment>> {
-        sqlx::query_as::<_, Comment>(
-            "SELECT * FROM comments WHERE post_id = ? ORDER BY fetched_at ASC",
-        )
-        .bind(post_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(Into::into)
+    pub async fn list_comments(
+        &self,
+        post_id: &str,
+        filter: &CommentFilter,
+    ) -> Result<Vec<Comment>> {
+        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let offset = filter.offset.unwrap_or(0).max(0);
+
+        let mut query = String::from("SELECT * FROM comments WHERE post_id = ?");
+        if filter.sentiment.is_some() {
+            query.push_str(" AND sentiment = ?");
+        }
+        if filter.from.is_some() {
+            query.push_str(" AND fetched_at >= ?");
+        }
+        if filter.to.is_some() {
+            query.push_str(" AND fetched_at <= ?");
+        }
+        if filter.search.is_some() {
+            query.push_str(" AND text LIKE ? COLLATE NOCASE");
+        }
+        query.push_str(" ORDER BY fetched_at DESC LIMIT ? OFFSET ?");
+
+        let mut q = sqlx::query_as::<_, Comment>(&query).bind(post_id);
+        if let Some(ref s) = filter.sentiment {
+            q = q.bind(s);
+        }
+        if let Some(ref f) = filter.from {
+            q = q.bind(f);
+        }
+        if let Some(ref t) = filter.to {
+            q = q.bind(t);
+        }
+        if let Some(ref search) = filter.search {
+            q = q.bind(format!("%{search}%"));
+        }
+        q.bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn insert_comment(
@@ -795,21 +876,37 @@ impl Store {
         .map_err(Into::into)
     }
 
-    pub async fn list_mentions(
-        &self,
-        account_id: &str,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<Mention>> {
-        sqlx::query_as::<_, Mention>(
-            "SELECT * FROM mentions WHERE account_id = ? ORDER BY fetched_at DESC LIMIT ? OFFSET ?",
-        )
-        .bind(account_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(Into::into)
+    pub async fn list_mentions(&self, filter: &MentionFilter) -> Result<Vec<Mention>> {
+        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let offset = filter.offset.unwrap_or(0).max(0);
+
+        let mut query = String::from("SELECT * FROM mentions WHERE 1=1");
+
+        if filter.account_id.is_some() {
+            query.push_str(" AND account_id = ?");
+        }
+        if filter.date_from.is_some() {
+            query.push_str(" AND fetched_at >= ?");
+        }
+        if filter.date_to.is_some() {
+            query.push_str(" AND fetched_at <= ?");
+        }
+        query.push_str(" ORDER BY fetched_at DESC LIMIT ? OFFSET ?");
+
+        let mut q = sqlx::query_as::<_, Mention>(&query);
+
+        if let Some(ref acct) = filter.account_id {
+            q = q.bind(acct);
+        }
+        if let Some(ref from) = filter.date_from {
+            q = q.bind(from);
+        }
+        if let Some(ref to) = filter.date_to {
+            q = q.bind(to);
+        }
+        q = q.bind(limit).bind(offset);
+
+        q.fetch_all(&self.pool).await.map_err(Into::into)
     }
 
     // ─── Analytics ───────────────────────────────────────────
@@ -853,8 +950,28 @@ impl Store {
 
     // ─── Media ──────────────────────────────────────────────
 
-    pub async fn list_media(&self) -> Result<Vec<MediaAsset>> {
-        sqlx::query_as::<_, MediaAsset>("SELECT * FROM media_assets ORDER BY uploaded_at DESC")
+    pub async fn list_media(&self, filter: &MediaFilter) -> Result<Vec<MediaAsset>> {
+        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let offset = filter.offset.unwrap_or(0).max(0);
+
+        let mut query = String::from("SELECT * FROM media_assets WHERE 1=1");
+        if filter.content_type.is_some() {
+            query.push_str(" AND content_type = ?");
+        }
+        if filter.search.is_some() {
+            query.push_str(" AND filename LIKE ? COLLATE NOCASE");
+        }
+        query.push_str(" ORDER BY uploaded_at DESC LIMIT ? OFFSET ?");
+
+        let mut q = sqlx::query_as::<_, MediaAsset>(&query);
+        if let Some(ref ct) = filter.content_type {
+            q = q.bind(ct);
+        }
+        if let Some(ref search) = filter.search {
+            q = q.bind(format!("%{search}%"));
+        }
+        q.bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await
             .map_err(Into::into)

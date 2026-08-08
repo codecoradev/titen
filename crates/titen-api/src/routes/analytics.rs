@@ -5,6 +5,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::server::AppState;
+use titen_core::models::PostFilter;
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
@@ -20,7 +21,14 @@ pub async fn list_analytics(
 ) -> Json<serde_json::Value> {
     let posts = match state
         .store
-        .list_posts(q.account_id.as_deref(), Some("published"), 1000, 0)
+        .list_posts(&PostFilter {
+            account_id: q.account_id.clone(),
+            status: Some("published".to_string()),
+            from: q.from.clone(),
+            to: q.to.clone(),
+            limit: Some(1000),
+            ..Default::default()
+        })
         .await
     {
         Ok(p) => p,

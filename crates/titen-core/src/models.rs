@@ -235,6 +235,163 @@ pub struct MediaAsset {
     pub uploaded_at: String,
 }
 
+// ─── Unified Query Filters (Issue #83) ─────────────────────
+
+/// Filter for post listings — supports date range, media_type, and text search.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PostFilter {
+    pub account_id: Option<String>,
+    pub status: Option<String>,
+    pub media_type: Option<String>,
+    /// ISO-8601 — only posts created at or after this date
+    pub from: Option<String>,
+    /// ISO-8601 — only posts created at or before this date
+    pub to: Option<String>,
+    /// Case-insensitive LIKE search on caption
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for PostFilter {
+    fn default() -> Self {
+        Self {
+            account_id: None,
+            status: None,
+            media_type: None,
+            from: None,
+            to: None,
+            search: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
+/// Filter for schedule listings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScheduleFilter {
+    pub account_id: Option<String>,
+    pub status: Option<String>,
+    pub media_type: Option<String>,
+    /// ISO-8601 — only schedules at or after this date
+    pub from: Option<String>,
+    /// ISO-8601 — only schedules at or before this date
+    pub to: Option<String>,
+    /// Case-insensitive LIKE search on caption
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for ScheduleFilter {
+    fn default() -> Self {
+        Self {
+            account_id: None,
+            status: None,
+            media_type: None,
+            from: None,
+            to: None,
+            search: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
+/// Filter for comment listings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CommentFilter {
+    pub sentiment: Option<String>,
+    pub reply_status: Option<String>,
+    /// ISO-8601 — only comments fetched at or after this date
+    pub from: Option<String>,
+    /// ISO-8601 — only comments fetched at or before this date
+    pub to: Option<String>,
+    /// Case-insensitive LIKE search on text
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for CommentFilter {
+    fn default() -> Self {
+        Self {
+            sentiment: None,
+            reply_status: None,
+            from: None,
+            to: None,
+            search: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
+/// Filter for media listings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MediaFilter {
+    pub content_type: Option<String>,
+    /// Case-insensitive LIKE search on filename
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for MediaFilter {
+    fn default() -> Self {
+        Self {
+            content_type: None,
+            search: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
+/// Filter for account listings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AccountFilter {
+    pub is_active: Option<bool>,
+    /// Case-insensitive LIKE search on username
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for AccountFilter {
+    fn default() -> Self {
+        Self {
+            is_active: None,
+            search: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
+/// Filter for mention listings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MentionFilter {
+    pub account_id: Option<String>,
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+impl Default for MentionFilter {
+    fn default() -> Self {
+        Self {
+            account_id: None,
+            date_from: None,
+            date_to: None,
+            limit: Some(50),
+            offset: Some(0),
+        }
+    }
+}
+
 // ─── Sentiment ─────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

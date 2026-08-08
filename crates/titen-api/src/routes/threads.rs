@@ -4,7 +4,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use titen_core::models::Mention;
+use titen_core::models::{Mention, MentionFilter};
 
 /// Fetch the Threads user profile for an account
 pub async fn get_user_profile(
@@ -385,11 +385,16 @@ pub async fn list_mentions_handler(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<MentionListQuery>,
 ) -> Json<serde_json::Value> {
-    let account_id = params.account_id.as_str();
-    let limit = params.limit.unwrap_or(25).clamp(1, 100) as i64;
-    let offset = params.offset.unwrap_or(0) as i64;
+    let filter = MentionFilter {
+        account_id: Some(params.account_id.clone()),
+        limit: params.limit.map(|v| v as i64),
+        offset: params.offset.map(|v| v as i64),
+        ..Default::default()
+    };
+    let limit = filter.limit.unwrap_or(50);
+    let offset = filter.offset.unwrap_or(0);
 
-    match state.store.list_mentions(account_id, limit, offset).await {
+    match state.store.list_mentions(&filter).await {
         Ok(mentions) => Json(serde_json::json!({
             "data": mentions,
             "count": mentions.len(),

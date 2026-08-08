@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-08
+
+### Added
+- **Unified query/filter system**: all list endpoints now support structured filtering via reusable filter structs (`PostFilter`, `ScheduleFilter`, `CommentFilter`, `MediaFilter`, `MentionFilter`, `AccountFilter`). Each supports date range (`from`/`to`), text search, entity-specific fields (e.g. `media_type`, `sentiment`), and pagination (`limit` clamped 1–1000, `offset` defaults 0). [#83]
+- **Dynamic SQL builder**: store layer now constructs WHERE clauses dynamically based on provided filter fields — no more hardcoded query params.
+- **Pagination on all list endpoints**: `list_schedules`, `list_comments`, `list_media`, and `list_mentions` now support `limit`/`offset` (previously missing or limited).
+
+### Changed
+- **Breaking (API query params)**: `GET /api/posts` now accepts `from`/`to` instead of `start_date`/`end_date`. `GET /api/schedules` now accepts `limit`/`offset` in addition to `account_id`/`status`. `GET /api/media` now accepts `account_id`/`media_type`/`limit`/`offset`.
+- **MCP tool signatures**: `list_schedules`, `list_posts`, `list_comments` MCP handlers updated to pass filter structs.
+- **Store function signatures**: `list_posts`, `list_schedules`, `list_comments`, `list_media`, `list_mentions` now take a single `&Filter` parameter instead of individual arguments.
+
 ## [0.5.0] - 2026-08-08
 
 ### Added
