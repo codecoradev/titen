@@ -18,6 +18,12 @@ pub const ENV_API_KEY: &str = "TITEN_API_KEY";
 /// Environment variable for the Titen API base URL (used by CLI client).
 pub const ENV_URL: &str = "TITEN_URL";
 
+/// Environment variable for the display timezone.
+pub const ENV_TZ: &str = "TZ";
+
+/// Default timezone (UTC).
+pub const DEFAULT_TZ: &str = "UTC";
+
 /// Default listen host.
 pub const DEFAULT_HOST: &str = "0.0.0.0";
 
@@ -51,10 +57,19 @@ pub fn default_host() -> String {
     std::env::var(ENV_HOST).unwrap_or_else(|_| DEFAULT_HOST.into())
 }
 
-/// Returns the configured or default listen port.
+/// Returns the configured or default port.
 pub fn default_port() -> u16 {
     std::env::var(ENV_PORT)
         .unwrap_or_else(|_| DEFAULT_PORT.to_string())
         .parse()
         .unwrap_or(DEFAULT_PORT)
+}
+
+/// Returns the configured display timezone.
+///
+/// Reads from the `TZ` environment variable. Defaults to `UTC` if unset.
+///
+/// Example: `TZ=Asia/Jakarta`
+pub fn timezone() -> String {
+    std::env::var(ENV_TZ).unwrap_or_else(|_| DEFAULT_TZ.into())
 }
