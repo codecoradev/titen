@@ -31,7 +31,10 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use serde_json::json;
-use titen_core::{Store, ThreadsClient};
+use titen_core::{
+    Store, ThreadsClient,
+    models::{CommentFilter, PostFilter, ScheduleFilter},
+};
 
 fn main() {
     eprintln!("titen-mcp starting (stdio JSON-RPC)");
@@ -444,9 +447,20 @@ fn handle_tool_call(
             }
         }),
         "list_schedules" => rt.block_on(async {
-            let account_id = args.get("account_id").and_then(|v| v.as_str());
-            let status = args.get("status").and_then(|v| v.as_str());
-            match store.list_schedules(account_id, status).await {
+            match store
+                .list_schedules(&ScheduleFilter {
+                    account_id: args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    status: args
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    ..Default::default()
+                })
+                .await
+            {
                 Ok(schedules) => {
                     let data: Vec<serde_json::Value> = schedules
                         .into_iter()
@@ -558,7 +572,10 @@ fn handle_tool_call(
         }),
         "get_post_sentiment" => rt.block_on(async {
             let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
-            let comments = match store.list_comments(post_id).await {
+            let comments = match store
+                .list_comments(post_id, &CommentFilter::default())
+                .await
+            {
                 Ok(c) => c,
                 Err(e) => return Err(format!("Failed to list comments: {e}")),
             };
@@ -626,7 +643,12 @@ fn handle_tool_call(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             match store
-                .list_posts(Some(account_id), Some("published"), 100, 0)
+                .list_posts(&PostFilter {
+                    account_id: Some(account_id.to_string()),
+                    status: Some("published".to_string()),
+                    limit: Some(100),
+                    ..Default::default()
+                })
                 .await
             {
                 Ok(posts) => {

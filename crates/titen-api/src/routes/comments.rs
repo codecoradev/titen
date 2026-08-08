@@ -1,14 +1,20 @@
-use axum::{Json, extract::Path, extract::State};
+use axum::{
+    Json,
+    extract::State,
+    extract::{Path, Query},
+};
 use uuid::Uuid;
 
 use crate::server::AppState;
+use titen_core::models::CommentFilter;
 use titen_core::sentiment::build_engine;
 
 pub async fn list_comments(
     State(state): State<AppState>,
     Path(post_id): Path<String>,
+    Query(filter): Query<CommentFilter>,
 ) -> Json<serde_json::Value> {
-    match state.store.list_comments(&post_id).await {
+    match state.store.list_comments(&post_id, &filter).await {
         Ok(comments) => Json(serde_json::json!({ "data": comments })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
@@ -89,7 +95,11 @@ pub async fn get_sentiment(
     State(state): State<AppState>,
     Path(post_id): Path<String>,
 ) -> Json<serde_json::Value> {
-    let comments = match state.store.list_comments(&post_id).await {
+    let comments = match state
+        .store
+        .list_comments(&post_id, &CommentFilter::default())
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             return Json(serde_json::json!({ "error": e.to_string(), "code": "FETCH_FAILED" }));
@@ -136,7 +146,11 @@ pub async fn get_sentiment(
     }
 
     // Re-fetch with updated sentiments
-    let comments = match state.store.list_comments(&post_id).await {
+    let comments = match state
+        .store
+        .list_comments(&post_id, &CommentFilter::default())
+        .await
+    {
         Ok(c) => c,
         Err(_) => comments.clone(),
     };
