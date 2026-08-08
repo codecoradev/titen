@@ -1019,7 +1019,7 @@ fn handle_tool_call(
                 .build()
                 .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
 
-            let resp = match client.get(url).send().await {
+            let mut resp = match client.get(url).send().await {
                 Ok(r) => r,
                 Err(e) => return Err(format!("Failed to download image: {e}")),
             };
@@ -1053,13 +1053,22 @@ fn handle_tool_call(
                 }
             }
 
-            // Download body with size guard
-            let buf = match resp.bytes().await {
-                Ok(b) => b.to_vec(),
-                Err(e) => return Err(format!("Failed to read response body: {e}")),
-            };
-            if buf.len() > 50 * 1024 * 1024 {
-                return Err("File too large. Maximum 50MB.".to_string());
+            // Stream body with hard cap (prevents chunked-encoding OOM bypass)
+            const MAX_SIZE: usize = 50 * 1024 * 1024;
+            let mut buf: Vec<u8> = Vec::with_capacity(1024 * 1024);
+            loop {
+                match resp.chunk().await {
+                    Ok(Some(chunk)) => {
+                        if buf.len() + chunk.len() > MAX_SIZE {
+                            return Err(
+                                "File exceeds 50MB streaming limit.".to_string(),
+                            );
+                        }
+                        buf.extend_from_slice(&chunk);
+                    }
+                    Ok(None) => break, // EOF
+                    Err(e) => return Err(format!("Download failed: {e}")),
+                }
             }
 
             // Validate magic bytes match declared content-type (prevent spoofing)
@@ -1330,7 +1339,10 @@ fn handle_tool_call(
                     String::new()
                 });
             let redirect_uri = std::env::var("THREADS_REDIRECT_URI")
-                .unwrap_or_else(|_| "https://titen.ajianaz.dev/callback".to_string());
+                .unwrap_or_else(|_| {
+                    eprintln!("ERROR: THREADS_REDIRECT_URI not set — OAuth exchange will fail");
+                    String::new()
+                });
 
             if client_id.is_empty() || client_secret.is_empty() {
                 return Err("OAuth credentials not configured on server. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET env vars.".to_string());
@@ -1403,29 +1415,23 @@ fn json_rpc_error_value(id: &serde_json::Value, message: &str, code: i64) -> ser
 }
 
 /// Check if a hostname is a private/internal IP or localhost (SSRF protection).
+/// Also performs DNS resolution to catch hostnames resolving to private IPs.
 fn is_private_host(host: &str) -> bool {
-    use std::net::IpAddr;
+    use std::net::{IpAddr, ToSocketAddrs};
+
     // Localhost variants
     if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
         return true;
     }
-    // Try parsing as IP address
+
+    // Try parsing as literal IP address first
     if let Ok(ip) = host.parse::<IpAddr>() {
-        if ip.is_loopback() || ip.is_unspecified() {
+        if ip_is_private(&ip) {
             return true;
         }
-        // Check IPv4 private ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
-        if let IpAddr::V4(v4) = ip {
-            if v4.is_private() || v4.is_link_local() {
-                return true;
-            }
-            // Additional: carrier-grade NAT (100.64.0.0/10)
-            if v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64 {
-                return true;
-            }
-        }
     }
-    // Check for .local, .internal, .localhost TLDs
+
+    // Block internal TLDs
     if host.ends_with(".local")
         || host.ends_with(".internal")
         || host.ends_with(".localhost")
@@ -1433,7 +1439,39 @@ fn is_private_host(host: &str) -> bool {
     {
         return true;
     }
+
+    // DNS resolution: check ALL resolved IPs (prevents DNS rebinding attacks)
+    let lookup = format!("{host}:0");
+    if let Ok(addrs) = lookup.to_socket_addrs() {
+        for addr in addrs {
+            if ip_is_private(&addr.ip()) {
+                return true;
+            }
+        }
+    }
+
     false
+}
+
+/// Check if a resolved IP address is private/internal.
+fn ip_is_private(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            if v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+            {
+                return true;
+            }
+            // Carrier-grade NAT (100.64.0.0/10)
+            let o = v4.octets();
+            o[0] == 100 && (o[1] & 0xc0) == 64
+        }
+        std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_multicast(),
+    }
 }
 
 /// Validate that file magic bytes match the declared image type (anti-spoofing).
