@@ -205,8 +205,19 @@ export const getUpcomingSchedules = (): Promise<Schedule[]> =>
 	request<Schedule[]>('/schedules/upcoming');
 
 // ── Comments (nested under posts in backend) ──
-export const listComments = (postId: string): Promise<Comment[]> =>
-	request<Comment[]>(`/posts/${postId}/comments`);
+export const listComments = (postId: string, params?: {
+	sentiment?: string;
+	reply_status?: string;
+	search?: string;
+	limit?: number;
+	offset?: number;
+}): Promise<Comment[]> => {
+	const qs = params ? '?' + new URLSearchParams(
+		Object.entries(params).filter(([, v]) => v != null)
+			.map(([k, v]) => [k, String(v)])
+	).toString() : '';
+	return request<Comment[]>(`/posts/${postId}/comments${qs}`);
+};
 
 export const fetchComments = (postId: string): Promise<Comment[]> =>
 	request<Comment[]>(`/posts/${postId}/comments/fetch`, {
@@ -215,6 +226,25 @@ export const fetchComments = (postId: string): Promise<Comment[]> =>
 
 export const getCommentSentiment = (postId: string): Promise<SentimentSummary> =>
 	request<SentimentSummary>(`/posts/${postId}/comments/sentiment`);
+
+// ── Comment reply workflow ──
+export const updateCommentReply = (commentId: string, body: {
+	reply_status?: string;
+	reply_text?: string;
+}): Promise<Comment> =>
+	request<Comment>(`/comments/${commentId}`, {
+		method: 'PATCH',
+		body: JSON.stringify(body),
+	});
+
+export const replyToComment = (commentId: string, replyText: string): Promise<{
+	data: Comment;
+	threads_reply_id: string;
+}> =>
+	request(`/comments/${commentId}/reply`, {
+		method: 'POST',
+		body: JSON.stringify({ reply_text: replyText }),
+	});
 
 // ── Analytics ──
 export const listAnalytics = (params?: {

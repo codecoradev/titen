@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -224,6 +224,14 @@ pub async fn serve(
         .route(
             "/api/posts/{id}/comments/sentiment",
             get(routes::comments::get_sentiment),
+        )
+        .route(
+            "/api/comments/{id}",
+            patch(routes::comments::update_reply_status),
+        )
+        .route(
+            "/api/comments/{id}/reply",
+            post(routes::comments::reply_to_comment),
         )
         .route(
             "/api/analytics/posts",

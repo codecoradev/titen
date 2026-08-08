@@ -62,6 +62,10 @@ export interface Comment {
 	text: string;
 	sentiment: string | null;
 	sentiment_score: number | null;
+	reply_status: string; // new | needs_reply | replied | skipped
+	replied_at: string | null;
+	reply_text: string | null;
+	assigned_priority: number;
 	fetched_at: string;
 }
 

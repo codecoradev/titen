@@ -147,6 +147,13 @@ pub struct UpdateSchedule {
 
 // ─── Comment ──────────────────────────────────────────────
 
+/// Request body for updating comment reply status.
+#[derive(Debug, Deserialize)]
+pub struct UpdateCommentReply {
+    pub reply_status: Option<String>, // new | needs_reply | replied | skipped
+    pub reply_text: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Comment {
     pub id: String,
@@ -157,6 +164,10 @@ pub struct Comment {
     pub text: String,
     pub sentiment: Option<String>,
     pub sentiment_score: Option<f64>,
+    pub reply_status: String,
+    pub replied_at: Option<String>,
+    pub reply_text: Option<String>,
+    pub assigned_priority: i64,
     pub fetched_at: String,
 }
 
