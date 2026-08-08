@@ -9,21 +9,11 @@ use uuid::Uuid;
 use crate::server::AppState;
 use titen_core::models::*;
 
-#[derive(Deserialize)]
-pub struct ScheduleListQuery {
-    pub account_id: Option<String>,
-    pub status: Option<String>,
-}
-
 pub async fn list_schedules(
     State(state): State<AppState>,
-    Query(q): Query<ScheduleListQuery>,
+    Query(filter): Query<ScheduleFilter>,
 ) -> Json<serde_json::Value> {
-    match state
-        .store
-        .list_schedules(q.account_id.as_deref(), q.status.as_deref())
-        .await
-    {
+    match state.store.list_schedules(&filter).await {
         Ok(schedules) => Json(serde_json::json!({ "data": schedules })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
@@ -53,7 +43,14 @@ pub async fn get_schedule_by_id(
 }
 
 pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Value> {
-    match state.store.list_schedules(None, Some("pending")).await {
+    match state
+        .store
+        .list_schedules(&ScheduleFilter {
+            status: Some("pending".to_string()),
+            ..Default::default()
+        })
+        .await
+    {
         Ok(schedules) => {
             let upcoming: Vec<_> = schedules.into_iter().take(10).collect();
             Json(serde_json::json!({ "data": upcoming }))

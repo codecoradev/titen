@@ -1,15 +1,19 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use uuid::Uuid;
 
 use crate::server::AppState;
+use titen_core::models::MediaFilter;
 use titen_core::storage::{S3Storage, Storage};
 
-pub async fn list_media(State(state): State<AppState>) -> Json<serde_json::Value> {
-    match state.store.list_media().await {
+pub async fn list_media(
+    State(state): State<AppState>,
+    Query(filter): Query<MediaFilter>,
+) -> Json<serde_json::Value> {
+    match state.store.list_media(&filter).await {
         Ok(media) => Json(serde_json::json!({ "data": media })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
@@ -98,20 +102,18 @@ pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    // Get media record to find S3 key
-    let media_list = match state.store.list_media().await {
-        Ok(m) => m,
-        Err(e) => {
-            return Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" }));
-        }
-    };
-
-    if let Some(media) = media_list.iter().find(|m| m.id == id) {
-        // Try to delete from S3 (best effort)
-        if let Ok(s3) = S3Storage::from_env() {
-            if let Err(e) = s3.delete(&media.s3_key).await {
-                tracing::warn!("Failed to delete S3 object {}: {e}", media.s3_key);
+    // Get media record by ID to find S3 key
+    match state.store.get_media_asset(&id).await {
+        Ok(media) => {
+            // Try to delete from S3 (best effort)
+            if let Ok(s3) = S3Storage::from_env() {
+                if let Err(e) = s3.delete(&media.s3_key).await {
+                    tracing::warn!("Failed to delete S3 object {}: {e}", media.s3_key);
+                }
             }
+        }
+        Err(e) => {
+            return Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" }));
         }
     }
 

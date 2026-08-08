@@ -3,31 +3,16 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::server::AppState;
 use titen_core::models::*;
 
-#[derive(Deserialize)]
-pub struct PostListQuery {
-    pub account_id: Option<String>,
-    pub status: Option<String>,
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
-}
-
 pub async fn list_posts(
     State(state): State<AppState>,
-    Query(q): Query<PostListQuery>,
+    Query(filter): Query<PostFilter>,
 ) -> Json<serde_json::Value> {
-    let limit = q.limit.unwrap_or(50);
-    let offset = q.offset.unwrap_or(0);
-    match state
-        .store
-        .list_posts(q.account_id.as_deref(), q.status.as_deref(), limit, offset)
-        .await
-    {
+    match state.store.list_posts(&filter).await {
         Ok(posts) => Json(serde_json::json!({ "data": posts })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
