@@ -1441,16 +1441,22 @@ fn is_private_host(host: &str) -> bool {
     }
 
     // DNS resolution: check ALL resolved IPs (prevents DNS rebinding attacks)
+    // Fail-closed: if DNS resolution fails, treat as unsafe (return true)
     let lookup = format!("{host}:0");
-    if let Ok(addrs) = lookup.to_socket_addrs() {
-        for addr in addrs {
-            if ip_is_private(&addr.ip()) {
-                return true;
+    match lookup.to_socket_addrs() {
+        Ok(addrs) => {
+            let mut has_public = false;
+            for addr in addrs {
+                if ip_is_private(&addr.ip()) {
+                    return true;
+                }
+                has_public = true;
             }
+            // If no addresses returned at all, treat as unsafe
+            !has_public
         }
+        Err(_) => true, // DNS resolution failed — fail closed
     }
-
-    false
 }
 
 /// Check if a resolved IP address is private/internal.
@@ -1470,7 +1476,21 @@ fn ip_is_private(ip: &std::net::IpAddr) -> bool {
             let o = v4.octets();
             o[0] == 100 && (o[1] & 0xc0) == 64
         }
-        std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_multicast(),
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || {
+                    // Unique Local Addresses (fc00::/7)
+                    let seg = v6.segments()[0];
+                    (seg & 0xfe00) == 0xfc00
+                }
+                || {
+                    // Link-Local Addresses (fe80::/10)
+                    let seg = v6.segments()[0];
+                    (seg & 0xffc0) == 0xfe80
+                }
+        }
     }
 }
 
