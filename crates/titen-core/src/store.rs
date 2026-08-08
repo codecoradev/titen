@@ -185,6 +185,19 @@ impl Store {
             }
         }
 
+        // 008 — comment reply status workflow (reply_status, replied_at, reply_text, assigned_priority)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/008_comment_reply_status.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
         Ok(())
     }
 
