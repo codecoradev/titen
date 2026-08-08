@@ -38,21 +38,21 @@
 			: null
 	);
 
-	// Load insights + trend once on mount with cleanup
+	// Load insights + trend on mount with cleanup.
+	// Note: component is always recreated via {#if} guard in parent,
+	// so post.id never changes during a single component lifecycle.
 	$effect(() => {
-		// Reset state when post changes to avoid stale data flash
-		insights = null;
-		trend = [];
+		const id = post.id;
 		let cancelled = false;
 
 		loadingInsights = true;
-		getPostInsights(post.id)
+		getPostInsights(id)
 			.then((data) => { if (!cancelled) insights = data; })
 			.catch(() => {})
 			.finally(() => { if (!cancelled) loadingInsights = false; });
 
 		loadingTrend = true;
-		getAnalyticsTrend(post.id)
+		getAnalyticsTrend(id)
 			.then((data) => { if (!cancelled) trend = data; })
 			.catch(() => {})
 			.finally(() => { if (!cancelled) loadingTrend = false; });
