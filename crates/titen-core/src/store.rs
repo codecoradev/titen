@@ -762,6 +762,9 @@ impl Store {
         if filter.sentiment.is_some() {
             query.push_str(" AND sentiment = ?");
         }
+        if filter.reply_status.is_some() {
+            query.push_str(" AND reply_status = ?");
+        }
         if filter.from.is_some() {
             query.push_str(" AND fetched_at >= ?");
         }
@@ -776,6 +779,9 @@ impl Store {
         let mut q = sqlx::query_as::<_, Comment>(&query).bind(post_id);
         if let Some(ref s) = filter.sentiment {
             q = q.bind(s);
+        }
+        if let Some(ref rs) = filter.reply_status {
+            q = q.bind(rs);
         }
         if let Some(ref f) = filter.from {
             q = q.bind(f);
@@ -827,6 +833,52 @@ impl Store {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    /// Fetch a single comment by ID.
+    pub async fn get_comment(&self, id: &str) -> Result<Comment> {
+        sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => TitenError::CommentNotFound(id.to_string()),
+                other => other.into(),
+            })
+    }
+
+    /// Update comment reply status and optionally store reply text.
+    pub async fn update_comment_reply(
+        &self,
+        id: &str,
+        reply_status: &str,
+        reply_text: Option<&str>,
+    ) -> Result<Comment> {
+        let replied_at = if reply_status == "replied" {
+            Some(chrono::Utc::now().to_rfc3339())
+        } else {
+            None
+        };
+
+        let result = sqlx::query(
+            "UPDATE comments SET reply_status = ?, reply_text = ?, replied_at = COALESCE(?, replied_at) WHERE id = ?",
+        )
+        .bind(reply_status)
+        .bind(reply_text)
+        .bind(&replied_at)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TitenError::CommentNotFound(id.to_string()));
+        }
+
+        sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     // ─── Mentions ───────────────────────────────────────────
