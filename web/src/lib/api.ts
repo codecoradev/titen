@@ -176,6 +176,26 @@ export const updateSchedule = (id: string, data: {
 export const deleteSchedule = (id: string): Promise<void> =>
 	request<void>(`/schedules/${id}`, { method: 'DELETE' });
 
+export const patchSchedule = (id: string, data: {
+	caption?: string;
+	media_type?: string;
+	media_urls?: string[];
+	scheduled_at?: string;
+}): Promise<Schedule> =>
+	request<Schedule>(`/schedules/${id}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+
+export const approveSchedule = (id: string): Promise<Schedule> =>
+	request<Schedule>(`/schedules/${id}/approve`, { method: 'POST' });
+
+export const rejectSchedule = (id: string, reason?: string): Promise<Schedule> =>
+	request<Schedule>(`/schedules/${id}/reject`, {
+		method: 'POST',
+		body: JSON.stringify(reason ? { reason } : {}),
+	});
+
 export const getUpcomingSchedules = (): Promise<Schedule[]> =>
 	request<Schedule[]>('/schedules/upcoming');
 

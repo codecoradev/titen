@@ -150,6 +150,7 @@ pub fn is_encrypted(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn test_cipher() -> Cipher {
         // Deterministic test key — 32 bytes of 0xAA
@@ -249,6 +250,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_from_env_missing() {
         unsafe { std::env::remove_var("TITEN_ENCRYPTION_KEY") };
         let result = Cipher::from_env().unwrap();
@@ -256,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_from_env_empty() {
         unsafe { std::env::set_var("TITEN_ENCRYPTION_KEY", "") };
         let result = Cipher::from_env().unwrap();
@@ -264,6 +267,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_from_env_valid() {
         let key = "aa".repeat(32); // 64 hex chars = 32 bytes
         unsafe { std::env::set_var("TITEN_ENCRYPTION_KEY", &key) };
@@ -278,6 +282,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_from_env_wrong_length() {
         unsafe { std::env::set_var("TITEN_ENCRYPTION_KEY", "aabbcc") }; // Too short
         let result = Cipher::from_env();
@@ -286,6 +291,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_from_env_not_hex() {
         unsafe {
             std::env::set_var(
