@@ -2,39 +2,63 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatSkeleton from '$lib/components/StatSkeleton.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
-	import { getHealth, listAccounts, listPosts, listSchedules, getUpcomingSchedules, getAccountInsights } from '$lib/api';
+	import {
+		getHealth,
+		listAccounts,
+		listPosts,
+		listSchedules,
+		getUpcomingSchedules,
+		getThreadsProfile,
+		getAccountInsights,
+	} from '$lib/api';
+	import { formatDateTime } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
-	import type { Account, Post, Schedule, HealthResponse, AccountInsights } from '$lib/types';
+	import type {
+		Account,
+		Post,
+		Schedule,
+		HealthResponse,
+		AccountInsights,
+		ThreadsProfile,
+	} from '$lib/types';
 
+	// ── State ──
 	let loading = $state(true);
 	let health = $state<HealthResponse | null>(null);
 	let accounts = $state<Account[]>([]);
 	let posts = $state<Post[]>([]);
 	let schedules = $state<Schedule[]>([]);
 	let upcoming = $state<Schedule[]>([]);
-	let insights = $state<AccountInsights | null>(null);
-	let insightsLoading = $state(false);
-	let insightsAccountId = $state('');
 
+	// Per-account enriched data
+	interface AccountCard {
+		account: Account;
+		profile: ThreadsProfile | null;
+		insights: AccountInsights | null;
+		profileLoading: boolean;
+		insightsLoading: boolean;
+		profileError: boolean;
+	}
+	let cards = $state<AccountCard[]>([]);
+
+	// ── Derived stats ──
 	let activeAccounts = $derived(accounts.filter((a) => a.is_active).length);
 	let publishedPosts = $derived(posts.filter((p) => p.status === 'published').length);
 	let pendingSchedules = $derived(schedules.filter((s) => s.status === 'pending').length);
 	let draftSchedules = $derived(schedules.filter((s) => s.status === 'draft').length);
 
 	let recentPosts = $derived(
-		[...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5),
+		[...posts]
+			.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+			.slice(0, 5),
 	);
 
+	// ── Helpers ──
 	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	}
-
-	function formatDateTime(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
 			month: 'short',
 			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
+			year: 'numeric',
 		});
 	}
 
@@ -43,6 +67,17 @@
 		return new Date(expiresAt).getTime() < Date.now() + 7 * 24 * 60 * 60 * 1000;
 	}
 
+	// Extract key insight metrics for display
+	function getMetric(insights: AccountInsights | null, ...keys: string[]): number | null {
+		if (!insights) return null;
+		for (const key of keys) {
+			const val = insights[key];
+			if (typeof val === 'number') return val;
+		}
+		return null;
+	}
+
+	// ── Data loading ──
 	async function load() {
 		loading = true;
 		try {
@@ -58,10 +93,20 @@
 			posts = p;
 			schedules = s;
 			upcoming = u;
-			// Auto-load insights for first active account
-			if (a.length > 0) {
-				insightsAccountId = a[0].id;
-				await loadInsights();
+
+			// Initialize account cards — lazy-load profile + insights for each
+			cards = a.map((account) => ({
+				account,
+				profile: null,
+				insights: null,
+				profileLoading: false,
+				insightsLoading: false,
+				profileError: false,
+			}));
+
+			// Load profiles + insights in parallel (best-effort, don't block)
+			for (let i = 0; i < cards.length; i++) {
+				loadCardData(i);
 			}
 		} catch (e: any) {
 			toast('Failed to load dashboard data', 'error');
@@ -70,15 +115,28 @@
 		}
 	}
 
-	async function loadInsights() {
-		if (!insightsAccountId) return;
-		insightsLoading = true;
+	async function loadCardData(index: number) {
+		const card = cards[index];
+		if (!card) return;
+
+		// Load profile
+		card.profileLoading = true;
+		cards[index] = { ...card, profileLoading: true };
 		try {
-			insights = await getAccountInsights(insightsAccountId);
+			const profile = await getThreadsProfile(card.account.id);
+			cards[index] = { ...cards[index], profile, profileLoading: false };
 		} catch {
-			insights = null; // silently fail — insights are optional
-		} finally {
-			insightsLoading = false;
+			cards[index] = { ...cards[index], profileLoading: false, profileError: true };
+		}
+
+		// Load insights
+		card.insightsLoading = true;
+		cards[index] = { ...cards[index], insightsLoading: true };
+		try {
+			const insights = await getAccountInsights(card.account.id);
+			cards[index] = { ...cards[index], insights, insightsLoading: false };
+		} catch {
+			cards[index] = { ...cards[index], insightsLoading: false };
 		}
 	}
 
@@ -97,7 +155,7 @@
 		<StatSkeleton />
 	</div>
 {:else}
-	<!-- Stats -->
+	<!-- Overview Stats -->
 	<div class="stat-grid">
 		<div class="stat-card">
 			<div class="stat-card-label">Active Accounts</div>
@@ -128,74 +186,117 @@
 					<StatusBadge status={health.status} />
 				</div>
 			</div>
-			<div class="stat-card">
-				<div class="stat-card-label">Version</div>
-				<div class="stat-card-value tabular-nums">{health.version}</div>
-			</div>
 		{/if}
 	</div>
 
-	<!-- Token health -->
-	{#if accounts.length > 0}
+	<!-- Per-Account Cards -->
+	{#if cards.length > 0}
 		<section class="dashboard-section">
-			<h2 class="section-heading">Token Health</h2>
-			<div class="data-table-wrap">
-				<div class="token-list">
-					{#each accounts as account}
-						<div class="token-row">
-							<span class="token-username">{account.username}</span>
-							<StatusBadge status={account.is_active ? 'active' : 'inactive'} />
-							<span class="token-expiry">
-								{#if account.expires_at}
-									{#if isTokenExpiring(account.expires_at)}
-										<span class="badge badge--warning">Expires {formatDate(account.expires_at)}</span>
-									{:else}
-										{formatDate(account.expires_at)}
-									{/if}
+			<h2 class="section-heading">Accounts</h2>
+			<div class="account-cards-grid">
+				{#each cards as card, i (card.account.id)}
+					<div class="account-card">
+						<!-- Header: avatar + username -->
+						<div class="account-card-header">
+							<div class="account-avatar">
+								{#if card.profileLoading}
+									<div class="avatar-skeleton"></div>
+								{:else if card.profile?.threads_profile_picture_url}
+									<img
+										src={card.profile.threads_profile_picture_url}
+										alt={card.account.username}
+										class="avatar-img"
+										loading="lazy"
+									/>
 								{:else}
-									<span style="color: var(--color-muted);">—</span>
+									<div class="avatar-placeholder">
+										{card.account.username.charAt(0).toUpperCase()}
+									</div>
 								{/if}
-							</span>
-						</div>
-					{/each}
-				</div>
-			</div>
-		</section>
-	{/if}
-
-	<!-- Account insights -->
-	{#if accounts.length > 0}
-		<section class="dashboard-section">
-			<div class="insights-header">
-				<h2 class="section-heading" style="margin: 0;">Account Insights</h2>
-				<select class="form-input insights-select" bind:value={insightsAccountId} onchange={loadInsights}>
-					{#each accounts as account}
-						<option value={account.id}>@{account.username}</option>
-					{/each}
-				</select>
-			</div>
-			<div class="data-table-wrap">
-				{#if insightsLoading}
-					<div class="insights-grid">
-						{#each Array(6) as _}
-							<div class="insight-card"><div class="skeleton" style="height: 2rem;"></div></div>
-						{/each}
-					</div>
-				{:else if insights}
-					<div class="insights-grid">
-						{#each Object.entries(insights) as [key, value]}
-							<div class="insight-card">
-								<div class="insight-label">{key.replace(/_/g, ' ')}</div>
-								<div class="insight-value tabular-nums">{typeof value === 'number' ? value.toLocaleString() : value ?? '—'}</div>
 							</div>
-						{/each}
+							<div class="account-info">
+								<div class="account-name">
+									@{card.account.username}
+								</div>
+								<div class="account-status">
+									<StatusBadge status={card.account.is_active ? 'active' : 'inactive'} />
+									{#if card.account.expires_at && isTokenExpiring(card.account.expires_at)}
+										<span class="badge badge--warning">Token expiring</span>
+									{/if}
+								</div>
+							</div>
+						</div>
+
+						<!-- Profile metrics -->
+						{#if card.profile}
+							<div class="account-metrics">
+								<div class="metric">
+									<div class="metric-value tabular-nums">
+										{(card.profile.followers_count ?? 0).toLocaleString()}
+									</div>
+									<div class="metric-label">Followers</div>
+								</div>
+								<div class="metric">
+									<div class="metric-value tabular-nums">
+										{(card.profile.following_count ?? 0).toLocaleString()}
+									</div>
+									<div class="metric-label">Following</div>
+								</div>
+								<div class="metric">
+									<div class="metric-value tabular-nums">
+										{(card.profile.media_count ?? 0).toLocaleString()}
+									</div>
+									<div class="metric-label">Posts</div>
+								</div>
+							</div>
+						{:else if card.profileLoading}
+							<div class="account-metrics">
+								{#each Array(3) as _}
+									<div class="metric">
+										<div class="skeleton" style="height: 1.5rem; width: 3rem;"></div>
+										<div class="skeleton" style="height: 0.75rem; width: 2rem;"></div>
+									</div>
+								{/each}
+							</div>
+						{:else if card.profileError}
+							<div class="account-metrics">
+								<div class="metric metric-error">
+									<span style="font-size: var(--text-xs); color: var(--color-muted);">
+										Profile unavailable
+									</span>
+								</div>
+							</div>
+						{/if}
+
+						<!-- Engagement insights -->
+						{#if card.insights && Object.keys(card.insights).length > 0}
+							<div class="account-insights-row">
+								{#each Object.entries(card.insights).slice(0, 4) as [key, value]}
+									<div class="insight-mini">
+										<span class="insight-mini-label">{key.replace(/_/g, ' ')}</span>
+										<span class="insight-mini-value tabular-nums">
+											{typeof value === 'number' ? value.toLocaleString() : value ?? '—'}
+										</span>
+									</div>
+								{/each}
+							</div>
+						{:else if card.insightsLoading}
+							<div class="account-insights-row">
+								{#each Array(4) as _}
+									<div class="insight-mini">
+										<div class="skeleton" style="height: 0.75rem; width: 2.5rem;"></div>
+										<div class="skeleton" style="height: 1rem; width: 2rem;"></div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						<!-- Bio -->
+						{#if card.profile?.threads_biography}
+							<p class="account-bio">{card.profile.threads_biography}</p>
+						{/if}
 					</div>
-				{:else}
-					<div class="empty-state" style="padding: var(--space-lg);">
-						<p class="empty-state-title" style="font-size: var(--text-sm);">No insights available</p>
-						<p class="empty-state-desc" style="font-size: var(--text-xs);">Insights may require a valid Threads API token.</p>
-					</div>
-				{/if}
+				{/each}
 			</div>
 		</section>
 	{/if}
@@ -210,21 +311,21 @@
 					<div class="empty-state" style="padding: var(--space-lg);">
 						<p class="empty-state-title" style="font-size: var(--text-sm);">No posts yet</p>
 					</div>
-			{:else}
-				<ul class="compact-list">
-					{#each recentPosts as post}
-					<li class="compact-row">
-						<div class="compact-content">
-							<span class="truncate">{post.caption || '(no caption)'}</span>
-						</div>
-						<div class="compact-meta">
-							<StatusBadge status={post.status} />
-							<span class="compact-date">{formatDate(post.created_at)}</span>
-						</div>
-					</li>
-				{/each}
-				</ul>
-			{/if}
+				{:else}
+					<ul class="compact-list">
+						{#each recentPosts as post}
+							<li class="compact-row">
+								<div class="compact-content">
+									<span class="truncate">{post.caption || '(no caption)'}</span>
+								</div>
+								<div class="compact-meta">
+									<StatusBadge status={post.status} />
+									<span class="compact-date">{formatDate(post.created_at)}</span>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 		</section>
 
@@ -236,21 +337,21 @@
 					<div class="empty-state" style="padding: var(--space-lg);">
 						<p class="empty-state-title" style="font-size: var(--text-sm);">No upcoming schedules</p>
 					</div>
-			{:else}
-				<ul class="compact-list">
-					{#each upcoming.slice(0, 5) as schedule}
-					<li class="compact-row">
-						<div class="compact-content">
-							<span class="truncate">{schedule.caption || '(no caption)'}</span>
-						</div>
-						<div class="compact-meta">
-							<StatusBadge status={schedule.status} />
-							<span class="compact-date">{formatDateTime(schedule.scheduled_at)}</span>
-						</div>
-					</li>
-				{/each}
-				</ul>
-			{/if}
+				{:else}
+					<ul class="compact-list">
+						{#each upcoming.slice(0, 5) as schedule}
+							<li class="compact-row">
+								<div class="compact-content">
+									<span class="truncate">{schedule.caption || '(no caption)'}</span>
+								</div>
+								<div class="compact-meta">
+									<StatusBadge status={schedule.status} />
+									<span class="compact-date">{formatDateTime(schedule.scheduled_at)}</span>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 		</section>
 	</div>
@@ -267,92 +368,170 @@
 		margin-bottom: var(--space-lg);
 	}
 
-	.insights-header {
+	/* ── Account cards ── */
+	.account-cards-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		gap: var(--space-md);
+	}
+
+	.account-card {
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		transition: border-color 0.15s ease;
+	}
+
+	.account-card:hover {
+		border-color: var(--color-border-hover, var(--color-border));
+	}
+
+	.account-card-header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		gap: var(--space-sm);
-		margin-bottom: var(--space-sm);
+	}
+
+	.account-avatar {
+		flex-shrink: 0;
+		width: 3rem;
+		height: 3rem;
+	}
+
+	.avatar-img,
+	.avatar-placeholder,
+	.avatar-skeleton {
+		width: 3rem;
+		height: 3rem;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+
+	.avatar-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-bg-hover);
+		font-size: var(--text-lg);
+		font-weight: 700;
+		color: var(--color-muted);
+	}
+
+	.avatar-skeleton {
+		background: var(--color-bg-hover);
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	.account-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.account-name {
+		font-weight: 600;
+		font-size: var(--text-sm);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-status {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		margin-top: var(--space-3xs);
 		flex-wrap: wrap;
 	}
 
-	.insights-select {
-		width: auto;
-		font-size: var(--text-sm);
-	}
-
-	@media (max-width: 30rem) {
-		.insights-header {
-			flex-direction: column;
-			align-items: stretch;
-		}
-
-		.insights-select {
-			width: 100%;
-		}
-	}
-
-	.insights-grid {
+	/* ── Metrics ── */
+	.account-metrics {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
-		gap: var(--space-sm);
-		padding: var(--space-md);
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-xs);
+		padding: var(--space-xs) 0;
+		border-top: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
 	}
 
-	.insight-card {
-		padding: var(--space-sm) var(--space-md);
-		background: var(--color-bg-hover);
-		border-radius: var(--radius-sm);
+	.metric {
 		text-align: center;
 	}
 
-	.insight-label {
-		font-size: var(--text-xs);
-		color: var(--color-muted);
-		text-transform: capitalize;
-		margin-bottom: var(--space-3xs);
-	}
-
-	.insight-value {
-		font-size: var(--text-lg);
+	.metric-value {
+		font-size: var(--text-base);
 		font-weight: 700;
 	}
 
-	.token-list {
+	.metric-label {
+		font-size: var(--text-2xs);
+		color: var(--color-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.metric-error {
+		grid-column: 1 / -1;
+		text-align: center;
+		padding: var(--space-xs);
+	}
+
+	/* ── Insights mini row ── */
+	.account-insights-row {
+		display: flex;
+		gap: var(--space-xs);
+		flex-wrap: wrap;
+	}
+
+	.insight-mini {
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-3xs);
+		padding: var(--space-3xs) var(--space-xs);
+		background: var(--color-bg-hover);
+		border-radius: var(--radius-sm);
+		min-width: 4.5rem;
 	}
 
-	.token-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: var(--table-border);
+	.insight-mini-label {
+		font-size: var(--text-2xs);
+		color: var(--color-muted);
+		text-transform: capitalize;
+	}
+
+	.insight-mini-value {
 		font-size: var(--text-sm);
+		font-weight: 600;
 	}
 
-	.token-row:last-child {
-		border-bottom: none;
-	}
-
-	@media (max-width: 30rem) {
-		.token-row {
-			flex-wrap: wrap;
-			padding: var(--space-xs) var(--space-sm);
-		}
-	}
-
-	.token-username {
-		font-weight: 500;
-		flex: 1;
-	}
-
-	.token-expiry {
+	/* ── Bio ── */
+	.account-bio {
 		font-size: var(--text-xs);
 		color: var(--color-muted);
+		line-height: 1.4;
+		margin: 0;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 
+	/* ── Skeleton ── */
+	.skeleton {
+		background: var(--color-bg-hover);
+		border-radius: var(--radius-2xs);
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	/* ── Legacy ── */
 	.compact-list {
 		list-style: none;
 		padding: 0;

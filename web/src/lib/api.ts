@@ -10,7 +10,7 @@ import type {
 	Account, Post, Schedule, Comment, Insights,
 	MediaItem, AnalyticsSnap, AnalyticsTrend,
 	SentimentSummary, HealthResponse,
-	Mention, AccountInsights,
+	Mention, AccountInsights, ThreadsProfile,
 } from './types';
 
 const BASE = import.meta.env.TITEN_API_BASE || '/api';
@@ -92,8 +92,10 @@ export const refreshToken = (id: string): Promise<Account> =>
 export const checkAllTokens = (): Promise<Account[]> =>
 	request<Account[]>('/accounts/check-tokens');
 
-export const getThreadsProfile = (accountId: string): Promise<unknown> =>
-	request<unknown>(`/accounts/${accountId}/profile`);
+export const getThreadsProfile = (accountId: string): Promise<ThreadsProfile> =>
+	request<{ data: ThreadsProfile }>(`/accounts/${accountId}/profile`).then(
+		(r) => r.data ?? (r as unknown as ThreadsProfile)
+	);
 
 export const getPublishingLimit = (accountId: string): Promise<unknown> =>
 	request<unknown>(`/accounts/${accountId}/publishing-limit`);
