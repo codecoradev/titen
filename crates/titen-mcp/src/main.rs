@@ -1005,16 +1005,20 @@ fn handle_tool_call(
                     parsed.scheme()
                 ));
             }
+            // Check host is not private/internal (SSRF protection)
+            if let Some(host) = parsed.host_str() {
+                if is_private_host(host) {
+                    return Err("URL points to a private/internal host. Blocked for security.".to_string());
+                }
+            }
 
-            // Download with redirect policy + timeout + size limit (50MB)
-            let client = match reqwest::Client::builder()
-                .redirect(reqwest::redirect::Policy::limited(5))
+            // HTTP client (no redirect following to prevent SSRF via redirect)
+            let client = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-            {
-                Ok(c) => c,
-                Err(e) => return Err(format!("Failed to create HTTP client: {e}")),
-            };
+                .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
             let resp = match client.get(url).send().await {
                 Ok(r) => r,
                 Err(e) => return Err(format!("Failed to download image: {e}")),
@@ -1029,6 +1033,19 @@ fn handle_tool_call(
                 .unwrap_or("image/jpeg")
                 .to_string();
 
+            // Validate content-type is an allowed image type
+            let ext = match content_type.as_str() {
+                "image/jpeg" | "image/jpg" => "jpg",
+                "image/png" => "png",
+                "image/gif" => "gif",
+                "image/webp" => "webp",
+                _ => {
+                    return Err(format!(
+                        "Unsupported content type '{content_type}'. Only image/jpeg, image/png, image/gif, image/webp are allowed."
+                    ));
+                }
+            };
+
             // Check content-length before downloading body
             if let Some(len) = resp.content_length() {
                 if len > 50 * 1024 * 1024 {
@@ -1036,22 +1053,21 @@ fn handle_tool_call(
                 }
             }
 
-            let bytes = match resp.bytes().await {
-                Ok(b) => b,
-                Err(e) => return Err(format!("Failed to read image bytes: {e}")),
+            // Download body with size guard
+            let buf = match resp.bytes().await {
+                Ok(b) => b.to_vec(),
+                Err(e) => return Err(format!("Failed to read response body: {e}")),
             };
-            if bytes.len() > 50 * 1024 * 1024 {
+            if buf.len() > 50 * 1024 * 1024 {
                 return Err("File too large. Maximum 50MB.".to_string());
             }
 
-            // Determine file extension from content-type
-            let ext = match content_type.as_str() {
-                "image/jpeg" | "image/jpg" => "jpg",
-                "image/png" => "png",
-                "image/gif" => "gif",
-                "image/webp" => "webp",
-                _ => "bin",
-            };
+            // Validate magic bytes match declared content-type (prevent spoofing)
+            if !validate_magic_bytes(&buf, ext) {
+                return Err(format!(
+                    "File content does not match declared type '{ext}'. Possible spoofing attempt."
+                ));
+            }
 
             // Upload to S3
             use titen_core::storage::Storage;
@@ -1061,7 +1077,7 @@ fn handle_tool_call(
             };
             let asset_id = uuid::Uuid::now_v7();
             let s3_key = format!("uploads/{asset_id}.{ext}");
-            let s3_url = match s3.upload(&s3_key, &bytes, &content_type).await {
+            let s3_url = match s3.upload(&s3_key, &buf, &content_type).await {
                 Ok(u) => u,
                 Err(e) => return Err(format!("Failed to upload to S3: {e}")),
             };
@@ -1072,7 +1088,7 @@ fn handle_tool_call(
                     &id,
                     filename,
                     &content_type,
-                    bytes.len() as i64,
+                    buf.len() as i64,
                     &s3_key,
                     Some(&s3_url),
                 )
@@ -1301,18 +1317,27 @@ fn handle_tool_call(
         }),
         "exchange_oauth_code" => rt.block_on(async {
             let code = args.get("code").and_then(|v| v.as_str()).unwrap_or("");
-            let client_id = args.get("client_id").and_then(|v| v.as_str()).unwrap_or("");
-            let client_secret = args
-                .get("client_secret")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let redirect_uri = args
-                .get("redirect_uri")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+
+            // Read OAuth credentials from env — never accept from MCP client (security)
+            let client_id = std::env::var("THREADS_CLIENT_ID")
+                .unwrap_or_else(|_| {
+                    eprintln!("WARNING: THREADS_CLIENT_ID not set");
+                    String::new()
+                });
+            let client_secret = std::env::var("THREADS_CLIENT_SECRET")
+                .unwrap_or_else(|_| {
+                    eprintln!("WARNING: THREADS_CLIENT_SECRET not set");
+                    String::new()
+                });
+            let redirect_uri = std::env::var("THREADS_REDIRECT_URI")
+                .unwrap_or_else(|_| "https://titen.ajianaz.dev/callback".to_string());
+
+            if client_id.is_empty() || client_secret.is_empty() {
+                return Err("OAuth credentials not configured on server. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET env vars.".to_string());
+            }
 
             match threads_client
-                .exchange_code_for_token(code, client_id, client_secret, redirect_uri)
+                .exchange_code_for_token(code, &client_id, &client_secret, &redirect_uri)
                 .await
             {
                 Ok((access_token, _token_type)) => {
@@ -1375,4 +1400,71 @@ fn json_rpc_error_value(id: &serde_json::Value, message: &str, code: i64) -> ser
         "id": id,
         "error": { "code": code, "message": message }
     })
+}
+
+/// Check if a hostname is a private/internal IP or localhost (SSRF protection).
+fn is_private_host(host: &str) -> bool {
+    use std::net::IpAddr;
+    // Localhost variants
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+        return true;
+    }
+    // Try parsing as IP address
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if ip.is_loopback() || ip.is_unspecified() {
+            return true;
+        }
+        // Check IPv4 private ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
+        if let IpAddr::V4(v4) = ip {
+            if v4.is_private() || v4.is_link_local() {
+                return true;
+            }
+            // Additional: carrier-grade NAT (100.64.0.0/10)
+            if v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64 {
+                return true;
+            }
+        }
+    }
+    // Check for .local, .internal, .localhost TLDs
+    if host.ends_with(".local")
+        || host.ends_with(".internal")
+        || host.ends_with(".localhost")
+        || host.ends_with(".arpa")
+    {
+        return true;
+    }
+    false
+}
+
+/// Validate that file magic bytes match the declared image type (anti-spoofing).
+fn validate_magic_bytes(data: &[u8], ext: &str) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+    match ext {
+        "jpg" => data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF,
+        "png" => {
+            data[0] == 0x89
+                && data[1] == 0x50
+                && data[2] == 0x4E
+                && data[3] == 0x47
+                && data[4] == 0x0D
+                && data[5] == 0x0A
+                && data[6] == 0x1A
+                && data[7] == 0x0A
+        }
+        "gif" => data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38,
+        "webp" => {
+            data.len() >= 12
+                && data[0] == 0x52
+                && data[1] == 0x49
+                && data[2] == 0x46
+                && data[3] == 0x46
+                && data[8] == 0x57
+                && data[9] == 0x45
+                && data[10] == 0x42
+                && data[11] == 0x50
+        }
+        _ => false,
+    }
 }
