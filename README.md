@@ -41,7 +41,7 @@ No subscription. No vendor lock-in. Your tokens stay on your machine, encrypted 
 | `titen-core` | Domain logic: models, SQLite store, Threads API client, sentiment trait, scheduler, S3 storage, AES-256-GCM encryption |
 | `titen-api` | Axum HTTP server: REST API, API key auth, CORS, rate limiting |
 | `titen-cli` | Clap CLI: all operations via the HTTP API |
-| `titen-mcp` | MCP stdio server: 14 tools for AI agent integration |
+| `titen-mcp` | MCP stdio server: 17 tools for AI agent integration |
 
 8 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`, `_encryption_meta`.
 
@@ -116,73 +116,151 @@ X-API-Key: your-key-here
 
 ### Health
 
-| Method | Path | Auth |
-|---|---|---|
-| GET | `/health` | None |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/health` | None | Server health check |
 
 ### Accounts
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/accounts` | List all accounts |
-| POST | `/api/accounts` | Create an account |
-| PUT | `/api/accounts/{id}` | Update an account |
-| DELETE | `/api/accounts/{id}` | Delete an account |
-| POST | `/api/accounts/{id}/refresh-token` | Refresh OAuth token |
-| GET | `/api/accounts/{id}/profile` | Fetch Threads profile |
-| GET | `/api/accounts/{id}/publishing-limit` | Get remaining daily limits |
-| GET | `/api/accounts/check-tokens` | Batch token expiry check |
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/accounts` | List all accounts | — |
+| POST | `/api/accounts` | Create an account | — |
+| PUT | `/api/accounts/{id}` | Update an account | — |
+| DELETE | `/api/accounts/{id}` | Delete an account | — |
+| POST | `/api/accounts/{id}/refresh-token` | Refresh OAuth token | — |
+| GET | `/api/accounts/{id}/profile` | Fetch Threads profile (`/me`) | — |
+| GET | `/api/accounts/{id}/publishing-limit` | Get remaining daily limits | — |
+| GET | `/api/accounts/{id}/insights` | Account-level insights (followers, media count) | — |
+| GET | `/api/accounts/check-tokens` | Batch token expiry check + auto-refresh | — |
 
 ### Posts
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/posts` | List posts (`?account_id=&status=&limit=&offset=`) |
-| POST | `/api/posts` | Create and publish a post |
-| GET | `/api/posts/{id}` | Get a single post |
-| DELETE | `/api/posts/{id}` | Delete a post |
-| GET | `/api/posts/{id}/insights` | Fetch and store post insights |
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/posts` | List posts | `?account_id=&status=&limit=&offset=` |
+| POST | `/api/posts` | Create and publish a post | — |
+| GET | `/api/posts/{id}` | Get a single post | — |
+| DELETE | `/api/posts/{id}` | Delete a post | — |
+| GET | `/api/posts/{id}/insights` | Fetch and store post insights | — |
 
 ### Schedules
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/schedules` | List schedules (`?account_id=&status=`) |
-| POST | `/api/schedules` | Create a schedule |
-| PUT | `/api/schedules/{id}` | Update a schedule |
-| DELETE | `/api/schedules/{id}` | Delete a schedule |
-| GET | `/api/schedules/upcoming` | Next 10 pending schedules |
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/schedules` | List schedules | `?account_id=&status=` |
+| POST | `/api/schedules` | Create a schedule | — |
+| GET | `/api/schedules/{id}` | Get a single schedule | — |
+| PUT | `/api/schedules/{id}` | Full update (all fields) | — |
+| PATCH | `/api/schedules/{id}` | Partial update (specific fields) | — |
+| DELETE | `/api/schedules/{id}` | Delete a schedule | — |
+| POST | `/api/schedules/{id}/approve` | Approve draft → pending (HITL) | — |
+| POST | `/api/schedules/{id}/reject` | Reject draft (HITL) | — |
+| GET | `/api/schedules/upcoming` | Next 10 pending schedules | — |
 
 ### Comments
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/posts/{id}/comments` | List stored comments |
-| POST | `/api/posts/{id}/comments/fetch` | Fetch comments from Threads API |
-| GET | `/api/posts/{id}/comments/sentiment` | Analyze comment sentiment |
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/posts/{id}/comments` | List stored comments | — |
+| POST | `/api/posts/{id}/comments/fetch` | Fetch comments from Threads API | — |
+| GET | `/api/posts/{id}/comments/sentiment` | Analyze comment sentiment | — |
 
 ### Analytics
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/analytics/posts` | Post analytics (`?account_id=&from=&to=`) |
-| GET | `/api/analytics/posts/{id}/trend` | Time-series trend for a post |
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/analytics/posts` | Post analytics summary | `?account_id=&from=&to=` |
+| GET | `/api/analytics/posts/{id}/trend` | Time-series engagement trend | — |
 
 ### Media
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/media` | List uploaded media |
-| POST | `/api/media` | Upload media (multipart) |
+| POST | `/api/media` | Upload media (multipart `file` field) |
+| GET | `/api/media/{id}` | Get a single media asset |
 | DELETE | `/api/media/{id}` | Delete media |
 
-### Threads (low-level)
+### Threads (low-level passthrough)
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/threads/container` | Create a Threads media container |
 | POST | `/api/threads/container/{id}/publish` | Publish a container |
-| POST | `/api/threads/container/{id}/status` | Check container status |
+| POST | `/api/threads/container/{id}/status` | Check container publishing status |
+| POST | `/api/threads/reply` | Reply to a Threads post or comment |
+| POST | `/api/threads/reply/{id}/hide` | Hide/unhide a reply |
+| GET | `/api/threads/profile-lookup` | Look up any Threads user profile |
+| POST | `/api/threads/search` | Search Threads by keyword |
+| POST | `/api/threads/mentions` | Fetch mentions for an account |
+| POST | `/api/threads/share-to-instagram` | Cross-post to Instagram |
+
+### Authentication (web UI session)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/login` | Login (password → session cookie) |
+| GET | `/api/auth/session` | Check current session |
+| POST | `/api/auth/logout` | Logout (clear session) |
+
+### OAuth
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/oauth/exchange` | Exchange Threads OAuth code for access token |
+
+### Request/Response Format
+
+All responses use JSON with a `data` field for successful requests:
+
+```json
+{ "data": { ... } }
+```
+
+Or `data` array for list endpoints:
+
+```json
+{ "data": [ ... ], "count": 42 }
+```
+
+Errors return a JSON body with `error` and `code`:
+
+```json
+{ "error": "Schedule not found", "code": "NOT_FOUND" }
+```
+
+### Key Data Models
+
+**Schedule** — created as `draft`, requires approval before auto-publishing:
+
+```json
+{
+  "id": "019fdfae-dcad-7093-95d1-236065ad8aff",
+  "account_id": "019fdfae-c0b1-7031-afad-e7ae3ed80646",
+  "caption": "Post text with #hashtags",
+  "media_type": "CAROUSEL",
+  "media_urls": ["https://cdn.example.com/slide-01.jpg", "https://cdn.example.com/slide-02.jpg"],
+  "scheduled_at": "2026-08-09T12:00:00+07:00",
+  "status": "draft",
+  "approved_at": null,
+  "created_at": "2026-08-08T10:00:00Z"
+}
+```
+
+**Schedule lifecycle (HITL flow):**
+
+```
+draft → (approve) → pending → (scheduler at scheduled_at) → published
+draft → (reject)  → rejected
+pending → (publish fails) → failed
+```
+
+Only `pending` schedules are picked up by the scheduler. A schedule stays as `draft` until explicitly approved via `POST /api/schedules/{id}/approve`.
+
+**Media types supported:** `TEXT`, `IMAGE`, `CAROUSEL`, `VIDEO`
+
+For `IMAGE` and `CAROUSEL`, `media_urls` must contain publicly accessible URLs to hosted images. Titen does not download or re-host images referenced in schedules (use `POST /api/media` to upload first if needed).
 
 ## CLI
 
@@ -280,23 +358,28 @@ Titen ships an MCP (Model Context Protocol) server for AI agent integration. It 
 }
 ```
 
-### Available Tools
+### Available Tools (17)
 
-| Tool | Description |
-|---|---|
-| `list_accounts` | List all Threads accounts |
-| `get_account` | Get a single account by ID |
-| `create_post` | Create and publish a post |
-| `schedule_post` | Schedule a post for later |
-| `list_schedules` | List scheduled posts |
-| `cancel_schedule` | Cancel a scheduled post |
-| `fetch_comments` | Fetch and store comments from Threads |
-| `get_post_sentiment` | Sentiment analysis on a post's comments |
-| `get_post_analytics` | Analytics for a specific post |
-| `get_account_analytics` | Analytics summary for an account |
-| `upload_media` | Upload media to S3 storage |
-| `refresh_token` | Refresh an account's access token |
-| `check_tokens` | Batch check all accounts' token expiry |
+| Tool | Description | Key Parameters |
+|---|---|---|
+| `list_accounts` | List all Threads accounts | — |
+| `get_user_profile` | Fetch a Threads user's profile | `account_id` |
+| `get_publishing_limit` | Fetch daily publishing quota | `account_id` |
+| `create_post` | Create and publish a post | `account_id`, `caption`, `media_type` |
+| `schedule_post` | Schedule a post for future publishing | `account_id`, `caption`, `scheduled_at` |
+| `list_schedules` | List scheduled posts | `account_id?`, `status?` |
+| `cancel_schedule` | Cancel a scheduled post | `id` |
+| `refresh_token` | Refresh an account's access token | `account_id` |
+| `check_tokens` | Batch check all token expiry + auto-refresh | — |
+| `fetch_comments` | Fetch and store comments from Threads API | `post_id` |
+| `get_post_sentiment` | Sentiment analysis for a post's comments | `post_id` |
+| `get_post_insights` | Fetch post engagement metrics | `post_id` |
+| `get_account_analytics` | Analytics summary for an account | `account_id` |
+| `delete_post` | Delete a post from Threads + DB | `post_id` |
+| `create_container` | Create a Threads media container | `account_id`, `media_type` |
+| `publish_container` | Publish a previously created container | `account_id`, `container_id` |
+
+> **Note:** 13 additional API endpoints do not yet have MCP tool wrappers (list_posts, get_schedule, approve_schedule, upload_media, search, mentions, reply, etc.). See [issue #84](https://github.com/codecoradev/titen/issues/84) for the tracking issue.
 
 ## Threads API Limits
 
