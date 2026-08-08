@@ -724,8 +724,11 @@ impl Store {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(account_id, threads_mention_id) DO UPDATE SET
                author_username = excluded.author_username,
+               author_user_id = excluded.author_user_id,
                text = excluded.text,
+               media_type = excluded.media_type,
                permalink = excluded.permalink,
+               mentioned_at = excluded.mentioned_at,
                fetched_at = datetime('now')",
         )
         .bind(&mention.id)
