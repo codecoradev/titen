@@ -96,38 +96,20 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "SEMVER=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          name: Release ${{ steps.version.outputs.VERSION }}
+          name: v${{ steps.version.outputs.SEMVER }}
+          files: |
+            release-artifacts/*.tar.gz
+            release-artifacts/checksums-sha256.txt
           body: |
-            ## What's New in ${{ steps.version.outputs.VERSION }}
-
-            ### 📦 Binaries
-
-            Each archive contains **three binaries**:
-            - `titen-api` — HTTP server (Threads management API)
-            - `titen` — CLI client
-            - `titen-mcp` — MCP server (stdio)
-
-            ### 🚀 Quick Start
-
-            ```bash
-            # Start API server
-            titen-api
-
-            # Add Threads account (token only, auto-resolves user_id + username)
-            titen accounts add --token <ACCESS_TOKEN>
-
-            # Or with short-lived → long-lived exchange
-            titen accounts add --token <SHORT_LIVED> --app-secret <APP_SECRET>
-
-            # Create a post
-            titen posts create --account <ID> --text "Hello Threads!"
-            ```
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.VERSION }}/CHANGELOG.md) for full release notes.
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
         env:
