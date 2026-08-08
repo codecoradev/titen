@@ -3,6 +3,24 @@ use crate::error::{Result, TitenError};
 use crate::models::*;
 use sqlx::SqlitePool;
 
+/// Split SQL text into executable statements.
+///
+/// Strips `-- comment` lines first, then splits on `;`. This prevents
+/// semicolons inside SQL comments (e.g. "TEXT; serde_json") from breaking
+/// statement splitting.
+fn split_sql_statements(sql: &str) -> Vec<String> {
+    let stripped: String = sql
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("--"))
+        .collect::<Vec<&str>>()
+        .join("\n");
+    stripped
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 /// Main store — SQLite database access for all titen entities.
 ///
 /// Holds an optional [`Cipher`] for encrypting sensitive fields (`access_token`,
@@ -86,69 +104,83 @@ impl Store {
     /// Run migrations from embedded SQL
     pub async fn migrate(&self) -> Result<()> {
         // 001 — initial schema
-        let sql = include_str!("../../titen-api/migrations/001_initial.sql");
-        for statement in sql.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                sqlx::query(trimmed).execute(&self.pool).await?;
-            }
+        for stmt in split_sql_statements(include_str!("../../titen-api/migrations/001_initial.sql"))
+        {
+            sqlx::query(&stmt).execute(&self.pool).await?;
         }
 
         // 002 — drop refresh_token column (safe for fresh installs: ignore "no such column")
-        let sql_002 = include_str!("../../titen-api/migrations/002_drop_refresh_token.sql");
-        for statement in sql_002.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                let result = sqlx::query(trimmed).execute(&self.pool).await;
-                if let Err(e) = result {
-                    let msg = e.to_string();
-                    // SQLite error: "no such column" means the column was already absent (fresh install)
-                    if !msg.contains("no such column") {
-                        return Err(TitenError::DatabaseError(msg));
-                    }
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/002_drop_refresh_token.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("no such column") {
+                    return Err(TitenError::DatabaseError(msg));
                 }
             }
         }
 
         // 003 — add app_secret column (safe for fresh installs: ignore "duplicate column")
-        let sql_003 = include_str!("../../titen-api/migrations/003_add_app_secret.sql");
-        for statement in sql_003.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                let result = sqlx::query(trimmed).execute(&self.pool).await;
-                if let Err(e) = result {
-                    let msg = e.to_string();
-                    if !msg.contains("duplicate column") {
-                        return Err(TitenError::DatabaseError(msg));
-                    }
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/003_add_app_secret.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(msg));
                 }
             }
         }
 
         // 004 — encryption metadata table
-        let sql_004 = include_str!("../../titen-api/migrations/004_encrypt_tokens.sql");
-        for statement in sql_004.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                sqlx::query(trimmed).execute(&self.pool).await?;
-            }
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/004_encrypt_tokens.sql"
+        )) {
+            sqlx::query(&stmt).execute(&self.pool).await?;
         }
 
         // 004 (Rust side) — encrypt existing plaintext tokens if cipher is available
         self.migrate_encrypted_fields().await?;
 
         // 005 — HITL scheduling: add approved_by, approved_at columns
-        let sql_005 = include_str!("../../titen-api/migrations/005_hitl_scheduling.sql");
-        for statement in sql_005.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                let result = sqlx::query(trimmed).execute(&self.pool).await;
-                if let Err(e) = result {
-                    let msg = e.to_string();
-                    // SQLite error: "duplicate column" means already migrated (fresh install)
-                    if !msg.contains("duplicate column") {
-                        return Err(TitenError::DatabaseError(msg));
-                    }
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/005_hitl_scheduling.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                // SQLite error: "duplicate column" means already migrated (fresh install)
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
+        // 006 — mentions table
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/006_mentions_table.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
+        // 007 — media_urls documentation (no-op marker: SELECT 1)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/007_media_urls_doc.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(msg));
                 }
             }
         }
