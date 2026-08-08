@@ -71,7 +71,7 @@
 <div class="admin-shell">
 	<!-- Mobile hamburger -->
 	<button
-		class="mobile-menu-btn btn-ghost"
+		class="mobile-menu-btn"
 		onclick={toggleSidebar}
 		aria-label="Toggle menu"
 		aria-expanded={sidebarOpen}
@@ -147,6 +147,24 @@
 		inset-block-start: var(--space-sm);
 		inset-inline-start: var(--space-sm);
 		z-index: calc(var(--z-modal) + 1);
+		width: 2.5rem;
+		height: 2.5rem;
+		align-items: center;
+		justify-content: center;
+		background: var(--surface-raised);
+		border: var(--rule-default);
+		border-radius: var(--radius-md);
+		color: var(--color-ink);
+		box-shadow: var(--shadow-whisper);
+	}
+
+	.mobile-menu-btn:hover {
+		background: var(--surface-sunken);
+	}
+
+	.mobile-menu-btn svg {
+		width: 1.25rem;
+		height: 1.25rem;
 	}
 
 	.sidebar-backdrop {
