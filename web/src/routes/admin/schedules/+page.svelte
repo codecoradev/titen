@@ -14,6 +14,7 @@
 	import { listAccounts } from '$lib/api';
 	import type { Schedule, Account } from '$lib/types';
 	import { toast } from '$lib/toast.svelte';
+	import { formatDateTime, toDatetimeInput, getTimezone } from '$lib/tz';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
 
@@ -25,12 +26,17 @@
 	let filterAccountId = $state('');
 	let filterStatus = $state<StatusFilter>('all');
 
+	// Timezone display label
+	let tzLabel = $derived(getTimezone() || 'Browser TZ');
+
 	// Create modal
 	let modalOpen = $state(false);
 	let modalAccountId = $state('');
 	let modalScheduledAt = $state('');
 	let modalCaption = $state('');
-	let modalMediaType = $state('text');
+	let modalMediaType = $state<'text' | 'IMAGE' | 'CAROUSEL'>('text');
+	let modalImageUrl = $state('');
+	let modalCarouselUrls = $state<string[]>(['', '']);
 
 	// Edit modal (HITL)
 	let editTarget = $state<Schedule | null>(null);
@@ -76,6 +82,8 @@
 		modalScheduledAt = '';
 		modalCaption = '';
 		modalMediaType = 'text';
+		modalImageUrl = '';
+		modalCarouselUrls = ['', ''];
 		modalOpen = true;
 	}
 
@@ -83,18 +91,57 @@
 		modalOpen = false;
 	}
 
+	function addCarouselUrl() {
+		if (modalCarouselUrls.length < 20) {
+			modalCarouselUrls = [...modalCarouselUrls, ''];
+		}
+	}
+
+	function removeCarouselUrl(idx: number) {
+		if (modalCarouselUrls.length > 2) {
+			modalCarouselUrls = modalCarouselUrls.filter((_, i) => i !== idx);
+		}
+	}
+
 	async function handleCreate() {
 		if (!modalAccountId || !modalScheduledAt) {
 			toast('Account and scheduled time are required', 'error');
 			return;
 		}
+
+		// Validate media URLs based on type
+		let mediaType = 'TEXT';
+		let mediaUrls: string | undefined;
+
+		if (modalMediaType === 'IMAGE') {
+			if (!modalImageUrl.trim()) {
+				toast('Image URL is required for IMAGE posts', 'error');
+				return;
+			}
+			mediaType = 'IMAGE';
+			mediaUrls = modalImageUrl.trim();
+		} else if (modalMediaType === 'CAROUSEL') {
+			const validUrls = modalCarouselUrls.filter((u) => u.trim());
+			if (validUrls.length < 2) {
+				toast('Carousel requires at least 2 image URLs', 'error');
+				return;
+			}
+			if (validUrls.length > 20) {
+				toast('Carousel supports a maximum of 20 images', 'error');
+				return;
+			}
+			mediaType = 'CAROUSEL';
+			mediaUrls = validUrls.join(',');
+		}
+
 		creating = true;
 		try {
 			await createSchedule({
 				account_id: modalAccountId,
-				media_type: modalMediaType,
+				media_type: mediaType,
 				scheduled_at: new Date(modalScheduledAt).toISOString(),
-				caption: modalCaption || undefined
+				caption: modalCaption || undefined,
+				media_urls: mediaUrls || undefined
 			});
 			toast('Schedule created as draft', 'success');
 			closeCreateModal();
@@ -110,7 +157,7 @@
 	function openEditModal(schedule: Schedule) {
 		editTarget = schedule;
 		editCaption = schedule.caption ?? '';
-		editScheduledAt = toLocalDatetimeInput(schedule.scheduled_at);
+		editScheduledAt = toDatetimeInput(schedule.scheduled_at);
 		editing = false;
 	}
 
@@ -199,26 +246,14 @@
 		}
 	}
 
-	function formatDateTime(iso: string): string {
-		const d = new Date(iso);
-		return d.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
-
-	function toLocalDatetimeInput(iso: string): string {
-		const d = new Date(iso);
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-	}
-
 	function truncate(s: string, max: number = 60): string {
 		if (s.length <= max) return s;
 		return s.slice(0, max).trimEnd() + '…';
+	}
+
+	// Format schedule time using TZ from backend
+	function fmtDate(iso: string): string {
+		return formatDateTime(iso);
 	}
 
 	// Count drafts for badge
@@ -263,6 +298,10 @@
 				<option value="rejected">Rejected</option>
 			</select>
 		</div>
+
+		<div class="form-group tz-info">
+			<span class="tz-badge" title="Display timezone from TZ env var">🕒 {tzLabel}</span>
+		</div>
 	</div>
 
 	<!-- Table -->
@@ -305,13 +344,16 @@
 						{#each schedules as schedule (schedule.id)}
 							<tr class={schedule.status === 'draft' ? 'row-draft' : ''}>
 								<td class="truncate" title={schedule.caption || '—'}>
+									{#if schedule.media_urls}
+										<span class="media-tag">{schedule.media_type || 'MEDIA'}</span>
+									{/if}
 									{truncate(schedule.caption || '—', 60)}
 								</td>
 								<td>
 									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
 								</td>
 								<td class="tabular-nums">
-									{formatDateTime(schedule.scheduled_at)}
+									{fmtDate(schedule.scheduled_at)}
 								</td>
 								<td>
 									<StatusBadge status={schedule.status} />
@@ -382,7 +424,7 @@
 <!-- Create Schedule Modal -->
 {#if modalOpen}
 	<div class="confirm-overlay" onclick={closeCreateModal} role="dialog" aria-modal="true" aria-label="New Schedule">
-		<div class="confirm-dialog" style="max-width: 32rem;" onclick={(e) => e.stopPropagation()}>
+		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>New Schedule</h3>
 			<p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
 				New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
@@ -397,15 +439,72 @@
 					</select>
 				</div>
 
-				<div class="form-group">
-					<label class="form-label" for="modal-scheduled">Scheduled At <span class="required">*</span></label>
-					<input
-						class="form-input"
-						type="datetime-local"
-						id="modal-scheduled"
-						bind:value={modalScheduledAt}
-					/>
+				<div class="form-row">
+					<div class="form-group" style="flex: 1;">
+						<label class="form-label" for="modal-scheduled">Scheduled At <span class="required">*</span></label>
+						<input
+							class="form-input"
+							type="datetime-local"
+							id="modal-scheduled"
+							bind:value={modalScheduledAt}
+						/>
+						<span class="form-hint">Times shown in {tzLabel}</span>
+					</div>
+
+					<div class="form-group" style="flex: 1;">
+						<label class="form-label" for="modal-media-type">Media Type</label>
+						<select class="form-input" id="modal-media-type" bind:value={modalMediaType}>
+							<option value="text">Text Only</option>
+							<option value="IMAGE">Single Image</option>
+							<option value="CAROUSEL">Carousel (2-20)</option>
+						</select>
+					</div>
 				</div>
+
+				{#if modalMediaType === 'IMAGE'}
+					<div class="form-group">
+						<label class="form-label" for="modal-image-url">Image URL <span class="required">*</span></label>
+						<input
+							class="form-input"
+							type="url"
+							id="modal-image-url"
+							bind:value={modalImageUrl}
+							placeholder="https://example.com/image.jpg"
+						/>
+						<span class="form-hint">Direct link to image (JPG, PNG)</span>
+					</div>
+				{:else if modalMediaType === 'CAROUSEL'}
+					<div class="form-group">
+						<label class="form-label">Carousel Image URLs <span class="required">*</span></label>
+						<span class="form-hint">2–20 image URLs. Each becomes a carousel slide.</span>
+						{#each modalCarouselUrls as _, idx}
+							<div class="carousel-url-row">
+								<input
+									class="form-input"
+									type="url"
+									placeholder={`Image ${idx + 1} URL`}
+									bind:value={modalCarouselUrls[idx]}
+								/>
+								{#if modalCarouselUrls.length > 2}
+									<button
+										class="btn-ghost btn-sm carousel-remove"
+										onclick={() => removeCarouselUrl(idx)}
+										title="Remove"
+										type="button"
+									>✕</button>
+								{/if}
+							</div>
+						{/each}
+						{#if modalCarouselUrls.length < 20}
+							<button
+								class="btn-outline btn-sm"
+								onclick={addCarouselUrl}
+								type="button"
+								style="margin-top: 0.5rem;"
+							>+ Add Image</button>
+						{/if}
+					</div>
+				{/if}
 
 				<div class="form-group">
 					<label class="form-label" for="modal-caption">Caption</label>
@@ -436,7 +535,7 @@
 <!-- Edit Schedule Modal (HITL) -->
 {#if editTarget}
 	<div class="confirm-overlay" onclick={closeEditModal} role="dialog" aria-modal="true" aria-label="Edit Schedule">
-		<div class="confirm-dialog" style="max-width: 32rem;" onclick={(e) => e.stopPropagation()}>
+		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>Edit Schedule</h3>
 			<p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
 				Status: <StatusBadge status={editTarget.status} />
@@ -450,6 +549,7 @@
 						id="edit-scheduled"
 						bind:value={editScheduledAt}
 					/>
+					<span class="form-hint">Times shown in {tzLabel}</span>
 				</div>
 
 				<div class="form-group">
@@ -585,5 +685,68 @@
 
 	.btn-danger:hover {
 		background: var(--color-danger-bg, #fef2f2);
+	}
+
+	/* TZ badge */
+	.tz-info {
+		display: flex;
+		align-items: flex-end;
+	}
+	.tz-badge {
+		font-size: 0.75rem;
+		color: var(--text-muted, #6b7280);
+		background: var(--color-bg-elevated, #f3f4f6);
+		padding: 0.25rem 0.625rem;
+		border-radius: 0.375rem;
+		white-space: nowrap;
+	}
+
+	/* Media type tag in table */
+	.media-tag {
+		display: inline-block;
+		font-size: 0.625rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		background: var(--color-primary-bg, #dbeafe);
+		color: var(--color-primary, #2563eb);
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		margin-right: 0.375rem;
+		vertical-align: middle;
+	}
+
+	/* Form helpers */
+	.form-row {
+		display: flex;
+		gap: var(--space-md, 1rem);
+	}
+	.form-hint {
+		display: block;
+		font-size: 0.75rem;
+		color: var(--text-muted, #6b7280);
+		margin-top: 0.25rem;
+	}
+
+	/* Carousel URL input rows */
+	.carousel-url-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		margin-bottom: 0.5rem;
+	}
+	.carousel-url-row .form-input {
+		flex: 1;
+	}
+	.carousel-remove {
+		flex-shrink: 0;
+		padding: 0.375rem 0.5rem;
+		color: var(--color-danger, #dc2626);
+	}
+
+	@media (max-width: 640px) {
+		.form-row {
+			flex-direction: column;
+		}
 	}
 </style>

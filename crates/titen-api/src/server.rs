@@ -27,6 +27,7 @@ struct HealthResponse {
     status: &'static str,
     version: &'static str,
     db: &'static str,
+    timezone: String,
 }
 
 #[derive(serde::Serialize)]
@@ -115,6 +116,7 @@ async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         db: "ok",
+        timezone: titen_core::config::timezone(),
     })
 }
 
