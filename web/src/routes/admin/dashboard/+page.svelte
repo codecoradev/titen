@@ -137,8 +137,8 @@
 
 	<!-- Token health -->
 	{#if accounts.length > 0}
-		<section style="margin-bottom: var(--space-lg);">
-			<h2 style="font-size: var(--text-md); font-weight: 600; margin-bottom: var(--space-sm);">Token Health</h2>
+		<section class="dashboard-section">
+			<h2 class="section-heading">Token Health</h2>
 			<div class="data-table-wrap">
 				<div class="token-list">
 					{#each accounts as account}
@@ -165,10 +165,10 @@
 
 	<!-- Account insights -->
 	{#if accounts.length > 0}
-		<section style="margin-bottom: var(--space-lg);">
-			<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
-				<h2 style="font-size: var(--text-md); font-weight: 600; margin: 0;">Account Insights</h2>
-				<select class="select" style="width: auto; font-size: var(--text-sm);" bind:value={insightsAccountId} onchange={loadInsights}>
+		<section class="dashboard-section">
+			<div class="insights-header">
+				<h2 class="section-heading" style="margin: 0;">Account Insights</h2>
+				<select class="form-input insights-select" bind:value={insightsAccountId} onchange={loadInsights}>
 					{#each accounts as account}
 						<option value={account.id}>@{account.username}</option>
 					{/each}
@@ -201,10 +201,10 @@
 	{/if}
 
 	<!-- Two-column: Recent posts + Upcoming schedules -->
-	<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg);">
+	<div class="dashboard-grid">
 		<!-- Recent posts -->
 		<section>
-			<h2 style="font-size: var(--text-md); font-weight: 600; margin-bottom: var(--space-sm);">Recent Posts</h2>
+			<h2 class="section-heading">Recent Posts</h2>
 			<div class="data-table-wrap">
 				{#if recentPosts.length === 0}
 					<div class="empty-state" style="padding: var(--space-lg);">
@@ -230,7 +230,7 @@
 
 		<!-- Upcoming schedules -->
 		<section>
-			<h2 style="font-size: var(--text-md); font-weight: 600; margin-bottom: var(--space-sm);">Upcoming</h2>
+			<h2 class="section-heading">Upcoming</h2>
 			<div class="data-table-wrap">
 				{#if upcoming.length === 0}
 					<div class="empty-state" style="padding: var(--space-lg);">
@@ -257,6 +257,41 @@
 {/if}
 
 <style>
+	.dashboard-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-lg);
+	}
+
+	.dashboard-section {
+		margin-bottom: var(--space-lg);
+	}
+
+	.insights-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-sm);
+		flex-wrap: wrap;
+	}
+
+	.insights-select {
+		width: auto;
+		font-size: var(--text-sm);
+	}
+
+	@media (max-width: 30rem) {
+		.insights-header {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.insights-select {
+			width: 100%;
+		}
+	}
+
 	.insights-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
@@ -299,6 +334,13 @@
 
 	.token-row:last-child {
 		border-bottom: none;
+	}
+
+	@media (max-width: 30rem) {
+		.token-row {
+			flex-wrap: wrap;
+			padding: var(--space-xs) var(--space-sm);
+		}
 	}
 
 	.token-username {
@@ -349,8 +391,22 @@
 		font-family: var(--font-mono);
 	}
 
+	@media (max-width: 30rem) {
+		.compact-row {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-2xs);
+			padding: var(--space-xs) var(--space-sm);
+		}
+
+		.compact-meta {
+			width: 100%;
+			justify-content: space-between;
+		}
+	}
+
 	@media (max-width: 48rem) {
-		div[style*='grid-template-columns: 1fr 1fr'] {
+		.dashboard-grid {
 			grid-template-columns: 1fr !important;
 		}
 	}

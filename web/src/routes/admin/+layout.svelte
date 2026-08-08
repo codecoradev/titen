@@ -74,6 +74,7 @@
 		class="mobile-menu-btn btn-ghost"
 		onclick={toggleSidebar}
 		aria-label="Toggle menu"
+		aria-expanded={sidebarOpen}
 	>
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 			{#if sidebarOpen}
@@ -83,6 +84,16 @@
 			{/if}
 		</svg>
 	</button>
+
+	<!-- Mobile sidebar backdrop -->
+	{#if sidebarOpen}
+		<button
+			class="sidebar-backdrop"
+			onclick={closeSidebar}
+			aria-label="Close menu"
+			tabindex="-1"
+		></button>
+	{/if}
 
 	<!-- Sidebar -->
 	<aside class="admin-sidebar" class:is-open={sidebarOpen} role="navigation" aria-label="Admin navigation">
@@ -104,7 +115,7 @@
 		</nav>
 		<div class="sidebar-footer">
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
-			<span class="sidebar-version">v0.3.0 · admin</span>
+			<span class="sidebar-version">v0.4.0 · admin</span>
 		</div>
 	</aside>
 
@@ -138,9 +149,24 @@
 		z-index: calc(var(--z-modal) + 1);
 	}
 
+	.sidebar-backdrop {
+		display: none;
+		position: fixed;
+		inset: 0;
+		background: oklch(0% 0 0 / 0.4);
+		z-index: var(--z-modal);
+		border: none;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
 	@media (max-width: 48rem) {
 		.mobile-menu-btn {
 			display: flex;
+		}
+
+		.sidebar-backdrop {
+			display: block;
 		}
 	}
 

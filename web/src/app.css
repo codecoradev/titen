@@ -423,6 +423,13 @@ h1, h2, h3, .display-text {
 	margin-bottom: var(--space-lg);
 }
 
+/* ── Section heading (card sections inside pages) ── */
+.section-heading {
+	font-size: var(--text-md);
+	font-weight: 600;
+	margin-bottom: var(--space-sm);
+}
+
 .page-header h1 {
 	font-size: var(--text-xl);
 	font-weight: 600;
@@ -448,6 +455,13 @@ h1, h2, h3, .display-text {
 	border: var(--rule-default);
 	border-radius: var(--radius-lg);
 	padding: var(--space-md);
+	transition: border-color var(--dur-short) var(--ease-out),
+	            box-shadow var(--dur-short) var(--ease-out);
+}
+
+.stat-card:hover {
+	border-color: var(--color-rule-2);
+	box-shadow: var(--shadow-whisper);
 }
 
 .stat-card-label {
@@ -752,6 +766,7 @@ textarea.form-input {
 	flex-direction: column;
 	gap: var(--space-xs);
 	pointer-events: none;
+	max-width: calc(100vw - var(--space-lg) * 2);
 }
 
 .toast {
@@ -806,6 +821,7 @@ textarea.form-input {
 
 	.admin-content {
 		padding: var(--space-md);
+		padding-block-start: calc(var(--space-md) + var(--space-xl));
 	}
 
 	.data-table {
