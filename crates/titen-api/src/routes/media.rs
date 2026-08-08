@@ -102,15 +102,8 @@ pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    // Get media record to find S3 key
-    let media_list = match state.store.list_media(&MediaFilter::default()).await {
-        Ok(m) => m,
-        Err(e) => {
-            return Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" }));
-        }
-    };
-
-    if let Some(media) = media_list.iter().find(|m| m.id == id) {
+    // Get media record by ID to find S3 key
+    if let Ok(media) = state.store.get_media_asset(&id).await {
         // Try to delete from S3 (best effort)
         if let Ok(s3) = S3Storage::from_env() {
             if let Err(e) = s3.delete(&media.s3_key).await {
