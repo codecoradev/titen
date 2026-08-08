@@ -719,6 +719,16 @@ impl Store {
     // ─── Mentions ───────────────────────────────────────────
 
     pub async fn upsert_mention(&self, mention: &Mention) -> Result<Mention> {
+        // ON CONFLICT requires non-NULL threads_mention_id; caller must skip
+        // mentions without a Threads ID (handled in fetch_mentions handler).
+        let conflict_id = match mention.threads_mention_id.as_deref() {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                return Err(TitenError::InvalidRequest(
+                    "upsert_mention requires non-empty threads_mention_id".into(),
+                ));
+            }
+        };
         sqlx::query(
             "INSERT INTO mentions (id, account_id, threads_mention_id, author_username, author_user_id, text, media_type, permalink, mentioned_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -733,7 +743,7 @@ impl Store {
         )
         .bind(&mention.id)
         .bind(&mention.account_id)
-        .bind(&mention.threads_mention_id)
+        .bind(conflict_id)
         .bind(&mention.author_username)
         .bind(&mention.author_user_id)
         .bind(&mention.text)
@@ -747,7 +757,7 @@ impl Store {
             "SELECT * FROM mentions WHERE account_id = ? AND threads_mention_id = ?",
         )
         .bind(&mention.account_id)
-        .bind(&mention.threads_mention_id)
+        .bind(conflict_id)
         .fetch_one(&self.pool)
         .await
         .map_err(Into::into)

@@ -422,6 +422,7 @@ pub async fn fetch_mentions(
         Ok(mentions) => {
             // Persist each mention to DB (upsert by threads_mention_id)
             let mut stored = Vec::new();
+            let mut failed: u32 = 0;
             for m in &mentions {
                 let threads_id = m
                     .get("id")
@@ -455,12 +456,13 @@ pub async fn fetch_mentions(
                 match state.store.upsert_mention(&mention).await {
                     Ok(persisted) => stored.push(persisted),
                     Err(e) => {
-                        tracing::warn!("Failed to persist mention {threads_id}: {e}");
+                        failed += 1;
+                        tracing::error!(%e, mention_id = %threads_id, "Failed to persist mention");
                     }
                 }
             }
             Json(
-                serde_json::json!({ "data": stored, "fetched": mentions.len(), "stored": stored.len() }),
+                serde_json::json!({ "data": stored, "fetched": mentions.len(), "stored": stored.len(), "failed": failed }),
             )
         }
         Err(e) => {
