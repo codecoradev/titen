@@ -620,23 +620,20 @@ impl Store {
         media_urls: Option<Vec<String>>,
         scheduled_at: Option<&str>,
     ) -> Result<Schedule> {
-        // Fetch current values for fallback (fields not provided remain unchanged)
-        let schedule = self.get_schedule(id).await?;
-
+        // Serialize media_urls if provided
         let media_urls_str = media_urls
             .as_ref()
             .map(|urls| serde_json::to_string(urls).unwrap_or_default());
 
-        let caption = caption.or(schedule.caption.as_deref());
-        let media_type = media_type.or(Some(schedule.media_type.as_str()));
-        let media_urls_str = media_urls_str.or_else(|| schedule.media_urls.clone());
-        let scheduled_at = scheduled_at.or(Some(schedule.scheduled_at.as_str()));
-
-        // Atomic update: only applies if schedule is still in an editable state.
-        // This avoids TOCTOU race between the get_schedule above and this UPDATE.
+        // Use COALESCE in SQL: None → keep existing, Some(v) → set new value
+        // This allows callers to explicitly clear a field by passing Some("")
         let result = sqlx::query(
             "UPDATE schedules
-             SET caption = ?, media_type = ?, media_urls = ?, scheduled_at = ?, updated_at = datetime('now')
+             SET caption = COALESCE(?, caption),
+                 media_type = COALESCE(?, media_type),
+                 media_urls = COALESCE(?, media_urls),
+                 scheduled_at = COALESCE(?, scheduled_at),
+                 updated_at = datetime('now')
              WHERE id = ? AND status IN ('draft', 'pending')",
         )
         .bind(caption)
