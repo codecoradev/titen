@@ -1476,13 +1476,11 @@ fn ip_is_private(ip: &std::net::IpAddr) -> bool {
 
 /// Validate that file magic bytes match the declared image type (anti-spoofing).
 fn validate_magic_bytes(data: &[u8], ext: &str) -> bool {
-    if data.len() < 4 {
-        return false;
-    }
     match ext {
-        "jpg" => data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF,
+        "jpg" => data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF,
         "png" => {
-            data[0] == 0x89
+            data.len() >= 8
+                && data[0] == 0x89
                 && data[1] == 0x50
                 && data[2] == 0x4E
                 && data[3] == 0x47
@@ -1491,7 +1489,13 @@ fn validate_magic_bytes(data: &[u8], ext: &str) -> bool {
                 && data[6] == 0x1A
                 && data[7] == 0x0A
         }
-        "gif" => data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38,
+        "gif" => {
+            data.len() >= 4
+                && data[0] == 0x47
+                && data[1] == 0x49
+                && data[2] == 0x46
+                && data[3] == 0x38
+        }
         "webp" => {
             data.len() >= 12
                 && data[0] == 0x52
