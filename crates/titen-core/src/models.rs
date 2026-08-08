@@ -51,6 +51,18 @@ impl Account {
     }
 }
 
+// ─── Sanitizers ────────────────────────────────────────────
+
+/// Sanitize caption text: normalize line endings, strip control chars.
+/// Issue #82: raw curl with unescaped multiline breaks JSON parsing.
+pub fn sanitize_caption(s: &str) -> String {
+    s.replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .replace('\0', "")
+        .trim_end_matches('\n')
+        .to_string()
+}
+
 // ─── Post ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -94,6 +106,8 @@ pub struct Schedule {
     pub media_type: String,
     pub caption: Option<String>,
     pub text_attachment: Option<String>,
+    /// JSON-encoded array of media URLs (TEXT column, not native JSON).
+    /// Decode with `serde_json::from_str::<Vec<String>>` before use.
     pub media_urls: Option<String>,
     pub scheduled_at: String,
     pub status: String,
@@ -143,6 +157,22 @@ pub struct Comment {
     pub text: String,
     pub sentiment: Option<String>,
     pub sentiment_score: Option<f64>,
+    pub fetched_at: String,
+}
+
+// ─── Mentions ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Mention {
+    pub id: String,
+    pub account_id: String,
+    pub threads_mention_id: Option<String>,
+    pub author_username: Option<String>,
+    pub author_user_id: Option<String>,
+    pub text: Option<String>,
+    pub media_type: Option<String>,
+    pub permalink: Option<String>,
+    pub mentioned_at: Option<String>,
     pub fetched_at: String,
 }
 
