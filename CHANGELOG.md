@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.2] - 2026-08-08
 
 ### Added
-- **13 new MCP tools**: expanded MCP handler from 17 → 30 tools, covering all major API capabilities previously only accessible via REST. [#84]
+- **13 new MCP tools**: expanded MCP handler from 17 → 30 tools, covering all major API capabilities previously accessible via REST. [#84]
   - `get_post`, `get_schedule`, `approve_schedule`, `reject_schedule` — schedule/post lifecycle
   - `list_media`, `upload_media` — media management with S3 upload
   - `fetch_mentions`, `list_mentions` — mention monitoring (API fetch + DB list)
@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `reply_to_comment` — reply to Threads comments
   - `exchange_oauth_code`, `create_account` — OAuth flow + account onboarding
 - MCP `Cargo.toml`: added `reqwest` and `chrono` workspace dependencies for HTTP media download and date handling.
+
+### Fixed
+- **SSRF protection on `upload_media`**: all outbound HTTP requests now enforce `redirect(Policy::none())` (no redirect following) and `is_private_host()` DNS check before download — blocks requests to `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, IPv6 `::1`, `fc00::/7` (ULA), and `fe80::/10` (link-local).
+- **Fail-closed DNS resolution**: `is_private_host()` now returns `true` (unsafe) on DNS resolution errors and empty address iterators, preventing fail-open bypasses.
+- **File type validation via magic bytes**: `validate_magic_bytes()` checks actual file signatures (JPEG, PNG, WebP, GIF) with per-format length guards — rejects spoofed extensions.
+- **Schema/handler field alignment**: `upload_media` schema now includes `filename` (handler already reads it); `list_media` handler now reads `media_type` to match its schema (was reading non-existent `content_type`).
+- **Chunked encoding OOM bypass**: removed redundant `Content-Length` pre-check in favor of streaming body with hard 50 MB cap via `resp.chunk()` — handles both Content-Length and chunked transfer encoding uniformly.
+- **Hardcoded token expiry removed**: `exchange_oauth_code` now performs full short-lived → long-lived token exchange to get actual `expires_in` from the Threads API instead of assuming a hardcoded 5,184,000-second (60-day) value.
 
 ## [0.5.1] - 2026-08-08
 
