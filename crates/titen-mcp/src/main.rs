@@ -1354,7 +1354,7 @@ fn handle_tool_call(
                                 access_token: access_token.clone(),
                                 expires_at,
                                 app_id: Some(client_id.to_string()),
-                                app_secret: Some(client_secret.to_string()),
+                                app_secret: None, // Never persist client secret — only needed at exchange time
                             };
                             match store.create_account(&id, &input).await {
                                 Ok(account) => Ok(json!({
