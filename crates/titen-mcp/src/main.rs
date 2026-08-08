@@ -313,6 +313,161 @@ fn tools_list() -> serde_json::Value {
                     },
                     "required": ["account_id", "container_id"]
                 }
+            },
+            {
+                "name": "list_posts",
+                "description": "List published/draft posts with optional filtering",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Filter by account ID" },
+                        "status": { "type": "string", "enum": ["draft", "published", "failed", "deleted"], "description": "Filter by post status" },
+                        "limit": { "type": "integer", "description": "Max results (default 50, max 1000)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" }
+                    }
+                }
+            },
+            {
+                "name": "get_post",
+                "description": "Get a single post by ID",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "post_id": { "type": "string", "description": "Post ID" }
+                    },
+                    "required": ["post_id"]
+                }
+            },
+            {
+                "name": "get_schedule",
+                "description": "Get a single scheduled post by ID",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Schedule ID" }
+                    },
+                    "required": ["id"]
+                }
+            },
+            {
+                "name": "approve_schedule",
+                "description": "Approve a pending scheduled post for publishing (HITL approval)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Schedule ID" },
+                        "approved_by": { "type": "string", "description": "Who approved (optional)" }
+                    },
+                    "required": ["id"]
+                }
+            },
+            {
+                "name": "reject_schedule",
+                "description": "Reject a pending scheduled post with optional reason (HITL rejection)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Schedule ID" },
+                        "reason": { "type": "string", "description": "Rejection reason" }
+                    },
+                    "required": ["id"]
+                }
+            },
+            {
+                "name": "upload_media",
+                "description": "Upload a media asset (image) to titen storage for use in posts/carousels",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "Source URL of the image to upload" },
+                        "filename": { "type": "string", "description": "Base filename for the uploaded asset (without extension)" },
+                        "alt_text": { "type": "string", "description": "Alt text for accessibility" }
+                    },
+                    "required": ["url"]
+                }
+            },
+            {
+                "name": "list_media",
+                "description": "List media assets stored in titen",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "media_type": { "type": "string", "description": "Filter by media type (image, video)" },
+                        "limit": { "type": "integer", "description": "Max results (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset" }
+                    }
+                }
+            },
+            {
+                "name": "fetch_mentions",
+                "description": "Fetch mentions of a managed account from the Threads API and store them",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID to fetch mentions for" }
+                    },
+                    "required": ["account_id"]
+                }
+            },
+            {
+                "name": "list_mentions",
+                "description": "List stored mentions for an account",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID" },
+                        "limit": { "type": "integer", "description": "Max results (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset" }
+                    },
+                    "required": ["account_id"]
+                }
+            },
+            {
+                "name": "search_keyword",
+                "description": "Search Threads for a keyword or trending topic",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "account_id": { "type": "string", "description": "Account ID to authenticate as" },
+                        "keyword": { "type": "string", "description": "Search query" }
+                    },
+                    "required": ["account_id", "keyword"]
+                }
+            },
+            {
+                "name": "get_post_trend",
+                "description": "Get time-series engagement trend data for a post (stored analytics snapshots)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "post_id": { "type": "string", "description": "Post ID" }
+                    },
+                    "required": ["post_id"]
+                }
+            },
+            {
+                "name": "reply_to_comment",
+                "description": "Reply to a comment on a Threads post directly from the AI agent",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "post_id": { "type": "string", "description": "The titen post ID" },
+                        "comment_id": { "type": "string", "description": "The Threads comment ID to reply to" },
+                        "text": { "type": "string", "description": "Reply text" }
+                    },
+                    "required": ["post_id", "comment_id", "text"]
+                }
+            },
+            {
+                "name": "exchange_oauth_code",
+                "description": "Exchange an OAuth authorization code for a long-lived token and add account to titen",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "string", "description": "OAuth authorization code from Meta" }
+                    },
+                    "required": ["code"]
+                }
             }
         ]
     })
@@ -739,6 +894,503 @@ fn handle_tool_call(
                 Err(e) => Err(format!("Account not found: {e}")),
             }
         }),
+        "list_posts" => rt.block_on(async {
+            match store
+                .list_posts(&PostFilter {
+                    account_id: args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    status: args
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as i64),
+                    offset: args
+                        .get("offset")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as i64),
+                    ..Default::default()
+                })
+                .await
+            {
+                Ok(posts) => {
+                    let data: Vec<serde_json::Value> = posts
+                        .into_iter()
+                        .map(|p| {
+                            json!({
+                                "id": p.id,
+                                "account_id": p.account_id,
+                                "caption": p.caption,
+                                "status": p.status,
+                                "media_type": p.media_type,
+                                "threads_post_id": p.threads_post_id,
+                                "created_at": p.created_at,
+                            })
+                        })
+                        .collect();
+                    Ok(json!(data))
+                }
+                Err(e) => Err(format!("Failed to list posts: {e}")),
+            }
+        }),
+        "get_post" => rt.block_on(async {
+            let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
+            match store.get_post(post_id).await {
+                Ok(post) => Ok(json!({
+                    "id": post.id,
+                    "account_id": post.account_id,
+                    "caption": post.caption,
+                    "status": post.status,
+                    "media_type": post.media_type,
+                    "threads_post_id": post.threads_post_id,
+                    "published_at": post.published_at,
+                    "created_at": post.created_at,
+                })),
+                Err(e) => Err(format!("Post not found: {e}")),
+            }
+        }),
+        "get_schedule" => rt.block_on(async {
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            match store.get_schedule(id).await {
+                Ok(s) => Ok(json!({
+                    "id": s.id,
+                    "account_id": s.account_id,
+                    "caption": s.caption,
+                    "scheduled_at": s.scheduled_at,
+                    "status": s.status,
+                    "media_type": s.media_type,
+                })),
+                Err(e) => Err(format!("Schedule not found: {e}")),
+            }
+        }),
+        "approve_schedule" => rt.block_on(async {
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let approved_by = args.get("approved_by").and_then(|v| v.as_str());
+            match store.approve_schedule(id, approved_by).await {
+                Ok(s) => Ok(json!({
+                    "id": s.id,
+                    "status": s.status,
+                    "approved_by": s.approved_by,
+                })),
+                Err(e) => Err(format!("Failed to approve schedule: {e}")),
+            }
+        }),
+        "reject_schedule" => rt.block_on(async {
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let reason = args.get("reason").and_then(|v| v.as_str());
+            match store.reject_schedule(id, reason).await {
+                Ok(s) => Ok(json!({
+                    "id": s.id,
+                    "status": s.status,
+                    "error": s.error,
+                })),
+                Err(e) => Err(format!("Failed to reject schedule: {e}")),
+            }
+        }),
+        "upload_media" => rt.block_on(async {
+            let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let filename = args
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .unwrap_or("upload");
+
+            // Validate URL scheme — prevent SSRF and file:// attacks
+            let parsed = match reqwest::Url::parse(url) {
+                Ok(u) => u,
+                Err(_) => return Err("Invalid URL format".to_string()),
+            };
+            if parsed.scheme() != "https" && parsed.scheme() != "http" {
+                return Err(format!(
+                    "URL scheme '{}' not allowed. Only http/https.",
+                    parsed.scheme()
+                ));
+            }
+            // Check host is not private/internal (SSRF protection)
+            if let Some(host) = parsed.host_str() {
+                if is_private_host(host) {
+                    return Err("URL points to a private/internal host. Blocked for security.".to_string());
+                }
+            }
+
+            // HTTP client (no redirect following to prevent SSRF via redirect)
+            let client = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+            let mut resp = match client.get(url).send().await {
+                Ok(r) => r,
+                Err(e) => return Err(format!("Failed to download image: {e}")),
+            };
+            if !resp.status().is_success() {
+                return Err(format!("Download failed: HTTP {}", resp.status()));
+            }
+            let content_type = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("image/jpeg")
+                .to_string();
+
+            // Validate content-type is an allowed image type
+            let ext = match content_type.as_str() {
+                "image/jpeg" | "image/jpg" => "jpg",
+                "image/png" => "png",
+                "image/gif" => "gif",
+                "image/webp" => "webp",
+                _ => {
+                    return Err(format!(
+                        "Unsupported content type '{content_type}'. Only image/jpeg, image/png, image/gif, image/webp are allowed."
+                    ));
+                }
+            };
+
+            // Stream body with hard cap (handles both Content-Length and chunked encoding)
+            const MAX_SIZE: usize = 50 * 1024 * 1024;
+            let mut buf: Vec<u8> = Vec::with_capacity(1024 * 1024);
+            loop {
+                match resp.chunk().await {
+                    Ok(Some(chunk)) => {
+                        if buf.len() + chunk.len() > MAX_SIZE {
+                            return Err(
+                                "File exceeds 50MB streaming limit.".to_string(),
+                            );
+                        }
+                        buf.extend_from_slice(&chunk);
+                    }
+                    Ok(None) => break, // EOF
+                    Err(e) => return Err(format!("Download failed: {e}")),
+                }
+            }
+
+            // Validate magic bytes match declared content-type (prevent spoofing)
+            if !validate_magic_bytes(&buf, ext) {
+                return Err(format!(
+                    "File content does not match declared type '{ext}'. Possible spoofing attempt."
+                ));
+            }
+
+            // Upload to S3
+            use titen_core::storage::Storage;
+            let s3 = match titen_core::storage::S3Storage::from_env() {
+                Ok(s) => s,
+                Err(_) => return Err("S3 storage not configured. Set S3_* env vars.".to_string()),
+            };
+            let asset_id = uuid::Uuid::now_v7();
+            let s3_key = format!("uploads/{asset_id}.{ext}");
+            let s3_url = match s3.upload(&s3_key, &buf, &content_type).await {
+                Ok(u) => u,
+                Err(e) => return Err(format!("Failed to upload to S3: {e}")),
+            };
+
+            let id = asset_id.to_string();
+            match store
+                .create_media_asset(
+                    &id,
+                    filename,
+                    &content_type,
+                    buf.len() as i64,
+                    &s3_key,
+                    Some(&s3_url),
+                )
+                .await
+            {
+                Ok(asset) => Ok(json!({
+                    "id": asset.id,
+                    "filename": asset.filename,
+                    "s3_key": asset.s3_key,
+                    "s3_url": asset.s3_url,
+                    "content_type": asset.content_type,
+                    "size_bytes": asset.size_bytes,
+                    "uploaded_at": asset.uploaded_at,
+                })),
+                Err(e) => {
+                    // Best-effort S3 cleanup on DB insert failure
+                    let _ = s3.delete(&s3_key).await;
+                    Err(format!("Failed to create media asset: {e}"))
+                }
+            }
+        }),
+        "list_media" => rt.block_on(async {
+            match store
+                .list_media(&titen_core::models::MediaFilter {
+                    content_type: args
+                        .get("media_type")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as i64),
+                    offset: args
+                        .get("offset")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as i64),
+                    ..Default::default()
+                })
+                .await
+            {
+                Ok(assets) => {
+                    let data: Vec<serde_json::Value> = assets
+                        .into_iter()
+                        .map(|a| {
+                            json!({
+                                "id": a.id,
+                                "filename": a.filename,
+                                "s3_key": a.s3_key,
+                                "s3_url": a.s3_url,
+                                "content_type": a.content_type,
+                                "size_bytes": a.size_bytes,
+                            })
+                        })
+                        .collect();
+                    Ok(json!(data))
+                }
+                Err(e) => Err(format!("Failed to list media: {e}")),
+            }
+        }),
+        "fetch_mentions" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as u32);
+
+            let account = match store.get_account(account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Fetch mentions from Threads API (returns raw JSON)
+            let mentions = match threads_client.fetch_mentions(&account, limit).await {
+                Ok(m) => m,
+                Err(e) => return Err(format!("Failed to fetch mentions: {e}")),
+            };
+
+            let mut stored = 0;
+            for mention in &mentions {
+                let id = uuid::Uuid::now_v7().to_string();
+                let m = titen_core::models::Mention {
+                    id,
+                    account_id: account_id.to_string(),
+                    threads_mention_id: mention
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    author_username: mention
+                        .get("username")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    author_user_id: None,
+                    text: mention
+                        .get("text")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    media_type: mention
+                        .get("media_type")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    permalink: mention
+                        .get("permalink")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    mentioned_at: mention
+                        .get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    fetched_at: chrono::Utc::now().to_rfc3339(),
+                };
+                if store.upsert_mention(&m).await.is_ok() {
+                    stored += 1;
+                }
+            }
+
+            Ok(json!({
+                "fetched": mentions.len(),
+                "stored": stored,
+            }))
+        }),
+        "list_mentions" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            match store
+                .list_mentions(&titen_core::models::MentionFilter {
+                    account_id: Some(account_id.to_string()),
+                    limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as i64),
+                    offset: args
+                        .get("offset")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as i64),
+                    ..Default::default()
+                })
+                .await
+            {
+                Ok(mentions) => {
+                    let data: Vec<serde_json::Value> = mentions
+                        .into_iter()
+                        .map(|m| {
+                            json!({
+                                "id": m.id,
+                                "author_username": m.author_username,
+                                "text": m.text,
+                                "permalink": m.permalink,
+                                "mentioned_at": m.mentioned_at,
+                            })
+                        })
+                        .collect();
+                    Ok(json!(data))
+                }
+                Err(e) => Err(format!("Failed to list mentions: {e}")),
+            }
+        }),
+        "search_keyword" => rt.block_on(async {
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let keyword = args.get("keyword").and_then(|v| v.as_str()).unwrap_or("");
+
+            let account = match store.get_account(account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            match threads_client.search_keyword(&account, keyword, None).await {
+                Ok(results) => Ok(json!(results)),
+                Err(e) => Err(format!("Search failed: {e}")),
+            }
+        }),
+        "get_post_trend" => rt.block_on(async {
+            let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
+            match store.list_analytics_snap(post_id).await {
+                Ok(snaps) => {
+                    let data: Vec<serde_json::Value> = snaps
+                        .into_iter()
+                        .map(|s| {
+                            json!({
+                                "views": s.views,
+                                "likes": s.likes,
+                                "replies": s.replies,
+                                "reposts": s.reposts,
+                                "quotes": s.quotes,
+                                "snapshot_at": s.snapshot_at,
+                            })
+                        })
+                        .collect();
+                    Ok(json!({ "post_id": post_id, "snapshots": data, "count": data.len() }))
+                }
+                Err(e) => Err(format!("Failed to get trend data: {e}")),
+            }
+        }),
+        "reply_to_comment" => rt.block_on(async {
+            let post_id = args.get("post_id").and_then(|v| v.as_str()).unwrap_or("");
+            let comment_id = args
+                .get("comment_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
+
+            let post = match store.get_post(post_id).await {
+                Ok(p) => p,
+                Err(e) => return Err(format!("Post not found: {e}")),
+            };
+
+            // reply_to_comment: verify post exists and is published
+            if post.threads_post_id.is_none() {
+                return Err("Post not yet published to Threads".to_string());
+            }
+
+            let account = match store.get_account(&post.account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            match threads_client
+                .create_reply(&account, comment_id, text)
+                .await
+            {
+                Ok(reply_id) => Ok(json!({
+                    "reply_id": reply_id,
+                    "comment_id": comment_id,
+                    "post_id": post_id,
+                })),
+                Err(e) => Err(format!("Failed to reply: {e}")),
+            }
+        }),
+        "exchange_oauth_code" => rt.block_on(async {
+            let code = args.get("code").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Read OAuth credentials from env — never accept from MCP client (security)
+            let client_id = std::env::var("THREADS_CLIENT_ID")
+                .unwrap_or_else(|_| {
+                    eprintln!("WARNING: THREADS_CLIENT_ID not set");
+                    String::new()
+                });
+            let client_secret = std::env::var("THREADS_CLIENT_SECRET")
+                .unwrap_or_else(|_| {
+                    eprintln!("WARNING: THREADS_CLIENT_SECRET not set");
+                    String::new()
+                });
+            let redirect_uri = std::env::var("THREADS_REDIRECT_URI")
+                .unwrap_or_else(|_| {
+                    eprintln!("ERROR: THREADS_REDIRECT_URI not set — OAuth exchange will fail");
+                    String::new()
+                });
+
+            if client_id.is_empty() || client_secret.is_empty() {
+                return Err("OAuth credentials not configured on server. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET env vars.".to_string());
+            }
+
+            match threads_client
+                .exchange_code_for_token(code, &client_id, &client_secret, &redirect_uri)
+                .await
+            {
+                Ok((short_token, _token_type)) => {
+                    // Exchange short-lived → long-lived token (gets real expiry)
+                    let (access_token, expires_in) = match threads_client
+                        .exchange_long_lived_token(&short_token, &client_secret)
+                        .await
+                    {
+                        Ok((token, exp)) => (token, exp),
+                        Err(e) => {
+                            return Err(format!(
+                                "Failed to exchange for long-lived token: {e}"
+                            ));
+                        }
+                    };
+                    // Resolve user identity from token
+                    match threads_client.resolve_account(&access_token).await {
+                        Ok((user_id, username)) => {
+                            let id = uuid::Uuid::now_v7().to_string();
+                            // Use actual expiry from API response
+                            let expires_at = (chrono::Utc::now()
+                                + chrono::Duration::seconds(expires_in))
+                            .to_rfc3339();
+                            let input = titen_core::models::CreateAccount {
+                                username: Some(username.clone()),
+                                user_id: Some(user_id.clone()),
+                                access_token: access_token.clone(),
+                                expires_at,
+                                app_id: Some(client_id.to_string()),
+                                app_secret: None, // Never persist client secret — only needed at exchange time
+                            };
+                            match store.create_account(&id, &input).await {
+                                Ok(account) => Ok(json!({
+                                    "id": account.id,
+                                    "username": account.username,
+                                    "user_id": account.user_id,
+                                    "token_status": account.token_status(),
+                                })),
+                                Err(e) => Err(format!("Account created but DB save failed: {e}")),
+                            }
+                        }
+                        Err(e) => Err(format!("Token exchanged but profile resolve failed: {e}")),
+                    }
+                }
+                Err(e) => Err(format!("OAuth code exchange failed: {e}")),
+            }
+        }),
         _ => Err(format!("Unknown tool: {tool_name}")),
     };
 
@@ -767,4 +1419,121 @@ fn json_rpc_error_value(id: &serde_json::Value, message: &str, code: i64) -> ser
         "id": id,
         "error": { "code": code, "message": message }
     })
+}
+
+/// Check if a hostname is a private/internal IP or localhost (SSRF protection).
+/// Also performs DNS resolution to catch hostnames resolving to private IPs.
+fn is_private_host(host: &str) -> bool {
+    use std::net::{IpAddr, ToSocketAddrs};
+
+    // Localhost variants
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+        return true;
+    }
+
+    // Try parsing as literal IP address first
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if ip_is_private(&ip) {
+            return true;
+        }
+    }
+
+    // Block internal TLDs
+    if host.ends_with(".local")
+        || host.ends_with(".internal")
+        || host.ends_with(".localhost")
+        || host.ends_with(".arpa")
+    {
+        return true;
+    }
+
+    // DNS resolution: check ALL resolved IPs (prevents DNS rebinding attacks)
+    // Fail-closed: if DNS resolution fails, treat as unsafe (return true)
+    let lookup = format!("{host}:0");
+    match lookup.to_socket_addrs() {
+        Ok(addrs) => {
+            let mut has_public = false;
+            for addr in addrs {
+                if ip_is_private(&addr.ip()) {
+                    return true;
+                }
+                has_public = true;
+            }
+            // If no addresses returned at all, treat as unsafe
+            !has_public
+        }
+        Err(_) => true, // DNS resolution failed — fail closed
+    }
+}
+
+/// Check if a resolved IP address is private/internal.
+fn ip_is_private(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            if v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+            {
+                return true;
+            }
+            // Carrier-grade NAT (100.64.0.0/10)
+            let o = v4.octets();
+            o[0] == 100 && (o[1] & 0xc0) == 64
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || {
+                    // Unique Local Addresses (fc00::/7)
+                    let seg = v6.segments()[0];
+                    (seg & 0xfe00) == 0xfc00
+                }
+                || {
+                    // Link-Local Addresses (fe80::/10)
+                    let seg = v6.segments()[0];
+                    (seg & 0xffc0) == 0xfe80
+                }
+        }
+    }
+}
+
+/// Validate that file magic bytes match the declared image type (anti-spoofing).
+fn validate_magic_bytes(data: &[u8], ext: &str) -> bool {
+    match ext {
+        "jpg" => data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF,
+        "png" => {
+            data.len() >= 8
+                && data[0] == 0x89
+                && data[1] == 0x50
+                && data[2] == 0x4E
+                && data[3] == 0x47
+                && data[4] == 0x0D
+                && data[5] == 0x0A
+                && data[6] == 0x1A
+                && data[7] == 0x0A
+        }
+        "gif" => {
+            data.len() >= 4
+                && data[0] == 0x47
+                && data[1] == 0x49
+                && data[2] == 0x46
+                && data[3] == 0x38
+        }
+        "webp" => {
+            data.len() >= 12
+                && data[0] == 0x52
+                && data[1] == 0x49
+                && data[2] == 0x46
+                && data[3] == 0x46
+                && data[8] == 0x57
+                && data[9] == 0x45
+                && data[10] == 0x42
+                && data[11] == 0x50
+        }
+        _ => false,
+    }
 }

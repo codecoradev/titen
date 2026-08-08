@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-08
+
+### Added
+- **13 new MCP tools**: expanded MCP handler from 17 → 30 tools, covering all major API capabilities previously only accessible via REST. [#84]
+  - `get_post`, `get_schedule`, `approve_schedule`, `reject_schedule` — schedule/post lifecycle
+  - `list_media`, `upload_media` — media management with S3 upload
+  - `fetch_mentions`, `list_mentions` — mention monitoring (API fetch + DB list)
+  - `search_keyword` — keyword search across Threads
+  - `get_post_trend` — analytics trend per post
+  - `reply_to_comment` — reply to Threads comments
+  - `exchange_oauth_code`, `create_account` — OAuth flow + account onboarding
+- MCP `Cargo.toml`: added `reqwest` and `chrono` workspace dependencies for HTTP media download and date handling.
+
 ## [0.5.1] - 2026-08-08
 
 ### Added
