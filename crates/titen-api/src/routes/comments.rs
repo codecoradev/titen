@@ -2,11 +2,12 @@ use axum::{
     Json,
     extract::State,
     extract::{Path, Query},
+    http::StatusCode,
 };
 use uuid::Uuid;
 
 use crate::server::AppState;
-use titen_core::models::CommentFilter;
+use titen_core::models::{CommentFilter, UpdateCommentReply};
 use titen_core::sentiment::build_engine;
 
 pub async fn list_comments(
@@ -186,4 +187,154 @@ pub async fn get_sentiment(
             "comments": analyzed,
         }
     }))
+}
+
+/// PATCH /api/comments/{id} — update reply status (manual workflow).
+pub async fn update_reply_status(
+    State(state): State<AppState>,
+    Path(comment_id): Path<String>,
+    Json(body): Json<UpdateCommentReply>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Validate reply_status if provided
+    let valid_statuses = ["new", "needs_reply", "replied", "skipped"];
+    let reply_status = match body.reply_status.as_deref() {
+        Some(s) if valid_statuses.contains(&s) => s.to_string(),
+        Some(s) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("Invalid reply_status: {s}. Must be one of: new, needs_reply, replied, skipped"),
+                    "code": "INVALID_STATUS"
+                })),
+            ));
+        }
+        None => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "reply_status is required",
+                    "code": "MISSING_FIELD"
+                })),
+            ));
+        }
+    };
+
+    match state
+        .store
+        .update_comment_reply(&comment_id, &reply_status, body.reply_text.as_deref())
+        .await
+    {
+        Ok(comment) => Ok(Json(serde_json::json!({ "data": comment }))),
+        Err(e) => {
+            let msg = e.to_string();
+            let is_not_found = msg.contains("not found");
+            let status = if is_not_found {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            let code = if is_not_found {
+                "NOT_FOUND"
+            } else {
+                "UPDATE_FAILED"
+            };
+            Err((
+                status,
+                Json(serde_json::json!({ "error": msg, "code": code })),
+            ))
+        }
+    }
+}
+
+/// POST /api/comments/{id}/reply — publish a reply to Threads and mark as replied.
+pub async fn reply_to_comment(
+    State(state): State<AppState>,
+    Path(comment_id): Path<String>,
+    Json(body): Json<UpdateCommentReply>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let reply_text = match body.reply_text.as_deref() {
+        Some(t) if !t.trim().is_empty() => t.to_string(),
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "reply_text is required and must not be empty",
+                    "code": "MISSING_FIELD"
+                })),
+            ));
+        }
+    };
+
+    // Fetch the comment to get threads_comment_id
+    let comment = state.store.get_comment(&comment_id).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+        )
+    })?;
+
+    let threads_comment_id = comment.threads_comment_id.clone().ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Comment has no threads_comment_id — cannot reply",
+                "code": "NO_THREADS_ID"
+            })),
+        )
+    })?;
+
+    // Fetch the post → account for Threads API access
+    let post = state.store.get_post(&comment.post_id).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "POST_NOT_FOUND" })),
+        )
+    })?;
+
+    let account = state
+        .store
+        .get_account(&post.account_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" })),
+            )
+        })?;
+
+    // Publish reply to Threads
+    match state
+        .threads_client
+        .create_reply(&account, &threads_comment_id, &reply_text)
+        .await
+    {
+        Ok(threads_reply_id) => {
+            // Update DB: mark replied + store reply text
+            match state
+                .store
+                .update_comment_reply(&comment_id, "replied", Some(&reply_text))
+                .await
+            {
+                Ok(updated) => Ok(Json(serde_json::json!({
+                    "data": updated,
+                    "threads_reply_id": threads_reply_id,
+                }))),
+                Err(e) => Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": format!("Reply published to Threads but DB update failed: {e}"),
+                        "code": "DB_UPDATE_FAILED",
+                        "threads_reply_id": threads_reply_id,
+                    })),
+                )),
+            }
+        }
+        Err(e) => Err((
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Threads API reply failed: {e}"),
+                "code": "THREADS_REPLY_FAILED"
+            })),
+        )),
+    }
 }
