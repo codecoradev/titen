@@ -116,24 +116,22 @@
 	}
 
 	async function loadCardData(index: number) {
-		const card = cards[index];
-		if (!card) return;
+		if (!cards[index]) return;
+		const accountId = cards[index].account.id;
 
 		// Load profile
-		card.profileLoading = true;
-		cards[index] = { ...card, profileLoading: true };
+		cards[index] = { ...cards[index], profileLoading: true };
 		try {
-			const profile = await getThreadsProfile(card.account.id);
+			const profile = await getThreadsProfile(accountId);
 			cards[index] = { ...cards[index], profile, profileLoading: false };
 		} catch {
 			cards[index] = { ...cards[index], profileLoading: false, profileError: true };
 		}
 
 		// Load insights
-		card.insightsLoading = true;
 		cards[index] = { ...cards[index], insightsLoading: true };
 		try {
-			const insights = await getAccountInsights(card.account.id);
+			const insights = await getAccountInsights(accountId);
 			cards[index] = { ...cards[index], insights, insightsLoading: false };
 		} catch {
 			cards[index] = { ...cards[index], insightsLoading: false };
