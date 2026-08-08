@@ -142,6 +142,18 @@ export interface AccountInsights {
 	[key: string]: number | string | null;
 }
 
+// ─── Threads Profile (from Meta API via /accounts/{id}/profile) ───
+export interface ThreadsProfile {
+	id: string;
+	username: string;
+	name?: string;
+	threads_profile_picture_url?: string;
+	threads_biography?: string;
+	followers_count?: number;
+	following_count?: number;
+	media_count?: number;
+}
+
 // ─── Dashboard Summary (computed client-side from list endpoints) ───
 export interface DashboardSummary {
 	total_accounts: number;
