@@ -648,12 +648,15 @@ impl Store {
         .await?;
 
         if result.rows_affected() == 0 {
-            // Re-fetch to get the actual status for the error message
-            let current = self.get_schedule(id).await?;
-            return Err(TitenError::InvalidRequest(format!(
-                "Schedule {} is in '{}' state, can only edit 'draft' or 'pending'",
-                id, current.status
-            )));
+            // Re-fetch to determine cause: not found vs wrong status
+            return match self.get_schedule(id).await {
+                Ok(current) => Err(TitenError::InvalidRequest(format!(
+                    "Schedule {} is in '{}' state, can only edit 'draft' or 'pending'",
+                    id, current.status
+                ))),
+                Err(e) if matches!(e, TitenError::ScheduleNotFound(_)) => Err(e),
+                Err(e) => Err(e),
+            };
         }
 
         self.get_schedule(id).await
