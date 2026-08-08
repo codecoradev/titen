@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-08
+
+### Fixed
+- **Hamburger button invisible on mobile**: removed `btn-ghost` class (transparent bg + muted color = invisible). Now has standalone styling with visible background, border, and fixed 2.5rem size.
+- **Dashboard header overlap**: mobile content padding adjusted to `calc(2.5rem + var(--space-md) + var(--space-sm))` so content clears the fixed hamburger button.
+
 ## [0.4.1] - 2026-08-08
 
 ### Fixed
