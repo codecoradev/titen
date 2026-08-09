@@ -288,6 +288,10 @@ pub async fn serve(
         )
         .route("/api/threads/search", post(routes::threads::search_keyword))
         .route(
+            "/api/threads/location-search",
+            post(routes::threads::search_locations),
+        )
+        .route(
             "/api/threads/mentions",
             get(routes::threads::list_mentions_handler).post(routes::threads::fetch_mentions),
         )

@@ -253,7 +253,10 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
         let result = match schedule.media_type.as_str() {
             "TEXT" => {
                 let caption = schedule.caption.as_deref().unwrap_or("");
-                match client.publish_text(&account, caption).await {
+                match client
+                    .publish_text(&account, caption, schedule.location_id.as_deref())
+                    .await
+                {
                     Ok(post_id) => {
                         let _ = store.track_rate(&schedule.account_id, "post").await;
                         Ok(serde_json::json!({ "threads_post_id": post_id }))
@@ -272,7 +275,13 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     Err("No image URL provided".to_string())
                 } else {
                     match client
-                        .publish_image(&account, schedule.caption.as_deref(), &image_url, None)
+                        .publish_image(
+                            &account,
+                            schedule.caption.as_deref(),
+                            &image_url,
+                            None,
+                            schedule.location_id.as_deref(),
+                        )
                         .await
                     {
                         Ok(post_id) => {
@@ -294,7 +303,12 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     Err("No video URL provided".to_string())
                 } else {
                     match client
-                        .publish_video(&account, schedule.caption.as_deref(), &video_url)
+                        .publish_video(
+                            &account,
+                            schedule.caption.as_deref(),
+                            &video_url,
+                            schedule.location_id.as_deref(),
+                        )
                         .await
                     {
                         Ok(post_id) => {
