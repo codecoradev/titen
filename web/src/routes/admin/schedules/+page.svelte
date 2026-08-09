@@ -364,11 +364,24 @@
 								tabindex="0"
 							>
 							<td class="truncate" title={schedule.caption || '—'}>
-								{#if schedule.media_urls}
-									<span class="media-tag">{schedule.media_type || 'MEDIA'}</span>
-								{/if}
-								{truncate(schedule.caption || '—', 60)}
-							</td>
+									<div class="caption-cell">
+										{#if schedule.media_urls}
+											{#each schedule.media_urls.split(',').filter(Boolean).slice(0, 3) as url, i}
+												<img
+													src={url}
+													alt="Preview"
+													class="row-thumb"
+													loading="lazy"
+													onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+												/>
+												{#if i === 2 && schedule.media_urls.split(',').filter(Boolean).length > 3}
+													<span class="thumb-more">+{schedule.media_urls.split(',').filter(Boolean).length - 3}</span>
+												{/if}
+											{/each}
+										{/if}
+										<span>{truncate(schedule.caption || '—', 60)}</span>
+									</div>
+								</td>
 								<td>
 									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
 								</td>
@@ -717,6 +730,32 @@
 		display: flex;
 		gap: 0.25rem;
 		flex-wrap: wrap;
+	}
+
+	/* Carousel thumbnail preview */
+	.caption-cell {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.row-thumb {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		border: 1px solid var(--color-rule);
+		flex-shrink: 0;
+	}
+
+	.thumb-more {
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: var(--color-muted);
+		background: var(--color-paper-2);
+		padding: 0.125rem 0.25rem;
+		border-radius: var(--radius-sm);
+		flex-shrink: 0;
 	}
 
 	.btn-success:disabled {
