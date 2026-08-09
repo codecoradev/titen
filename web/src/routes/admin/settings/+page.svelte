@@ -1,12 +1,13 @@
 <script lang="ts">
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import { getHealth, ApiError } from '$lib/api';
+	import { getHealth, getSettings, updateSettings, ApiError } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
 	import type { HealthResponse } from '$lib/types';
 
 	// ── State ──
 	let activeTab = $state<'general' | 'api-keys' | 'danger'>('general');
 	let saving = $state(false);
+	let loading = $state(false);
 
 	// General settings
 	let instanceName = $state('');
@@ -17,8 +18,12 @@
 	// API keys (masked)
 	let threadsAppId = $state('');
 	let threadsAppSecret = $state('');
+	let secretIsSet = $state(false); // true if backend has a secret stored
 	let showAppId = $state(false);
 	let showAppSecret = $state(false);
+
+	// Track whether user typed a new secret
+	let secretDirty = $state(false);
 
 	// Danger zone
 	let confirmPurgeText = $state('');
@@ -28,6 +33,9 @@
 	let health = $state<HealthResponse | null>(null);
 	let healthLoading = $state(false);
 
+	// Lifecycle guard
+	let loaded = $state(false);
+
 	const tabs = [
 		{ id: 'general' as const, label: 'General' },
 		{ id: 'api-keys' as const, label: 'API Keys' },
@@ -36,45 +44,52 @@
 
 	// ── Lifecycle ──
 	$effect(() => {
-		loadSettings();
+		if (!loaded) {
+			loaded = true;
+			loadSettings();
+		}
 	});
 
 	async function loadSettings() {
-		const saved = localStorage.getItem('titen-settings');
-		if (saved) {
-			try {
-				const parsed = JSON.parse(saved);
-				instanceName = parsed.instanceName ?? '';
-				autoFetchComments = parsed.autoFetchComments ?? true;
-				commentFetchInterval = parsed.commentFetchInterval ?? '30';
-				scheduleLookaheadHours = parsed.scheduleLookaheadHours ?? '24';
-				threadsAppId = parsed.threadsAppId ?? '';
-				threadsAppSecret = parsed.threadsAppSecret ?? '';
-			} catch {
-				// ignore corrupt data
+		loading = true;
+		try {
+			const s = await getSettings();
+			instanceName = s.instance_name ?? '';
+			autoFetchComments = s.auto_fetch_comments ?? true;
+			commentFetchInterval = s.comment_fetch_interval ?? '30';
+			scheduleLookaheadHours = s.schedule_lookahead_hours ?? '24';
+			threadsAppId = s.threads_app_id ?? '';
+			secretIsSet = s.threads_app_secret_set ?? false;
+			threadsAppSecret = '';
+			secretDirty = false;
+		} catch (e) {
+			if (e instanceof ApiError) {
+				toast(`Failed to load settings: ${e.status}`, 'error');
+			} else {
+				toast('Failed to load settings', 'error');
 			}
+		} finally {
+			loading = false;
 		}
-	}
-
-	function persistSettings() {
-		const data = {
-			instanceName,
-			autoFetchComments,
-			commentFetchInterval,
-			scheduleLookaheadHours,
-			threadsAppId,
-			threadsAppSecret,
-		};
-		localStorage.setItem('titen-settings', JSON.stringify(data));
 	}
 
 	async function saveGeneral() {
 		saving = true;
 		try {
-			persistSettings();
+			const s = await updateSettings({
+				instance_name: instanceName,
+				auto_fetch_comments: autoFetchComments,
+				comment_fetch_interval: commentFetchInterval,
+				schedule_lookahead_hours: scheduleLookaheadHours,
+			});
+			secretIsSet = s.threads_app_secret_set ?? secretIsSet;
 			toast('General settings saved', 'success');
-		} catch {
-			toast('Failed to save settings', 'error');
+		} catch (e) {
+			if (e instanceof ApiError) {
+				toast(`Failed to save: ${e.status}`, 'error');
+			} else {
+				toast('Failed to save settings', 'error');
+			}
 		} finally {
 			saving = false;
 		}
@@ -83,12 +98,25 @@
 	async function saveApiKeys() {
 		saving = true;
 		try {
-			persistSettings();
+			const payload: Record<string, string> = {};
+			if (threadsAppId) payload.threads_app_id = threadsAppId;
+			// Only send secret if user typed a new one
+			if (secretDirty && threadsAppSecret) {
+				payload.threads_app_secret = threadsAppSecret;
+			}
+			const s = await updateSettings(payload);
+			secretIsSet = s.threads_app_secret_set ?? secretIsSet;
+			threadsAppSecret = '';
+			secretDirty = false;
 			showAppId = false;
 			showAppSecret = false;
 			toast('API keys saved', 'success');
-		} catch {
-			toast('Failed to save API keys', 'error');
+		} catch (e) {
+			if (e instanceof ApiError) {
+				toast(`Failed to save: ${e.status}`, 'error');
+			} else {
+				toast('Failed to save API keys', 'error');
+			}
 		} finally {
 			saving = false;
 		}
@@ -97,7 +125,7 @@
 	async function refreshHealth() {
 		healthLoading = true;
 		try {
-				health = await getHealth();
+			health = await getHealth();
 		} catch (e) {
 			if (e instanceof ApiError) {
 				toast(`Health check failed: ${e.status}`, 'error');
@@ -251,10 +279,10 @@
 <!-- ── API Keys ── -->
 {#if activeTab === 'api-keys'}
 	<section class="settings-section">
-		<div class="settings-card settings-card--warn">
-			<p class="settings-warning-text">
-				API keys are stored in your browser's local storage and never sent to third parties.
-				For production use, configure these as server-side environment variables instead.
+		<div class="settings-card settings-card--info">
+			<p class="settings-info-text">
+				Credentials are encrypted at rest (AES-256-GCM) and stored server-side.
+				The App Secret is never exposed to the browser after saving.
 			</p>
 		</div>
 
@@ -282,22 +310,31 @@
 
 			<div class="form-group">
 				<label class="form-label" for="threads-app-secret">App Secret</label>
-				<div class="input-reveal">
-					<input
-						id="threads-app-secret"
-						class="form-input"
-						type={showAppSecret ? 'text' : 'password'}
-						bind:value={threadsAppSecret}
-						placeholder="Threads App Secret"
-					/>
-					<button class="btn-ghost reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
-						{#if showAppSecret}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-						{:else}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-						{/if}
-					</button>
-				</div>
+				{#if secretIsSet && !secretDirty}
+					<div class="secret-status">
+						<span class="badge badge--success">✓ Configured</span>
+						<button class="btn-ghost btn-sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</button>
+					</div>
+				{:else}
+					<div class="input-reveal">
+						<input
+							id="threads-app-secret"
+							class="form-input"
+							type={showAppSecret ? 'text' : 'password'}
+							bind:value={threadsAppSecret}
+							oninput={() => { secretDirty = true; }}
+							placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
+							autocomplete="off"
+						/>
+						<button class="btn-ghost reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
+							{#if showAppSecret}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+							{/if}
+						</button>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -437,20 +474,26 @@
 		gap: var(--space-md);
 	}
 
-	.settings-card--warn {
-		border-color: var(--color-warning);
-		background: var(--color-warning-dim);
+	.settings-card--info {
+		border-color: var(--color-accent);
+		background: var(--color-accent-dim, color-mix(in srgb, var(--color-accent) 8%, var(--surface-raised)));
+	}
+
+	.settings-info-text {
+		font-size: var(--text-sm);
+		color: var(--color-muted);
+		line-height: 1.6;
+	}
+
+	.secret-status {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 
 	.settings-card--danger {
 		border-color: var(--color-error);
 		border-width: 1.5px;
-	}
-
-	.settings-warning-text {
-		font-size: var(--text-sm);
-		color: var(--color-warning-ink);
-		line-height: 1.6;
 	}
 
 	/* ── Form row (side-by-side fields) ── */

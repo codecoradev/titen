@@ -198,6 +198,19 @@ impl Store {
             }
         }
 
+        // 009 — app_settings table (centralized config, encrypted secrets)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/009_app_settings.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -1186,5 +1199,78 @@ impl Store {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    // ── App Settings ───────────────────────────────────────
+
+    /// Load app settings from the database (single-row table, id=1).
+    /// Returns encrypted values as-is; callers must decrypt if needed.
+    pub async fn get_app_settings(&self) -> Result<AppSettings> {
+        let mut settings: AppSettings =
+            sqlx::query_as("SELECT instance_name, auto_fetch_comments, comment_fetch_interval, schedule_lookahead_hours, threads_app_id, threads_app_secret_enc, updated_at FROM app_settings WHERE id = 1")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| TitenError::DatabaseError(e.to_string()))?;
+        let _ = &mut settings; // suppress unused_mut
+        Ok(settings)
+    }
+
+    /// Get the decrypted Threads app secret (for server-side OAuth exchange).
+    /// Returns `None` if not configured or empty.
+    pub async fn get_threads_app_secret(&self) -> Result<Option<String>> {
+        let settings = self.get_app_settings().await?;
+        match settings.threads_app_secret_enc {
+            Some(ref enc) if !enc.is_empty() => {
+                let plaintext = self.decrypt_field(enc)?;
+                if plaintext.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(plaintext))
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Update app settings. Only provided fields are changed.
+    /// If `threads_app_secret` is `Some(value)`, the value is encrypted before storage.
+    /// If `None`, the existing encrypted secret is preserved.
+    pub async fn update_app_settings(&self, input: &UpdateAppSettings) -> Result<AppSettings> {
+        let current = self.get_app_settings().await?;
+
+        let instance_name = input.instance_name.clone().unwrap_or(current.instance_name);
+        let auto_fetch = input
+            .auto_fetch_comments
+            .unwrap_or(current.auto_fetch_comments);
+        let comment_interval = input
+            .comment_fetch_interval
+            .clone()
+            .unwrap_or(current.comment_fetch_interval);
+        let lookahead = input
+            .schedule_lookahead_hours
+            .clone()
+            .unwrap_or(current.schedule_lookahead_hours);
+        let app_id = input.threads_app_id.clone().or(current.threads_app_id);
+
+        // Handle secret: encrypt if new value provided, otherwise keep existing
+        let secret_enc = match &input.threads_app_secret {
+            Some(val) if !val.is_empty() => Some(self.encrypt_field(val)?),
+            Some(_) => None, // empty string = clear secret
+            None => current.threads_app_secret_enc.clone(), // keep existing
+        };
+
+        sqlx::query(
+            "UPDATE app_settings SET instance_name = ?, auto_fetch_comments = ?, comment_fetch_interval = ?, schedule_lookahead_hours = ?, threads_app_id = ?, threads_app_secret_enc = ?, updated_at = datetime('now') WHERE id = 1",
+        )
+        .bind(&instance_name)
+        .bind(auto_fetch)
+        .bind(&comment_interval)
+        .bind(&lookahead)
+        .bind(&app_id)
+        .bind(&secret_enc)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_app_settings().await
     }
 }
