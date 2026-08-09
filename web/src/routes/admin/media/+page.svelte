@@ -3,10 +3,12 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { listMedia, uploadMedia, deleteMedia } from '$lib/api';
 	import type { MediaItem } from '$lib/types';
+	import { formatDateTime } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 
 	let media = $state<MediaItem[]>([]);
 	let loading = $state(true);
+	let loaded = $state(false);
 	let deleteTarget = $state<MediaItem | null>(null);
 
 	function formatSize(bytes: number): string {
@@ -16,13 +18,7 @@
 	}
 
 	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-		});
+		return formatDateTime(iso);
 	}
 
 	async function loadMedia() {
@@ -62,8 +58,10 @@
 	}
 
 	$effect(() => {
+		if (loaded) return;
 		loadMedia().then(() => {
 			loading = false;
+			loaded = true;
 		});
 	});
 </script>

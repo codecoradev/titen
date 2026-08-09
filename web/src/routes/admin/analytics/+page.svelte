@@ -31,20 +31,23 @@
 	// ── Derived: aggregate totals across accounts ──
 	const totals = $derived.by(() => {
 		if (summaries.length === 0) return null;
-		return summaries.reduce(
+		const agg = summaries.reduce(
 			(acc, s) => ({
 				total_posts: acc.total_posts + s.total_posts,
 				total_likes: acc.total_likes + s.total_likes,
 				total_replies: acc.total_replies + s.total_replies,
 				total_reposts: acc.total_reposts + s.total_reposts,
 				total_views: acc.total_views + s.total_views,
-				engagement_rate: acc.total_views + s.total_views > 0
-					? ((acc.total_likes + s.total_likes + acc.total_replies + s.total_replies + acc.total_reposts + s.total_reposts) /
-						(acc.total_views + s.total_views)) * 100
-					: 0,
 			}),
-			{ total_posts: 0, total_likes: 0, total_replies: 0, total_reposts: 0, total_views: 0, engagement_rate: 0 },
+			{ total_posts: 0, total_likes: 0, total_replies: 0, total_reposts: 0, total_views: 0 },
 		);
+		// Engagement rate = (likes + replies + reposts) / views * 100
+		// Computed AFTER aggregation, not incrementally during reduce
+		const interactions = agg.total_likes + agg.total_replies + agg.total_reposts;
+		return {
+			...agg,
+			engagement_rate: agg.total_views > 0 ? (interactions / agg.total_views) * 100 : 0,
+		};
 	});
 
 

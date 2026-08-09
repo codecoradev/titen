@@ -3,11 +3,14 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { fetchMentions, createReply, listAccounts } from '$lib/api';
 	import type { Mention, Account } from '$lib/types';
+	import { formatDateTimeShort } from '$lib/tz';
+	import { truncate } from '$lib/format';
 	import { toast } from '$lib/toast.svelte';
 
 	let mentions = $state<Mention[]>([]);
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
+	let loaded = $state(false);
 	let fetchLoading = $state(false);
 	let selectedAccountId = $state('');
 
@@ -16,18 +19,9 @@
 	let replyText = $state('');
 	let replyLoading = $state(false);
 
-	function truncate(text: string, max: number): string {
-		return text.length > max ? text.slice(0, max) + '\u2026' : text;
-	}
-
 	function formatDate(iso?: string): string {
 		if (!iso) return '---';
-		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-		});
+		return formatDateTimeShort(iso);
 	}
 
 	async function loadAccounts() {
@@ -85,10 +79,12 @@
 	}
 
 	$effect(() => {
+		if (loaded) return;
 		(async () => {
 			loading = true;
 			await loadAccounts();
 			loading = false;
+			loaded = true;
 		})();
 	});
 </script>
@@ -205,7 +201,7 @@
 	.reply-overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
+		background: var(--overlay-scrim);
 		display: flex;
 		align-items: center;
 		justify-content: center;

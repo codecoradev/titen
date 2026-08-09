@@ -1,6 +1,4 @@
 <script lang="ts">
-	type StatusVariant = 'active' | 'suspended' | 'expired' | 'published' | 'draft' | 'failed' | 'deleted' | 'pending' | 'processing' | 'completed' | 'cancelled' | 'positive' | 'negative' | 'neutral';
-
 	interface Props {
 		status: string;
 	}

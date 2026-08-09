@@ -26,7 +26,9 @@
 			// Redirect to dashboard or original destination
 			const params = new URLSearchParams(window.location.search);
 			const redirect = params.get('redirect') || '/admin/dashboard';
-			goto(redirect);
+			// Prevent open redirect — only allow relative paths within the app
+			const safeRedirect = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/admin/dashboard';
+			goto(safeRedirect);
 		} catch {
 			error = 'Invalid API key. Make sure it matches the TITEN_API_KEY on the server.';
 		} finally {
