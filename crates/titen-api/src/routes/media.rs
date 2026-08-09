@@ -9,6 +9,16 @@ use crate::server::AppState;
 use titen_core::models::MediaFilter;
 use titen_core::storage::{S3Storage, Storage};
 
+#[utoipa::path(
+    get,
+    path = "/api/media",
+    tag = "media",
+    params(("filter" = Option<MediaFilter>, Query, description = "Media filter")),
+    responses(
+        (status = 200, description = "List of media assets", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_media(
     State(state): State<AppState>,
     Query(filter): Query<MediaFilter>,
@@ -19,6 +29,17 @@ pub async fn list_media(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/media",
+    tag = "media",
+    responses(
+        (status = 201, description = "Media uploaded", body = serde_json::Value),
+        (status = 400, description = "Bad request", body = serde_json::Value),
+        (status = 503, description = "S3 not configured", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn upload_media(
     State(state): State<AppState>,
     mut multipart: axum::extract::Multipart,
@@ -98,6 +119,17 @@ pub async fn upload_media(
     )
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/media/{id}",
+    tag = "media",
+    params(("id" = String, Path, description = "Media asset ID")),
+    responses(
+        (status = 200, description = "Media deleted", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,

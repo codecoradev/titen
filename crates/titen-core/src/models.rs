@@ -1,10 +1,11 @@
 /// Core models for titen
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // ─── Account ───────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Account {
     pub id: String,
     pub username: String,
@@ -18,7 +19,7 @@ pub struct Account {
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateAccount {
     pub username: Option<String>,
     pub user_id: Option<String>,
@@ -28,7 +29,7 @@ pub struct CreateAccount {
     pub app_secret: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAccount {
     pub access_token: Option<String>,
     pub expires_at: Option<String>,
@@ -65,7 +66,7 @@ pub fn sanitize_caption(s: &str) -> String {
 
 // ─── Post ──────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Post {
     pub id: String,
     pub threads_post_id: Option<String>,
@@ -82,7 +83,7 @@ pub struct Post {
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePost {
     pub account_id: String,
     pub media_type: Option<String>,
@@ -99,7 +100,7 @@ pub struct CreatePost {
 
 // ─── Schedule ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Schedule {
     pub id: String,
     pub account_id: String,
@@ -121,7 +122,7 @@ pub struct Schedule {
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateSchedule {
     pub account_id: String,
     pub media_type: Option<String>,
@@ -137,7 +138,7 @@ pub struct CreateSchedule {
 
 /// Partial update for a schedule (HITL edit before approval).
 /// All fields optional — only provided fields are updated.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateSchedule {
     pub caption: Option<String>,
     pub media_type: Option<String>,
@@ -148,13 +149,13 @@ pub struct UpdateSchedule {
 // ─── Comment ──────────────────────────────────────────────
 
 /// Request body for updating comment reply status.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateCommentReply {
     pub reply_status: Option<String>, // new | needs_reply | replied | skipped
     pub reply_text: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Comment {
     pub id: String,
     pub post_id: String,
@@ -173,7 +174,7 @@ pub struct Comment {
 
 // ─── Mentions ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Mention {
     pub id: String,
     pub account_id: String,
@@ -189,7 +190,7 @@ pub struct Mention {
 
 // ─── Analytics ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct AnalyticsSnap {
     pub id: String,
     pub post_id: String,
@@ -201,7 +202,7 @@ pub struct AnalyticsSnap {
     pub snapshot_at: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, ToSchema)]
 pub struct Insights {
     pub likes: Option<i64>,
     pub replies: Option<i64>,
@@ -235,7 +236,7 @@ impl From<Vec<InsightMetric>> for Insights {
 
 // ─── Media ─────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct MediaAsset {
     pub id: String,
     pub filename: String,
@@ -249,7 +250,7 @@ pub struct MediaAsset {
 // ─── Unified Query Filters (Issue #83) ─────────────────────
 
 /// Filter for post listings — supports date range, media_type, and text search.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct PostFilter {
     pub account_id: Option<String>,
     pub status: Option<String>,
@@ -280,7 +281,7 @@ impl Default for PostFilter {
 }
 
 /// Filter for schedule listings.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ScheduleFilter {
     pub account_id: Option<String>,
     pub status: Option<String>,
@@ -311,7 +312,7 @@ impl Default for ScheduleFilter {
 }
 
 /// Filter for comment listings.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CommentFilter {
     pub sentiment: Option<String>,
     pub reply_status: Option<String>,
@@ -340,7 +341,7 @@ impl Default for CommentFilter {
 }
 
 /// Filter for media listings.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct MediaFilter {
     pub content_type: Option<String>,
     /// Case-insensitive LIKE search on filename
@@ -361,7 +362,7 @@ impl Default for MediaFilter {
 }
 
 /// Filter for account listings.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct AccountFilter {
     pub is_active: Option<bool>,
     /// Case-insensitive LIKE search on username
@@ -382,7 +383,7 @@ impl Default for AccountFilter {
 }
 
 /// Filter for mention listings.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct MentionFilter {
     pub account_id: Option<String>,
     pub date_from: Option<String>,
@@ -405,13 +406,13 @@ impl Default for MentionFilter {
 
 // ─── Sentiment ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SentimentResult {
     pub label: String,
     pub score: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SentimentSummary {
     pub total: i64,
     pub positive: i64,
@@ -422,6 +423,7 @@ pub struct SentimentSummary {
 
 // ─── Rate Limiting ─────────────────────────────────────────
 
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct RateLimits {
     pub post: i64,
     pub reply: i64,
@@ -441,7 +443,7 @@ impl Default for RateLimits {
 // ─── Comment Data (from Threads API) ───────────────────────
 
 /// Comment data fetched from the Threads API (before storage)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ToSchema)]
 pub struct CommentData {
     pub threads_comment_id: String,
     pub author_username: Option<String>,
@@ -452,7 +454,7 @@ pub struct CommentData {
 
 // ─── Container Status (Threads API) ─────────────────────────
 /// Response from GET /{container_id}?fields=status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ContainerStatus {
     pub id: String,
     /// "FINISHED", "IN_PROGRESS", "ERROR"
@@ -461,7 +463,7 @@ pub struct ContainerStatus {
 
 // ─── User Profile (Threads API) ───────────────────────────
 /// Response from GET /{user_id}?fields=username,name,...
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserProfile {
     pub id: String,
     pub username: Option<String>,
@@ -473,14 +475,14 @@ pub struct UserProfile {
 
 // ─── Publishing Limit (Threads API) ─────────────────────────
 /// Response from GET /{user_id}/threads_publishing_limit
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PublishingLimit {
     pub quota_usage: i64,
     #[serde(default)]
     pub config: Option<PublishingLimitConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PublishingLimitConfig {
     pub quota_total: i64,
 }
@@ -488,7 +490,7 @@ pub struct PublishingLimitConfig {
 // ─── Insights (official Threads API format) ────────────────
 /// Response from GET /{media_id}/insights?metric=likes,reposts,...
 /// Returns an array of metrics with per-period values or totals.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InsightMetric {
     pub name: String,
     pub period: String,
@@ -499,13 +501,13 @@ pub struct InsightMetric {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InsightValue {
     pub value: i64,
     pub end_time: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InsightTotalValue {
     pub value: i64,
 }
@@ -513,7 +515,7 @@ pub struct InsightTotalValue {
 // ─── User Insights (Threads API) ───────────────────────────
 /// Response from GET /{user_id}/threads_insights?metric=views,likes,...
 /// Similar to InsightMetric but includes link_total_values for click metrics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserInsightMetric {
     pub name: String,
     pub period: String,
@@ -525,7 +527,7 @@ pub struct UserInsightMetric {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LinkTotalValue {
     pub value: i64,
     pub link_url: Option<String>,
@@ -533,7 +535,7 @@ pub struct LinkTotalValue {
 
 // ─── Reply Creation (Threads API) ──────────────────────────
 /// Request body for POST /{post_id}/replies (creating a reply to a post)
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateReply {
     pub media_type: String,
     pub text: String,
