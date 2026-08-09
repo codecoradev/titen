@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-09
+
+### Added
+- **Local filesystem storage fallback**: media uploads now work out-of-the-box without S3/MinIO configured. Files are saved to `TITEN_LOCAL_STORAGE_DIR` (default: `/data/media`) and served via `/media/` route. Path traversal protection included. [#105]
+  - Auto-detection: S3 takes priority when `TITEN_S3_ENDPOINT` is set, otherwise local filesystem
+  - Docker bind volume `./data:/data` covers persistence — no extra config needed
+
+### Fixed
+- **SigV4 canonical URI missing leading slash**: S3 uploads returned `SignatureDoesNotMatch` because the canonical URI path was signed without a leading `/` (e.g. `hermes/2026/...` instead of `/hermes/2026/...`). [#104]
+
 ## [0.5.3] - 2026-08-09
 
 ### Added
