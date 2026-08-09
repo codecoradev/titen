@@ -13,5 +13,6 @@
 //! - [`routes::analytics`] — aggregate analytics and per-post trends
 //! - [`routes::media`] — media listing, upload (multipart), and deletion
 
+pub mod openapi;
 pub mod routes;
 pub mod server;

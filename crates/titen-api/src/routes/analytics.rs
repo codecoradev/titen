@@ -15,6 +15,15 @@ pub struct AnalyticsQuery {
     pub to: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/analytics/posts",
+    tag = "analytics",
+    responses(
+        (status = 200, description = "Aggregated post analytics", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_analytics(
     State(state): State<AppState>,
     Query(q): Query<AnalyticsQuery>,
@@ -94,6 +103,16 @@ pub async fn list_analytics(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/analytics/posts/{id}/trend",
+    tag = "analytics",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Post analytics trend over time", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn post_trend(
     State(state): State<AppState>,
     Path(post_id): Path<String>,

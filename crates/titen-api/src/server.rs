@@ -11,6 +11,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::openapi;
 use crate::routes;
 use titen_core::{Store, ThreadsClient};
 
@@ -22,8 +23,8 @@ pub struct AppState {
     pub api_key: Option<String>,
 }
 
-#[derive(serde::Serialize)]
-struct HealthResponse {
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct HealthResponse {
     status: &'static str,
     version: &'static str,
     db: &'static str,
@@ -111,7 +112,15 @@ pub async fn api_key_auth(
     }
 }
 
-async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse),
+    ),
+)]
+pub async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -288,6 +297,8 @@ pub async fn serve(
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/session", get(routes::auth::session))
         .route("/api/auth/logout", post(routes::auth::logout))
+        // Swagger UI — public (no API key required to view docs)
+        .merge(Into::<Router<AppState>>::into(openapi::swagger_ui()))
         .merge(protected_routes)
         .layer(TraceLayer::new_for_http())
         .layer(match cors_origins {

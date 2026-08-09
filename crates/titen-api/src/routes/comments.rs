@@ -10,6 +10,19 @@ use crate::server::AppState;
 use titen_core::models::{CommentFilter, UpdateCommentReply};
 use titen_core::sentiment::build_engine;
 
+#[utoipa::path(
+    get,
+    path = "/api/posts/{id}/comments",
+    tag = "comments",
+    params(
+        ("id" = String, Path, description = "Post ID"),
+        ("filter" = Option<CommentFilter>, Query, description = "Comment filter"),
+    ),
+    responses(
+        (status = 200, description = "List of comments", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_comments(
     State(state): State<AppState>,
     Path(post_id): Path<String>,
@@ -21,6 +34,17 @@ pub async fn list_comments(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/posts/{id}/comments/fetch",
+    tag = "comments",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Comments fetched from Threads", body = serde_json::Value),
+        (status = 404, description = "Post or account not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn fetch_comments(
     State(state): State<AppState>,
     Path(post_id): Path<String>,
@@ -92,6 +116,16 @@ pub async fn fetch_comments(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/posts/{id}/comments/sentiment",
+    tag = "comments",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Sentiment analysis summary", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn get_sentiment(
     State(state): State<AppState>,
     Path(post_id): Path<String>,
@@ -189,7 +223,19 @@ pub async fn get_sentiment(
     }))
 }
 
-/// PATCH /api/comments/{id} — update reply status (manual workflow).
+#[utoipa::path(
+    patch,
+    path = "/api/comments/{id}",
+    tag = "comments",
+    params(("id" = String, Path, description = "Comment ID")),
+    request_body = UpdateCommentReply,
+    responses(
+        (status = 200, description = "Comment reply status updated", body = serde_json::Value),
+        (status = 400, description = "Bad request", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn update_reply_status(
     State(state): State<AppState>,
     Path(comment_id): Path<String>,
@@ -246,7 +292,20 @@ pub async fn update_reply_status(
     }
 }
 
-/// POST /api/comments/{id}/reply — publish a reply to Threads and mark as replied.
+#[utoipa::path(
+    post,
+    path = "/api/comments/{id}/reply",
+    tag = "comments",
+    params(("id" = String, Path, description = "Comment ID")),
+    request_body = UpdateCommentReply,
+    responses(
+        (status = 200, description = "Reply published", body = serde_json::Value),
+        (status = 400, description = "Bad request", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+        (status = 502, description = "Threads API error", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn reply_to_comment(
     State(state): State<AppState>,
     Path(comment_id): Path<String>,
