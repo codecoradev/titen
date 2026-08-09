@@ -442,6 +442,9 @@ impl ThreadsClient {
         if let Some(children) = &params.children {
             body["children"] = serde_json::json!(children.join(","));
         }
+        if let Some(loc_id) = &params.location_id {
+            body["location_id"] = serde_json::json!(loc_id);
+        }
 
         let url = format!("{THREADS_GRAPH_API}/v1.0/{}/threads", account.user_id);
         let resp = self.threads_post(&url, &body).await?;
@@ -522,10 +525,24 @@ impl ThreadsClient {
         &self,
         account: &crate::models::Account,
         caption: &str,
+        location_id: Option<&str>,
     ) -> Result<String> {
-        let container_id = self
-            .create_container(account, "TEXT", Some(caption), None, None)
-            .await?;
+        let params = ContainerParams {
+            media_type: "TEXT".to_string(),
+            text: Some(caption.to_string()),
+            image_url: None,
+            video_url: None,
+            topic_tag: None,
+            link_attachment: None,
+            gif_attachment: None,
+            reply_to_id: None,
+            reply_control: None,
+            is_carousel_item: None,
+            enable_reply_approvals: None,
+            children: None,
+            location_id: location_id.map(|s| s.to_string()),
+        };
+        let container_id = self.create_container_full(account, &params).await?;
         let post_id = self.publish_container(account, &container_id).await?;
         Ok(post_id)
     }
@@ -537,10 +554,29 @@ impl ThreadsClient {
         caption: Option<&str>,
         image_url: &str,
         _alt_text: Option<&str>,
+        location_id: Option<&str>,
     ) -> Result<String> {
-        let container_id = self
-            .create_container(account, "IMAGE", caption, Some(image_url), None)
-            .await?;
+        let container_id = if let Some(loc) = location_id {
+            let params = ContainerParams {
+                media_type: "IMAGE".to_string(),
+                text: caption.map(|c| c.to_string()),
+                image_url: Some(image_url.to_string()),
+                video_url: None,
+                topic_tag: None,
+                link_attachment: None,
+                gif_attachment: None,
+                reply_to_id: None,
+                reply_control: None,
+                is_carousel_item: None,
+                enable_reply_approvals: None,
+                children: None,
+                location_id: Some(loc.to_string()),
+            };
+            self.create_container_full(account, &params).await?
+        } else {
+            self.create_container(account, "IMAGE", caption, Some(image_url), None)
+                .await?
+        };
         let post_id = self.publish_container(account, &container_id).await?;
         Ok(post_id)
     }
@@ -555,10 +591,29 @@ impl ThreadsClient {
         account: &crate::models::Account,
         caption: Option<&str>,
         video_url: &str,
+        location_id: Option<&str>,
     ) -> Result<String> {
-        let container_id = self
-            .create_container(account, "VIDEO", caption, None, Some(video_url))
-            .await?;
+        let container_id = if let Some(loc) = location_id {
+            let params = ContainerParams {
+                media_type: "VIDEO".to_string(),
+                text: caption.map(|c| c.to_string()),
+                image_url: None,
+                video_url: Some(video_url.to_string()),
+                topic_tag: None,
+                link_attachment: None,
+                gif_attachment: None,
+                reply_to_id: None,
+                reply_control: None,
+                is_carousel_item: None,
+                enable_reply_approvals: None,
+                children: None,
+                location_id: Some(loc.to_string()),
+            };
+            self.create_container_full(account, &params).await?
+        } else {
+            self.create_container(account, "VIDEO", caption, None, Some(video_url))
+                .await?
+        };
 
         // Poll until container is ready (video processing)
         // Max ~90 attempts × 3s = ~4.5 min before giving up
@@ -625,6 +680,7 @@ impl ThreadsClient {
             is_carousel_item: None,
             enable_reply_approvals: None,
             children: Some(children_ids.to_vec()),
+            location_id: None,
         };
 
         let carousel_container_id = self.create_container_full(account, &params).await?;
@@ -660,6 +716,7 @@ impl ThreadsClient {
             is_carousel_item: Some(true),
             enable_reply_approvals: None,
             children: None,
+            location_id: None,
         };
 
         self.create_container_full(account, &params).await
@@ -858,6 +915,7 @@ impl ThreadsClient {
             is_carousel_item: None,
             enable_reply_approvals: None,
             children: None,
+            location_id: None,
         };
 
         let container_id = self.create_container_full(account, &params).await?;
@@ -1019,6 +1077,52 @@ impl ThreadsClient {
         Ok(results)
     }
 
+    // ─── Location Search ───────────────────────────────────────
+
+    /// Search for public locations on Threads by keyword query.
+    ///
+    /// Requires `threads_location_tagging` permission scope.
+    /// Returns up to `limit` location results (default 10).
+    pub async fn search_locations(
+        &self,
+        account: &crate::models::Account,
+        query: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<LocationResult>> {
+        let lim = limit.unwrap_or(10);
+        let encoded_query: String = query
+            .chars()
+            .map(|c| match c {
+                ' ' => "%20".to_string(),
+                '&' => "%26".to_string(),
+                '?' => "%3F".to_string(),
+                '=' => "%3D".to_string(),
+                '#' => "%23".to_string(),
+                c if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' => {
+                    c.to_string()
+                }
+                c => format!("%{:02X}", c as u8),
+            })
+            .collect();
+        let url = format!(
+            "{THREADS_GRAPH_API}/v1.0/location_search?q={encoded_query}&limit={lim}&access_token={}",
+            account.access_token
+        );
+
+        let resp = self.threads_get(&url).await?;
+
+        let locations = resp
+            .get("data")
+            .and_then(|d| d.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| serde_json::from_value::<LocationResult>(item).ok())
+            .collect();
+
+        Ok(locations)
+    }
+
     // ─── Token Health Check ────────────────────────────────────
 
     /// Check token expiry for all accounts and refresh if needed.
@@ -1170,6 +1274,8 @@ pub struct ContainerParams {
     pub enable_reply_approvals: Option<bool>,
     /// Optional. Comma-separated child container IDs (for CAROUSEL type).
     pub children: Option<Vec<String>>,
+    /// Optional. Location ID for location tagging (requires `threads_location_tagging` scope).
+    pub location_id: Option<String>,
 }
 
 // ─── Search Parameters ──────────────────────────────────────
@@ -1190,4 +1296,23 @@ pub struct SearchParams {
     pub media_type: Option<String>,
     /// Max results per page (default 25, max 100).
     pub limit: Option<u32>,
+}
+
+// ─── Location Results ───────────────────────────────────────
+
+/// A location result from the Threads location search API.
+///
+/// Returned by [`ThreadsClient::search_locations`].
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LocationResult {
+    /// Unique location identifier (use as `location_id` in ContainerParams).
+    pub id: String,
+    /// Human-readable location name.
+    pub name: String,
+    /// Optional latitude coordinate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latitude: Option<f64>,
+    /// Optional longitude coordinate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub longitude: Option<f64>,
 }

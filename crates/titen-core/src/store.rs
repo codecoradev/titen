@@ -211,6 +211,19 @@ impl Store {
             }
         }
 
+        // 010 — add location_id column to schedules (location tagging support)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/010_location_tagging.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -616,8 +629,8 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -627,6 +640,7 @@ impl Store {
         .bind(&media_urls)
         .bind(&input.scheduled_at)
         .bind(status)
+        .bind(&input.location_id)
         .execute(&self.pool)
         .await?;
 
@@ -793,6 +807,7 @@ impl Store {
         media_type: Option<&str>,
         media_urls: Option<Vec<String>>,
         scheduled_at: Option<&str>,
+        location_id: Option<&str>,
     ) -> Result<Schedule> {
         // Serialize media_urls if provided
         let media_urls_str = media_urls
@@ -810,6 +825,7 @@ impl Store {
                  media_type = COALESCE(?, media_type),
                  media_urls = COALESCE(?, media_urls),
                  scheduled_at = COALESCE(?, scheduled_at),
+                 location_id = COALESCE(?, location_id),
                  updated_at = datetime('now')
              WHERE id = ? AND status = 'draft'",
         )
@@ -817,6 +833,7 @@ impl Store {
         .bind(media_type)
         .bind(media_urls_str)
         .bind(scheduled_at)
+        .bind(location_id)
         .bind(id)
         .execute(&self.pool)
         .await?;

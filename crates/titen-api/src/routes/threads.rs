@@ -204,6 +204,13 @@ pub struct SearchKeywordInput {
 }
 
 #[derive(Deserialize)]
+pub struct SearchLocationsInput {
+    pub account_id: String,
+    pub query: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
 pub struct FetchMentionsInput {
     pub account_id: String,
     pub limit: Option<u32>,
@@ -328,6 +335,32 @@ pub async fn search_keyword(
     {
         Ok(results) => Json(serde_json::json!({ "data": results, "count": results.len() })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "SEARCH_FAILED" })),
+    }
+}
+
+/// Search for Threads locations by keyword
+pub async fn search_locations(
+    State(state): State<AppState>,
+    Json(input): Json<SearchLocationsInput>,
+) -> Json<serde_json::Value> {
+    let account = match state.store.get_account(&input.account_id).await {
+        Ok(a) => a,
+        Err(e) => {
+            return Json(
+                serde_json::json!({ "error": e.to_string(), "code": "ACCOUNT_NOT_FOUND" }),
+            );
+        }
+    };
+
+    match state
+        .threads_client
+        .search_locations(&account, &input.query, input.limit)
+        .await
+    {
+        Ok(results) => Json(serde_json::json!({ "data": results, "count": results.len() })),
+        Err(e) => {
+            Json(serde_json::json!({ "error": e.to_string(), "code": "LOCATION_SEARCH_FAILED" }))
+        }
     }
 }
 

@@ -174,6 +174,7 @@ pub async fn patch_schedule(
             input.media_type.as_deref(),
             input.media_urls,
             input.scheduled_at.as_deref(),
+            input.location_id.as_deref(),
         )
         .await
     {
@@ -241,6 +242,7 @@ pub async fn update_schedule(
             input.media_type.as_deref(),
             input.media_urls.clone(),
             Some(&input.scheduled_at),
+            input.location_id.as_deref(),
         )
         .await
     {

@@ -118,6 +118,8 @@ pub struct Schedule {
     pub error: Option<String>,
     pub approved_by: Option<String>,
     pub approved_at: Option<String>,
+    /// Optional Threads location ID for location tagging.
+    pub location_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -130,6 +132,8 @@ pub struct CreateSchedule {
     pub text_attachment: Option<String>,
     pub media_urls: Option<Vec<String>>,
     pub scheduled_at: String,
+    /// Optional Threads location ID for location tagging.
+    pub location_id: Option<String>,
     /// Skip draft state and go straight to 'pending' (auto-approve).
     /// Default: false — all new schedules require human approval.
     #[serde(default)]
@@ -144,6 +148,7 @@ pub struct UpdateSchedule {
     pub media_type: Option<String>,
     pub media_urls: Option<Vec<String>>,
     pub scheduled_at: Option<String>,
+    pub location_id: Option<String>,
 }
 
 // ─── Comment ──────────────────────────────────────────────

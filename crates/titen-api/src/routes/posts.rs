@@ -177,7 +177,12 @@ pub async fn create_post(
     // Publish via Threads API
     let caption = effective_input.caption.as_deref().unwrap_or("");
     let threads_post_id = match effective_input.media_type.as_deref().unwrap_or("TEXT") {
-        "TEXT" => state.threads_client.publish_text(&account, caption).await,
+        "TEXT" => {
+            state
+                .threads_client
+                .publish_text(&account, caption, None)
+                .await
+        }
         "IMAGE" => {
             let url = effective_input.image_url.as_deref().unwrap_or("");
             if url.is_empty() {
@@ -192,6 +197,7 @@ pub async fn create_post(
                         Some(caption),
                         url,
                         effective_input.alt_text.as_deref(),
+                        None,
                     )
                     .await
             }
@@ -205,7 +211,7 @@ pub async fn create_post(
             } else {
                 state
                     .threads_client
-                    .publish_video(&account, Some(caption), url)
+                    .publish_video(&account, Some(caption), url, None)
                     .await
             }
         }
