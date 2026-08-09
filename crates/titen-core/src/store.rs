@@ -459,10 +459,35 @@ impl Store {
     pub async fn create_post(&self, id: &str, input: &CreatePost) -> Result<Post> {
         let media_type = input.media_type.as_deref().unwrap_or("TEXT");
         sqlx::query(
-            "INSERT INTO posts (id, account_id, media_type, caption, text_attachment, status)
-             VALUES (?, ?, ?, ?, ?, 'published')",
+            "INSERT INTO posts (id, account_id, media_type, caption, text_attachment, status, published_at)
+             VALUES (?, ?, ?, ?, ?, 'published', datetime('now'))",
         )
         .bind(id)
+        .bind(&input.account_id)
+        .bind(media_type)
+        .bind(&input.caption)
+        .bind(&input.text_attachment)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_post(id).await
+    }
+
+    /// Create a post record with threads_post_id — used by scheduler and
+    /// immediate publish paths where the Threads post ID is known.
+    pub async fn create_post_with_threads_id(
+        &self,
+        id: &str,
+        input: &CreatePost,
+        threads_post_id: &str,
+    ) -> Result<Post> {
+        let media_type = input.media_type.as_deref().unwrap_or("TEXT");
+        sqlx::query(
+            "INSERT INTO posts (id, threads_post_id, account_id, media_type, caption, text_attachment, status, published_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'published', datetime('now'))",
+        )
+        .bind(id)
+        .bind(threads_post_id)
         .bind(&input.account_id)
         .bind(media_type)
         .bind(&input.caption)
@@ -538,8 +563,18 @@ impl Store {
     }
 
     pub async fn get_due_schedules(&self) -> Result<Vec<Schedule>> {
+        // #107 fix: Normalize scheduled_at (ISO 8601 with offset) to comparable UTC.
+        // datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, space separator).
+        // scheduled_at is stored as "YYYY-MM-DDTHH:MM:SS+07:00" (T separator + offset).
+        // SQLite lexicographic comparison fails: 'T' (84) > ' ' (32).
+        //
+        // Fix: use datetime(scheduled_at) to parse ISO 8601 → comparable format,
+        // then compare against datetime('now').
         sqlx::query_as::<_, Schedule>(
-            "SELECT * FROM schedules WHERE status = 'pending' AND scheduled_at <= datetime('now') ORDER BY scheduled_at ASC",
+            "SELECT * FROM schedules \
+             WHERE status = 'pending' \
+               AND datetime(scheduled_at) <= datetime('now') \
+             ORDER BY scheduled_at ASC",
         )
         .fetch_all(&self.pool)
         .await
@@ -600,15 +635,42 @@ impl Store {
         result_json: Option<&str>,
         error: Option<&str>,
     ) -> Result<()> {
-        sqlx::query(
-            "UPDATE schedules SET status = ?, result_json = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
-        )
-        .bind(status)
-        .bind(result_json)
-        .bind(error)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        // #112 fix: When status = 'published', also set published_at and
+        // extract result_post_id from result_json for audit trail.
+        if status == "published" {
+            // Extract threads_post_id from result_json if present
+            let result_post_id: Option<String> = result_json
+                .and_then(|j| serde_json::from_str::<serde_json::Value>(j).ok())
+                .and_then(|v| {
+                    v.get("threads_post_id")
+                        .and_then(|t| t.as_str())
+                        .map(String::from)
+                });
+
+            sqlx::query(
+                "UPDATE schedules \
+                 SET status = ?, result_json = ?, error = ?, published_at = datetime('now'), \
+                     result_post_id = COALESCE(?, result_post_id), updated_at = datetime('now') \
+                 WHERE id = ?",
+            )
+            .bind(status)
+            .bind(result_json)
+            .bind(error)
+            .bind(result_post_id)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        } else {
+            sqlx::query(
+                "UPDATE schedules SET status = ?, result_json = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
+            )
+            .bind(status)
+            .bind(result_json)
+            .bind(error)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        }
         Ok(())
     }
 
@@ -736,7 +798,7 @@ impl Store {
                  media_urls = COALESCE(?, media_urls),
                  scheduled_at = COALESCE(?, scheduled_at),
                  updated_at = datetime('now')
-             WHERE id = ? AND status IN ('draft', 'pending')",
+             WHERE id = ? AND status = 'draft'",
         )
         .bind(caption_sanitized.as_deref())
         .bind(media_type)
