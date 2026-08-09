@@ -8,6 +8,7 @@ use axum::{
     routing::{delete, get, patch, post, put},
 };
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -297,6 +298,16 @@ pub async fn serve(
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/session", get(routes::auth::session))
         .route("/api/auth/logout", post(routes::auth::logout))
+        // Static media files — served from local filesystem when S3 is not
+        // configured. Path from TITEN_LOCAL_STORAGE_DIR (default: /data/media).
+        // ServeDir gracefully returns 404 if the directory doesn't exist yet.
+        .nest_service(
+            "/media",
+            ServeDir::new(
+                std::env::var("TITEN_LOCAL_STORAGE_DIR")
+                    .unwrap_or_else(|_| "/data/media".to_string()),
+            ),
+        )
         // Swagger UI — public (no API key required to view docs)
         .merge(Into::<Router<AppState>>::into(openapi::swagger_ui()))
         .merge(protected_routes)
