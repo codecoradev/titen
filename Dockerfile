@@ -47,7 +47,8 @@ RUN apk add --no-cache \
         perl \
         clang \
         llvm-dev \
-        libgcc
+        libgcc \
+        curl
 
 ENV CC=clang CXX=clang++
 
