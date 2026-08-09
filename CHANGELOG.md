@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-09
+
+### Added
+- **Interactive API docs (Swagger UI)**: all endpoints are now self-documenting at `/api/docs` with a full OpenAPI 3.0 spec at `/api/docs/openapi.json`. Powered by `utoipa` + `utoipa-swagger-ui`. [#85]
+  - 21 paths, 34 schema definitions, 7 tags (health, accounts, posts, schedules, comments, analytics, media)
+  - API key security scheme documented — click "Authorize" in Swagger UI to test authenticated endpoints
+
+### Fixed
+- **Migration 008 registration**: `comment_reply_status.sql` was created in #99 but never registered in `store.migrate()`, causing `no such column: reply_status` errors on fresh databases. [#100]
+
 ## [0.5.2] - 2026-08-08
 
 ### Added
