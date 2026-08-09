@@ -8,26 +8,59 @@ use tracing::{error, warn};
 use crate::server::{AppState, error_response};
 use titen_core::models::{AppSettingsResponse, UpdateAppSettings};
 
-/// Derive the OAuth redirect URI from the request Host header, falling back
-/// to the TITEN_OAUTH_REDIRECT_URI env var if present.
-/// This avoids hardcoding production URLs into source.
+/// Derive the OAuth redirect URI from a trusted source.
+///
+/// Priority:
+/// 1. `TITEN_OAUTH_REDIRECT_URI` env var (explicit, safest)
+/// 2. Host header — ONLY if it matches an entry in `TITEN_ALLOWED_HOSTS`
+///    allowlist (comma-separated, e.g. "titen.ajianaz.dev,localhost:7845")
+///
+/// We never blindly trust the Host header because it can be spoofed by
+/// clients, leading to OAuth redirect-code interception.
 fn derive_redirect_uri(headers: &HeaderMap) -> String {
+    // 1. Explicit env var — always wins
     if let Ok(env_uri) = std::env::var("TITEN_OAUTH_REDIRECT_URI") {
         if !env_uri.is_empty() {
             return env_uri;
         }
     }
-    // Derive from Host header
-    let scheme = if let Some(h) = headers.get("x-forwarded-proto") {
-        h.to_str().unwrap_or("https")
-    } else {
-        "https"
-    };
+
+    // 2. Host header — only if allowlisted
+    let allowed = std::env::var("TITEN_ALLOWED_HOSTS").unwrap_or_default();
+    let allowed_hosts: Vec<&str> = allowed
+        .split(',')
+        .map(|h| h.trim())
+        .filter(|h| !h.is_empty())
+        .collect();
+
+    if allowed_hosts.is_empty() {
+        // No allowlist configured — refuse to derive from Host header
+        warn!(
+            "TITEN_OAUTH_REDIRECT_URI not set and TITEN_ALLOWED_HOSTS is empty; \
+             OAuth redirect URI will be empty. Configure one of these env vars."
+        );
+        return String::new();
+    }
+
     let host = headers
         .get(axum::http::header::HOST)
         .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost");
-    format!("{scheme}://{host}/auth/callback")
+        .unwrap_or("");
+
+    if allowed_hosts.contains(&host) {
+        let scheme = if let Some(h) = headers.get("x-forwarded-proto") {
+            h.to_str().unwrap_or("https")
+        } else {
+            "https"
+        };
+        format!("{scheme}://{host}/auth/callback")
+    } else {
+        warn!(
+            "Host '{host}' not in TITEN_ALLOWED_HOSTS allowlist; \
+             refusing to derive redirect URI"
+        );
+        String::new()
+    }
 }
 
 /// GET /api/settings — return app settings.
