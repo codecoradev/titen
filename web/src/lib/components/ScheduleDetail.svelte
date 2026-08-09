@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { formatDateTime } from '$lib/tz';
 	import { approveSchedule, rejectSchedule, deleteSchedule } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
@@ -16,6 +17,7 @@
 	let showRejectInput = $state(false);
 	let rejectReason = $state('');
 	let acting = $state(false);
+	let showDeleteConfirm = $state(false);
 
 	// Parse media URLs
 	let mediaUrls: string[] = $derived(
@@ -81,7 +83,6 @@
 	}
 
 	async function handleDelete() {
-		if (!confirm('Delete this schedule? This cannot be undone.')) return;
 		acting = true;
 		try {
 			await deleteSchedule(schedule.id);
@@ -92,6 +93,7 @@
 			toast(e.message || 'Failed to delete', 'error');
 		} finally {
 			acting = false;
+			showDeleteConfirm = false;
 		}
 	}
 
@@ -157,7 +159,7 @@
 					<div class="media-grid">
 						{#each mediaUrls as url}
 							<div class="media-thumb">
-								<img src={url} alt="Media preview" loading="lazy" />
+								<img src={url} alt="Media preview" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
 							</div>
 						{/each}
 					</div>
@@ -224,7 +226,7 @@
 				</button>
 			{/if}
 			{#if ['draft', 'rejected', 'failed'].includes(schedule.status)}
-				<button class="btn btn-ghost" onclick={handleDelete} disabled={acting}>
+				<button class="btn btn-ghost" onclick={() => (showDeleteConfirm = true)} disabled={acting}>
 					Delete
 				</button>
 			{/if}
@@ -233,15 +235,25 @@
 	</div>
 </div>
 
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Delete Schedule"
+	message="Are you sure you want to delete this schedule? This action cannot be undone."
+	confirmLabel="Delete"
+	variant="danger"
+	onconfirm={handleDelete}
+	oncancel={() => (showDeleteConfirm = false)}
+/>
+
 <style>
 	.modal-overlay {
 		position: fixed;
 		inset: 0;
-		background: var(--overlay-scrim);
+		background: var(--overlay-scrim, oklch(0% 0 0 / 0.5));
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 50;
+		z-index: var(--z-modal);
 		padding: var(--space-md);
 	}
 
@@ -475,42 +487,6 @@
 		border-top: 1px solid var(--color-rule);
 		justify-content: flex-end;
 		flex-wrap: wrap;
-	}
-
-	.btn {
-		padding: var(--space-xs) var(--space-md);
-		border-radius: var(--radius-sm);
-		font-size: var(--text-sm);
-		font-weight: 600;
-		cursor: pointer;
-		border: 1px solid transparent;
-		transition: opacity 0.15s ease;
-	}
-
-	.btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.btn-success {
-		background: var(--color-success);
-		color: white;
-	}
-
-	.btn-danger {
-		background: var(--color-error);
-		color: white;
-	}
-
-	.btn-secondary {
-		background: var(--color-paper-3);
-		color: var(--color-ink);
-		border-color: var(--color-rule);
-	}
-
-	.btn-ghost {
-		background: transparent;
-		color: var(--color-error);
 	}
 
 	.mono {

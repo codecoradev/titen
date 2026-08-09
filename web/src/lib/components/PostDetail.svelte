@@ -139,7 +139,7 @@
 					<div class="media-grid">
 						{#each mediaUrls as url}
 							<div class="media-thumb">
-								<img src={url} alt="Media" loading="lazy" />
+								<img src={url} alt="Media" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
 							</div>
 						{/each}
 					</div>
@@ -227,17 +227,17 @@
 	.modal-overlay {
 		position: fixed;
 		inset: 0;
-		background: var(--overlay-scrim);
+		background: var(--overlay-scrim, oklch(0% 0 0 / 0.5));
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 50;
+		z-index: var(--z-modal);
 		padding: var(--space-md);
 	}
 
 	.modal-content {
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--color-paper);
+		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-lg);
 		max-width: 42rem;
 		width: 100%;
@@ -251,7 +251,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space-md);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-rule);
 	}
 
 	.modal-title {
@@ -271,7 +271,7 @@
 	}
 
 	.close-btn:hover {
-		color: var(--color-text);
+		color: var(--color-ink);
 	}
 
 	.modal-body {
@@ -304,7 +304,7 @@
 
 	.badge-muted {
 		padding: var(--space-3xs) var(--space-xs);
-		background: var(--color-bg-hover);
+		background: var(--color-paper-2);
 		border-radius: var(--radius-sm);
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -346,7 +346,7 @@
 		aspect-ratio: 1;
 		border-radius: var(--radius-sm);
 		overflow: hidden;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-rule);
 	}
 
 	.media-thumb img {
@@ -365,7 +365,7 @@
 	.metric-card {
 		text-align: center;
 		padding: var(--space-xs);
-		background: var(--color-bg-hover);
+		background: var(--color-paper-2);
 		border-radius: var(--radius-sm);
 	}
 
@@ -390,7 +390,7 @@
 	/* Trend table */
 	.trend-table-wrap {
 		overflow-x: auto;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-sm);
 	}
 
@@ -429,7 +429,7 @@
 
 	/* Skeleton */
 	.skeleton {
-		background: var(--color-bg-hover);
+		background: var(--color-paper-2);
 		border-radius: var(--radius-2xs);
 		animation: pulse 1.5s ease-in-out infinite;
 	}
@@ -444,23 +444,8 @@
 		display: flex;
 		gap: var(--space-xs);
 		padding: var(--space-md);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-rule);
 		justify-content: flex-end;
-	}
-
-	.btn {
-		padding: var(--space-xs) var(--space-md);
-		border-radius: var(--radius-sm);
-		font-size: var(--text-sm);
-		font-weight: 600;
-		cursor: pointer;
-		border: 1px solid transparent;
-	}
-
-	.btn-secondary {
-		background: var(--color-bg-hover);
-		color: var(--color-text);
-		border-color: var(--color-border);
 	}
 
 	@media (max-width: 30rem) {

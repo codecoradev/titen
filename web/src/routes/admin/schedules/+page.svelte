@@ -444,12 +444,12 @@
 <!-- Create Schedule Modal -->
 {#if modalOpen}
 	<div class="confirm-overlay" onclick={closeCreateModal} role="dialog" aria-modal="true" aria-label="New Schedule">
-		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
+		<div class="confirm-dialog modal-narrow" onclick={(e) => e.stopPropagation()}>
 			<h3>New Schedule</h3>
-			<p style="color: var(--color-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
+			<p class="modal-desc">
 				New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
 			</p>
-			<div style="display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md);">
+			<div class="modal-stack">
 				<div class="form-group">
 					<label class="form-label" for="modal-account">Account <span class="required">*</span></label>
 					<select class="form-input" id="modal-account" bind:value={modalAccountId}>
@@ -561,12 +561,12 @@
 <!-- Edit Schedule Modal (HITL) -->
 {#if editTarget}
 	<div class="confirm-overlay" onclick={closeEditModal} role="dialog" aria-modal="true" aria-label="Edit Schedule">
-		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
+		<div class="confirm-dialog modal-narrow" onclick={(e) => e.stopPropagation()}>
 			<h3>Edit Schedule</h3>
-			<p style="color: var(--color-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
+			<p class="modal-desc">
 				Status: <StatusBadge status={editTarget.status} />
 			</p>
-			<div style="display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md);">
+			<div class="modal-stack">
 				<div class="form-group">
 					<label class="form-label" for="edit-scheduled">Scheduled At</label>
 					<input
@@ -613,7 +613,7 @@
 <!-- Reject Modal -->
 {#if rejectTarget}
 	<div class="confirm-overlay" onclick={closeRejectModal} role="dialog" aria-modal="true" aria-label="Reject Schedule">
-		<div class="confirm-dialog" style="max-width: 28rem;" onclick={(e) => e.stopPropagation()}>
+		<div class="confirm-dialog modal-narrow" style="max-width: 28rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>Reject Schedule</h3>
 			<div style="margin-bottom: var(--space-md);">
 				<div class="form-group">
@@ -695,47 +695,33 @@
 		background: var(--color-warning-bg-subtle, rgba(254, 243, 199, 0.3));
 	}
 
+	/* Modal utility classes */
+	.modal-narrow {
+		max-width: 36rem;
+	}
+
+	.modal-desc {
+		color: var(--color-muted);
+		font-size: 0.85rem;
+		margin-bottom: var(--space-md);
+	}
+
+	.modal-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+
 	.col-actions {
 		display: flex;
 		gap: 0.25rem;
 		flex-wrap: wrap;
 	}
 
-	.btn-success {
-		background: var(--color-success, #059669);
-		color: white;
-		border: none;
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.375rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: opacity 0.15s;
-	}
-
-	.btn-success:hover {
-		opacity: 0.9;
-	}
-
 	.btn-success:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-
-	.btn-danger {
-		background: transparent;
-		color: var(--color-danger, #dc2626);
-		border: 1px solid var(--color-danger-border, #fecaca);
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.375rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.15s;
-	}
-
-	.btn-danger:hover {
-		background: var(--color-danger-bg, #fef2f2);
 	}
 
 	/* TZ badge */
@@ -771,12 +757,6 @@
 	.form-row {
 		display: flex;
 		gap: var(--space-md, 1rem);
-	}
-	.form-hint {
-		display: block;
-		font-size: 0.75rem;
-		color: var(--color-muted);
-		margin-top: 0.25rem;
 	}
 	.char-count {
 		margin-left: auto;

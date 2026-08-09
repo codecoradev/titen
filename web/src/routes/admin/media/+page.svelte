@@ -130,6 +130,7 @@
 									src={item.s3_url || ''}
 									alt={item.filename}
 									class="media-thumb"
+									onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }}
 								/>
 							</td>
 							<td class="media-filename-cell" title={item.filename}>{item.filename}</td>
