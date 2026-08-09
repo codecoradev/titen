@@ -532,6 +532,17 @@ fn handle_tool_call(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let caption = args.get("caption").and_then(|v| v.as_str()).unwrap_or("");
+
+            // #136: Validate caption length against Threads API limit.
+            if caption.chars().count() > 500 {
+                return Ok(json!({
+                    "error": format!(
+                        "Caption exceeds Threads API limit of 500 characters (got {})",
+                        caption.chars().count()
+                    ),
+                    "code": "CAPTION_TOO_LONG"
+                }));
+            }
             let media_type = args
                 .get("media_type")
                 .and_then(|v| v.as_str())
@@ -573,6 +584,17 @@ fn handle_tool_call(
                 .get("scheduled_at")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
+
+            // #136: Validate caption length against Threads API limit.
+            if caption.chars().count() > 500 {
+                return Ok(json!({
+                    "error": format!(
+                        "Caption exceeds Threads API limit of 500 characters (got {})",
+                        caption.chars().count()
+                    ),
+                    "code": "CAPTION_TOO_LONG"
+                }));
+            }
             let media_type = args
                 .get("media_type")
                 .and_then(|v| v.as_str())

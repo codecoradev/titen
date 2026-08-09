@@ -116,6 +116,19 @@ pub async fn create_schedule(
     State(state): State<AppState>,
     Json(input): Json<CreateSchedule>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // #136: Validate caption length against Threads API limit (500 chars).
+    // Check both caption and text_attachment since they are merged downstream.
+    if let Some(ref c) = input.caption {
+        if c.chars().count() > 500 {
+            return caption_too_long(c);
+        }
+    }
+    if let Some(ref t) = input.text_attachment {
+        if t.chars().count() > 500 {
+            return caption_too_long(t);
+        }
+    }
+
     let id = Uuid::now_v7().to_string();
     match state.store.create_schedule(&id, &input).await {
         Ok(schedule) => (
@@ -147,6 +160,12 @@ pub async fn patch_schedule(
     Path(id): Path<String>,
     Json(input): Json<UpdateSchedule>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // #136: Validate caption length.
+    if let Some(ref c) = input.caption {
+        if c.chars().count() > 500 {
+            return caption_too_long(c);
+        }
+    }
     match state
         .store
         .update_schedule_fields(
@@ -206,6 +225,13 @@ pub async fn update_schedule(
     // Merge text_attachment → caption: CreateSchedule has both fields, but the
     // store layer only knows about caption. Use text_attachment as fallback.
     let effective_caption = input.caption.or(input.text_attachment);
+
+    // #136: Validate caption length.
+    if let Some(ref c) = effective_caption {
+        if c.chars().count() > 500 {
+            return caption_too_long(c);
+        }
+    }
 
     match state
         .store
@@ -343,4 +369,19 @@ pub async fn reject_schedule(
             )
         }
     }
+}
+
+/// #136: Return 400 for captions exceeding Threads API 500-character limit.
+/// Uses char count (not byte count) to match Threads API semantics.
+fn caption_too_long(caption: &str) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({
+            "error": format!(
+                "Caption exceeds Threads API limit of 500 characters (got {})",
+                caption.chars().count()
+            ),
+            "code": "CAPTION_TOO_LONG"
+        })),
+    )
 }
