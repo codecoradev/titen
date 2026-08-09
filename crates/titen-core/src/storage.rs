@@ -249,20 +249,33 @@ impl S3Storage {
         } else {
             // URI-encode path components per SigV4 spec (encode each segment,
             // preserve '/' as path separator). Handle multi-byte UTF-8 safely.
-            uri.split('/')
-                .map(|seg| {
-                    seg.as_bytes()
-                        .iter()
-                        .map(|&b| match b {
-                            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                                char::from(b).to_string()
-                            }
-                            _ => format!("%{:02X}", b),
-                        })
-                        .collect::<String>()
-                })
-                .collect::<Vec<_>>()
-                .join("/")
+            // Prepend "/" — SigV4 canonical URI must be an absolute path.
+            // Strip any leading slashes from `uri` to avoid a double slash
+            // (the URL parser at line 242 strips the first "/" via split_once,
+            // but be defensive in case the input format changes).
+            let stripped = uri.trim_start_matches('/');
+            format!(
+                "/{}",
+                stripped
+                    .split('/')
+                    .map(|seg| {
+                        seg.as_bytes()
+                            .iter()
+                            .map(|&b| match b {
+                                b'A'..=b'Z'
+                                | b'a'..=b'z'
+                                | b'0'..=b'9'
+                                | b'-'
+                                | b'_'
+                                | b'.'
+                                | b'~' => char::from(b).to_string(),
+                                _ => format!("%{:02X}", b),
+                            })
+                            .collect::<String>()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("/")
+            )
         };
 
         // Build headers list (will be signed)
