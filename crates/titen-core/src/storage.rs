@@ -393,6 +393,184 @@ impl Storage for S3Storage {
     }
 }
 
+/// Local filesystem storage backend.
+///
+/// Used as a zero-config fallback when S3/MinIO is not configured.
+/// Files are stored under `base_dir` (default: `/data/media/`) and
+/// served via a static-file route (`/media/`) on the API server.
+///
+/// **Persistence:** The `base_dir` should be bind-mounted in Docker
+/// (see docker-compose.yml: `./data:/data`).
+pub struct LocalStorage {
+    /// Absolute path to the storage root, e.g. `/data/media`.
+    base_dir: std::path::PathBuf,
+    /// Public URL prefix for constructing URLs, e.g. `http://localhost:7845/media`.
+    public_url: String,
+}
+
+impl LocalStorage {
+    /// Create a new local storage from ENV variables.
+    ///
+    /// Env vars:
+    /// - `TITEN_LOCAL_STORAGE_DIR` — filesystem path (default: `/data/media`)
+    /// - `TITEN_LOCAL_PUBLIC_URL` — URL prefix for serving files
+    ///   (default: derived from `TITEN_PUBLIC_URL` or `http://localhost:{port}/media`)
+    pub fn from_env() -> Result<Self> {
+        let base_dir =
+            std::env::var("TITEN_LOCAL_STORAGE_DIR").unwrap_or_else(|_| "/data/media".to_string());
+        let public_url =
+            std::env::var("TITEN_LOCAL_PUBLIC_URL").unwrap_or_else(|_| "/media".to_string());
+
+        let base_dir = std::path::PathBuf::from(&base_dir);
+
+        // Create directory tree if it doesn't exist
+        std::fs::create_dir_all(&base_dir).map_err(|e| {
+            crate::error::TitenError::ConfigError(format!(
+                "Failed to create local storage dir {}: {e}",
+                base_dir.display()
+            ))
+        })?;
+
+        tracing::info!(
+            "LocalStorage initialized: dir={}, public_url={}",
+            base_dir.display(),
+            public_url
+        );
+
+        Ok(Self {
+            base_dir,
+            public_url,
+        })
+    }
+
+    /// Get the filesystem path for a key, with path traversal protection.
+    ///
+    /// Rejects keys containing `..` segments or absolute paths that would
+    /// escape the `base_dir`.
+    fn key_path(&self, key: &str) -> Result<std::path::PathBuf> {
+        use std::path::Component;
+
+        // Reject keys with parent-dir components — prevents traversal
+        let path = self.base_dir.join(key);
+        for comp in path.components() {
+            if matches!(comp, Component::ParentDir) {
+                return Err(crate::error::TitenError::StorageError(format!(
+                    "Path traversal detected in key: {key}"
+                )));
+            }
+        }
+
+        Ok(path)
+    }
+}
+
+#[async_trait]
+impl Storage for LocalStorage {
+    async fn upload(&self, key: &str, data: &[u8], _content_type: &str) -> Result<String> {
+        let path = self.key_path(key)?;
+
+        // Create parent directories (YYYY/MM/DD structure)
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                crate::error::TitenError::StorageError(format!(
+                    "Failed to create dirs {}: {e}",
+                    parent.display()
+                ))
+            })?;
+        }
+
+        tokio::fs::write(&path, data).await.map_err(|e| {
+            crate::error::TitenError::StorageError(format!(
+                "Failed to write file {}: {e}",
+                path.display()
+            ))
+        })?;
+
+        let url = format!("{}/{}", self.public_url.trim_end_matches('/'), key);
+        Ok(url)
+    }
+
+    async fn delete(&self, key: &str) -> Result<()> {
+        let path = self.key_path(key)?;
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Already gone — not an error
+                Ok(())
+            }
+            Err(e) => Err(crate::error::TitenError::StorageError(format!(
+                "Failed to delete {}: {e}",
+                path.display()
+            ))),
+        }
+    }
+
+    async fn get_url(&self, key: &str) -> Result<String> {
+        Ok(format!("{}/{}", self.public_url.trim_end_matches('/'), key))
+    }
+
+    async fn list(&self, prefix: &str) -> Result<Vec<StorageEntry>> {
+        let search_dir = if prefix.is_empty() {
+            self.base_dir.clone()
+        } else {
+            self.base_dir.join(prefix)
+        };
+
+        let mut entries = Vec::new();
+        if !search_dir.exists() {
+            return Ok(entries);
+        }
+
+        let mut rd = tokio::fs::read_dir(&search_dir).await.map_err(|e| {
+            crate::error::TitenError::StorageError(format!(
+                "Failed to read dir {}: {e}",
+                search_dir.display()
+            ))
+        })?;
+
+        while let Some(entry) = rd
+            .next_entry()
+            .await
+            .map_err(|e| crate::error::TitenError::StorageError(format!("Read dir entry: {e}")))?
+        {
+            let meta = entry.metadata().await.ok();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let key = if prefix.is_empty() {
+                name
+            } else {
+                format!("{prefix}/{name}")
+            };
+            entries.push(StorageEntry {
+                key,
+                size: meta.as_ref().map(|m| m.len() as i64),
+                last_modified: meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| {
+                    t.duration_since(std::time::UNIX_EPOCH)
+                        .ok()
+                        .map(|d| format!("{}", d.as_secs()))
+                }),
+            });
+        }
+
+        Ok(entries)
+    }
+}
+
+/// Detect which storage backend to use based on environment variables.
+///
+/// - If `TITEN_S3_ENDPOINT` is set → use S3Storage (MinIO/S3/R2/Backblaze).
+/// - Otherwise → use LocalStorage (filesystem, zero-config).
+///
+/// Returns a boxed trait object so callers don't need to know the backend.
+pub fn detect_backend() -> Result<Box<dyn Storage>> {
+    if std::env::var("TITEN_S3_ENDPOINT").is_ok() {
+        tracing::info!("Storage backend: S3 (MinIO/S3-compatible)");
+        Ok(Box::new(S3Storage::from_env()?))
+    } else {
+        tracing::info!("Storage backend: local filesystem");
+        Ok(Box::new(LocalStorage::from_env()?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

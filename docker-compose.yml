@@ -10,6 +10,7 @@
 #   docker compose pull && docker compose up -d
 #
 # SQLite database persists to a bind-mounted volume (./data/).
+# Local media files also persist under ./data/media/ when S3 is not configured.
 #
 # Usage:
 #   cp .env.example .env        # fill in TITEN_API_KEY + OAuth creds
@@ -86,6 +87,10 @@ services:
       - TITEN_S3_SECRET_KEY=${TITEN_S3_SECRET_KEY:-}
       - TITEN_S3_REGION=${TITEN_S3_REGION:-}
       - TITEN_S3_PUBLIC_URL=${TITEN_S3_PUBLIC_URL:-}
+      # Local storage fallback (used when TITEN_S3_ENDPOINT is not set).
+      # Files persist via the ./data:/data bind mount.
+      - TITEN_LOCAL_STORAGE_DIR=${TITEN_LOCAL_STORAGE_DIR:-/data/media}
+      - TITEN_LOCAL_PUBLIC_URL=${TITEN_LOCAL_PUBLIC_URL:-/media}
     networks:
       - default
 
