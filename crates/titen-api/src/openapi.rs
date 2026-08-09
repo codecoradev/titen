@@ -15,7 +15,7 @@ use titen_core::models::{
 #[openapi(
     info(
         title = "Titen API",
-        version = "0.5.2",
+        version = "0.5.3",
         description = "Self-hosted Threads management platform — schedule posts, manage comments, track analytics.\n\nAuthentication: all `/api/*` routes (except `/api/auth/*`) require an `X-API-Key` header.",
         license(name = "Apache-2.0", url = "https://www.apache.org/licenses/LICENSE-2.0"),
     ),
