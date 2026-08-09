@@ -672,6 +672,15 @@ h1, h2, h3, .display-text {
 	color: var(--color-error);
 }
 
+/* Alias: .form-hint maps to .form-helper for pages using the old name */
+.form-hint {
+	font-size: var(--form-helper-size);
+	color: var(--color-muted);
+	min-height: 1lh;
+	display: block;
+	margin-top: 0.25rem;
+}
+
 textarea.form-input {
 	height: auto;
 	min-height: 6rem;
@@ -705,6 +714,34 @@ textarea.form-input {
 .btn-ghost:hover {
 	background: var(--surface-sunken);
 	color: var(--color-ink);
+}
+
+.btn-success {
+	background: var(--color-success);
+	color: var(--color-success-ink);
+	border: none;
+	padding: var(--space-2xs) var(--space-sm);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: opacity var(--dur-short) var(--ease-out);
+}
+
+.btn-success:hover {
+	opacity: 0.9;
+}
+
+.btn-secondary {
+	background: var(--color-paper-2);
+	color: var(--color-ink);
+	border: 1px solid var(--color-rule);
+	padding: var(--space-2xs) var(--space-sm);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: background-color var(--dur-short) var(--ease-out);
+}
+
+.btn-secondary:hover {
+	background: var(--color-paper-3);
 }
 
 /* ── Empty state ── */
@@ -741,7 +778,9 @@ textarea.form-input {
 .confirm-overlay {
 	position: fixed;
 	inset: 0;
-	background: oklch(0% 0 0 / 0.4);
+	background: oklch(0% 0 0 / 0.5);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	z-index: var(--z-modal);
 	display: grid;
 	place-items: center;
