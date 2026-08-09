@@ -812,7 +812,7 @@ impl Store {
             // Re-fetch to determine cause: not found vs wrong status
             return match self.get_schedule(id).await {
                 Ok(current) => Err(TitenError::InvalidRequest(format!(
-                    "Schedule {} is in '{}' state, can only edit 'draft' or 'pending'",
+                    "Schedule {} is in '{}' state, can only edit 'draft'",
                     id, current.status
                 ))),
                 Err(e) if matches!(e, TitenError::ScheduleNotFound(_)) => Err(e),

@@ -194,32 +194,46 @@ pub async fn update_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<CreateSchedule>,
-) -> Json<serde_json::Value> {
+) -> (StatusCode, Json<serde_json::Value>) {
     // #113 fix: Replaced delete+recreate with direct update to prevent data loss.
     // The old implementation deleted the schedule (losing created_at, result_json,
     // published_at, etc.) and recreated it. Now we delegate to update_schedule_fields
     // which preserves existing data via COALESCE.
+    //
+    // #114 fix: update_schedule_fields WHERE clause restricts to status='draft',
+    // so pending/published schedules are correctly rejected.
+    //
+    // Merge text_attachment → caption: CreateSchedule has both fields, but the
+    // store layer only knows about caption. Use text_attachment as fallback.
+    let effective_caption = input.caption.or(input.text_attachment);
+
     match state
         .store
         .update_schedule_fields(
             &id,
-            input.caption.as_deref(),
+            effective_caption.as_deref(),
             input.media_type.as_deref(),
             input.media_urls.clone(),
             Some(&input.scheduled_at),
         )
         .await
     {
-        Ok(schedule) => Json(serde_json::json!({ "data": schedule })),
+        Ok(schedule) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "data": schedule })),
+        ),
         Err(e) => {
             let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
-                "NOT_FOUND"
+                StatusCode::NOT_FOUND
             } else if matches!(e, titen_core::TitenError::InvalidRequest(_)) {
-                "CONFLICT"
+                StatusCode::CONFLICT
             } else {
-                "UPDATE_FAILED"
+                StatusCode::INTERNAL_SERVER_ERROR
             };
-            Json(serde_json::json!({ "error": e.to_string(), "code": code }))
+            (
+                code,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "UPDATE_FAILED" })),
+            )
         }
     }
 }
