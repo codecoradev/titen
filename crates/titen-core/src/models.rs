@@ -543,6 +543,56 @@ pub struct CreateReply {
     pub reply_to_id: Option<String>,
 }
 
+// ─── AppSettings ──────────────────────────────────────────
+
+/// Server-side application settings stored in the database.
+/// Sensitive fields are encrypted at rest via AES-256-GCM.
+///
+/// The `threads_app_secret` field is never returned to the client in plaintext.
+/// Use [`AppSettingsResponse`] for API responses.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AppSettings {
+    pub instance_name: String,
+    pub auto_fetch_comments: bool,
+    pub comment_fetch_interval: String,
+    pub schedule_lookahead_hours: String,
+    pub threads_app_id: Option<String>,
+    /// Encrypted value as stored in DB (`enc:v1:...` or plaintext).
+    /// Not serialized to avoid accidental leakage.
+    #[serde(skip)]
+    pub threads_app_secret_enc: Option<String>,
+    pub updated_at: String,
+}
+
+/// Safe representation of settings for API responses.
+/// The app secret is masked to indicate presence without revealing the value.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AppSettingsResponse {
+    pub instance_name: String,
+    pub auto_fetch_comments: bool,
+    pub comment_fetch_interval: String,
+    pub schedule_lookahead_hours: String,
+    pub threads_app_id: Option<String>,
+    /// `true` if a secret is stored, `false` otherwise.
+    /// The actual secret is never sent to the client.
+    pub threads_app_secret_set: bool,
+}
+
+/// Input for updating settings. All fields optional for partial updates.
+/// `threads_app_secret` is only set when the user provides a new value.
+/// If `None`, the existing secret is preserved.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateAppSettings {
+    pub instance_name: Option<String>,
+    pub auto_fetch_comments: Option<bool>,
+    pub comment_fetch_interval: Option<String>,
+    pub schedule_lookahead_hours: Option<String>,
+    pub threads_app_id: Option<String>,
+    /// If `Some(value)`, update the secret. If `None`, keep existing.
+    /// Empty string `Some("")` clears the secret.
+    pub threads_app_secret: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

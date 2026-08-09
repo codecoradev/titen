@@ -34,27 +34,12 @@
 			return;
 		}
 
-		// Read OAuth config from localStorage (set in Settings)
-		let appId = '';
-		let appSecret = '';
-		try {
-			const s = JSON.parse(localStorage.getItem('titen-settings') || '{}');
-			appId = s.threadsAppId || '';
-			appSecret = s.threadsAppSecret || '';
-		} catch { /* ignore */ }
-		const redirectUri = localStorage.getItem('titen_oauth_redirect_uri') || `${window.location.origin}/auth/callback`;
-
-		if (!appId || !appSecret) {
-			status = 'error';
-			errorMessage = 'Threads App ID and Secret not configured. Go to Settings to set them up.';
-			return;
-		}
+		// Exchange code — backend reads app_id + app_secret from DB (encrypted)
+		const redirectUri = `${window.location.origin}/auth/callback`;
 
 		try {
 			await oauthExchange({
 				code,
-				app_id: appId,
-				app_secret: appSecret,
 				redirect_uri: redirectUri,
 			});
 			status = 'success';

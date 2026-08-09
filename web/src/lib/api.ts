@@ -322,9 +322,9 @@ export const getAccountInsights = (accountId: string, params?: {
 // ── OAuth ──
 export const oauthExchange = (data: {
 	code: string;
-	app_id: string;
-	app_secret: string;
 	redirect_uri: string;
+	app_id?: string;
+	app_secret?: string;
 }): Promise<Account> =>
 	request<Account>('/oauth/exchange', {
 		method: 'POST',
@@ -354,4 +354,43 @@ export async function logout(): Promise<void> {
 	} catch {
 		// ignore — cookie may already be expired
 	}
+}
+
+// ── Settings ──
+export interface AppSettings {
+	instance_name: string;
+	auto_fetch_comments: boolean;
+	comment_fetch_interval: string;
+	schedule_lookahead_hours: string;
+	threads_app_id: string | null;
+	threads_app_secret_set: boolean;
+}
+
+export interface OAuthConfig {
+	app_id: string | null;
+	redirect_uri: string;
+	authorize_url: string | null;
+	secret_configured: boolean;
+}
+
+export async function getSettings(): Promise<AppSettings> {
+	return await request<AppSettings>('/settings');
+}
+
+export async function updateSettings(data: Partial<{
+	instance_name: string;
+	auto_fetch_comments: boolean;
+	comment_fetch_interval: string;
+	schedule_lookahead_hours: string;
+	threads_app_id: string;
+	threads_app_secret: string;
+}>): Promise<AppSettings> {
+	return await request<AppSettings>('/settings', {
+		method: 'PUT',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function getOAuthConfig(): Promise<OAuthConfig> {
+	return await request<OAuthConfig>('/settings/oauth-config');
 }

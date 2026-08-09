@@ -6,4 +6,5 @@ pub mod media;
 pub mod oauth;
 pub mod posts;
 pub mod schedules;
+pub mod settings;
 pub mod threads;

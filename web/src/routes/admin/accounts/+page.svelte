@@ -2,7 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { listAccounts, createAccount, deleteAccount, refreshToken } from '$lib/api';
+	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig } from '$lib/api';
 	import { formatDate as formatDateTz } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Account } from '$lib/types';
@@ -112,37 +112,45 @@
 		}
 	}
 
-	function getThreadsConfig() {
+	async function handleConnectThreads() {
 		try {
-			const s = JSON.parse(localStorage.getItem('titen-settings') || '{}');
-			return { appId: s.threadsAppId || '', appSecret: s.threadsAppSecret || '' };
+			// Try server-side OAuth config first
+			const config = await getOAuthConfig();
+			if (config.app_id) {
+				if (!config.secret_configured) {
+					toast('Set App Secret in Settings first', 'error');
+					return;
+				}
+				// Server returns ready-to-use authorize URL
+				if (config.authorize_url) {
+					window.location.href = config.authorize_url;
+					return;
+				}
+			}
+			// Fallback: no server config
+			toast('Set Threads App ID and Secret in Settings first', 'error');
 		} catch {
-			return { appId: '', appSecret: '' };
+			toast('Failed to get OAuth config. Set credentials in Settings.', 'error');
 		}
 	}
 
-	function handleConnectThreads() {
-		const { appId, appSecret } = getThreadsConfig();
-		if (!appId || !appSecret) {
-			toast('Set App ID and Secret in Settings first', 'error');
-			return;
+	async function handleConnectThreads() {
+		try {
+			const config = await getOAuthConfig();
+			if (config.app_id) {
+				if (!config.secret_configured) {
+					toast('Set App Secret in Settings first', 'error');
+					return;
+				}
+				if (config.authorize_url) {
+					window.location.href = config.authorize_url;
+					return;
+				}
+			}
+			toast('Set Threads App ID and Secret in Settings first', 'error');
+		} catch {
+			toast('Failed to get OAuth config. Set credentials in Settings.', 'error');
 		}
-		const redirectUri = `${window.location.origin}/auth/callback`;
-		localStorage.setItem('titen_oauth_redirect_uri', redirectUri);
-		const scopes = [
-			'threads_basic',
-			'threads_content_publish',
-			'threads_manage_insights',
-			'threads_read_replies',
-			'threads_delete',
-			'threads_manage_replies',
-			'threads_profile_discovery',
-			'threads_keyword_search',
-			'threads_manage_mentions',
-			'threads_share_to_instagram'
-		].join(',');
-		const url = `https://www.threads.net/oauth/authorize?client_id=${encodeURIComponent(appId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
-		window.location.href = url;
 	}
 
 	// Fetch once on mount — avoid infinite $effect re-runs
