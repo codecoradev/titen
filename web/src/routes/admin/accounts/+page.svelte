@@ -134,25 +134,6 @@
 		}
 	}
 
-	async function handleConnectThreads() {
-		try {
-			const config = await getOAuthConfig();
-			if (config.app_id) {
-				if (!config.secret_configured) {
-					toast('Set App Secret in Settings first', 'error');
-					return;
-				}
-				if (config.authorize_url) {
-					window.location.href = config.authorize_url;
-					return;
-				}
-			}
-			toast('Set Threads App ID and Secret in Settings first', 'error');
-		} catch {
-			toast('Failed to get OAuth config. Set credentials in Settings.', 'error');
-		}
-	}
-
 	// Fetch once on mount — avoid infinite $effect re-runs
 	$effect(() => {
 		if (!loaded) loadAccounts();

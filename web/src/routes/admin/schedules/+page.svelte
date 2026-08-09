@@ -527,13 +527,19 @@
 				{/if}
 
 				<div class="form-group">
-					<label class="form-label" for="modal-caption">Caption</label>
+					<label class="form-label" for="modal-caption">
+						Caption
+						<span class="char-count" class:over={modalCaption.length > 500}>
+							{modalCaption.length}/500
+						</span>
+					</label>
 					<textarea
 						class="form-input"
 						id="modal-caption"
 						bind:value={modalCaption}
 						placeholder="Write your post caption..."
 						rows="4"
+						maxlength="500"
 					></textarea>
 				</div>
 			</div>
@@ -573,13 +579,19 @@
 				</div>
 
 				<div class="form-group">
-					<label class="form-label" for="edit-caption">Caption</label>
+					<label class="form-label" for="edit-caption">
+						Caption
+						<span class="char-count" class:over={editCaption.length > 500}>
+							{editCaption.length}/500
+						</span>
+					</label>
 					<textarea
 						class="form-input"
 						id="edit-caption"
 						bind:value={editCaption}
 						placeholder="Write your post caption..."
 						rows="4"
+						maxlength="500"
 					></textarea>
 				</div>
 			</div>
@@ -765,6 +777,20 @@
 		font-size: 0.75rem;
 		color: var(--color-muted);
 		margin-top: 0.25rem;
+	}
+	.char-count {
+		margin-left: auto;
+		font-size: 0.75rem;
+		color: var(--color-muted);
+		font-variant-numeric: tabular-nums;
+	}
+	.char-count.over {
+		color: var(--color-error);
+		font-weight: 600;
+	}
+	.form-label:has(.char-count) {
+		display: flex;
+		align-items: baseline;
 	}
 
 	/* Carousel URL input rows */
