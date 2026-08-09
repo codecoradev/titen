@@ -11,7 +11,7 @@
 		getThreadsProfile,
 		getAccountInsights,
 	} from '$lib/api';
-	import { formatDateTime } from '$lib/tz';
+	import { formatDateTime, formatDate } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type {
 		Account,
@@ -24,6 +24,7 @@
 
 	// ── State ──
 	let loading = $state(true);
+	let loaded = $state(false);
 	let health = $state<HealthResponse | null>(null);
 	let accounts = $state<Account[]>([]);
 	let posts = $state<Post[]>([]);
@@ -54,13 +55,6 @@
 	);
 
 	// ── Helpers ──
-	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-		});
-	}
 
 	function isTokenExpiring(expiresAt: string | null): boolean {
 		if (!expiresAt) return false;
@@ -143,7 +137,10 @@
 	}
 
 	$effect(() => {
-		load();
+		if (!loaded) {
+			load();
+			loaded = true;
+		}
 	});
 </script>
 

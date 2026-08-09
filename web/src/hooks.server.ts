@@ -24,13 +24,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Remove hop-by-hop headers per RFC 7230.
 		headers.delete('connection');
 
-		// Debug: log cookie presence for auth/OAuth tracing
-		const cookieHeader = headers.get('cookie') || '';
-		const cookieNames = cookieHeader
-			? cookieHeader.split(';').map(s => s.trim().split('=')[0]).filter(Boolean).join(',')
-			: 'none';
-		console.log(`[TITEN PROXY] ${event.request.method} ${pathname} → cookies=[${cookieNames}]`);
-
 		let body: ArrayBuffer | undefined;
 		if (event.request.method !== 'GET' && event.request.method !== 'HEAD') {
 			try {
@@ -55,13 +48,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 			resHeaders.delete('connection');
 			resHeaders.delete('keep-alive');
 			resHeaders.delete('transfer-encoding');
-
-			// Debug: log Set-Cookie in response
-			const setCookie = resHeaders.get('set-cookie') || '';
-			if (setCookie) {
-				const scSummary = setCookie.split(';').map(s => s.trim()).filter(s => !s.toLowerCase().startsWith('titen_session=')).join(';');
-				console.log(`[TITEN PROXY] ${pathname} ← set-cookie present (attrs: ${scSummary})`);
-			}
 
 			return new Response(res.body, {
 				status: res.status,

@@ -14,7 +14,7 @@ let toasts = $state<Toast[]>([]);
 
 function add(message: string, type: ToastType = 'info') {
 	const id = nextId++;
-	toasts.push({ id, message, type });
+	toasts = [...toasts, { id, message, type }];
 	setTimeout(() => {
 		toasts = toasts.filter((t) => t.id !== id);
 	}, 4000);

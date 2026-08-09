@@ -78,6 +78,34 @@ export function formatDate(iso: string, timezone?: string | null): string {
 }
 
 /**
+ * Format an ISO datetime string as a short date (month + day only, no year).
+ */
+export function formatDateShort(iso: string, timezone?: string | null): string {
+	const d = new Date(iso);
+	const tz = timezone || cachedTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+	return d.toLocaleDateString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		timeZone: tz,
+	});
+}
+
+/**
+ * Format an ISO datetime as date + time without year (e.g. "Aug 9, 2:30 PM").
+ */
+export function formatDateTimeShort(iso: string, timezone?: string | null): string {
+	const d = new Date(iso);
+	const tz = timezone || cachedTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+	return d.toLocaleString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		timeZone: tz,
+	});
+}
+
+/**
  * Convert an ISO datetime to a local datetime-local input value.
  * Uses the configured timezone for conversion.
  */

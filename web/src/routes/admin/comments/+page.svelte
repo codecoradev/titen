@@ -9,11 +9,14 @@
 		replyToComment,
 	} from '$lib/api';
 	import type { Comment, Post } from '$lib/types';
+	import { formatDateTime } from '$lib/tz';
+	import { truncate } from '$lib/format';
 	import { toast } from '$lib/toast.svelte';
 
 	let comments = $state<Comment[]>([]);
 	let posts = $state<Post[]>([]);
 	let loading = $state(true);
+	let loaded = $state(false);
 	let commentsLoading = $state(false);
 	let fetchLoading = $state(false);
 	let selectedPostId = $state('');
@@ -31,7 +34,7 @@
 		comments.filter((c) => {
 			if (replyStatusFilter && c.reply_status !== replyStatusFilter) return false;
 			if (sentimentFilter && c.sentiment !== sentimentFilter) return false;
-			if (searchQuery && !c.text.toLowerCase().includes(searchQuery.toLowerCase()))
+			if (searchQuery && !(c.text || '').toLowerCase().includes(searchQuery.toLowerCase()))
 				return false;
 			return true;
 		}),
@@ -50,18 +53,8 @@
 		skipped: comments.filter((c) => c.reply_status === 'skipped').length,
 	});
 
-	function truncate(text: string, max: number): string {
-		return text.length > max ? text.slice(0, max) + '\u2026' : text;
-	}
-
 	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			year: 'numeric',
-		});
+		return formatDateTime(iso);
 	}
 
 	const REPLY_STATUS_COLORS: Record<string, string> = {
@@ -160,10 +153,11 @@
 		loading = true;
 		await loadPosts();
 		loading = false;
+		loaded = true;
 	}
 
 	$effect(() => {
-		init();
+		if (!loaded) init();
 	});
 </script>
 

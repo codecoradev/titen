@@ -13,46 +13,26 @@
 
 		const url = new URL($page.url);
 		const code = url.searchParams.get('code');
-		const state_param = url.searchParams.get('state');
-
-		console.log('[TITEN CALLBACK] invoked', {
-			hasCode: !!code,
-			codeLen: code?.length || 0,
-			hasState: !!state_param,
-			url: url.toString().split('?')[0],
-			searchParams: url.search
-		});
 
 		if (!code) {
-			console.warn('[TITEN CALLBACK] no code param, aborting');
 			status = 'error';
 			errorMessage = 'No authorization code received from Threads.';
 			return;
 		}
 
 		// Check if user is authenticated via session cookie
-		console.log('[TITEN CALLBACK] checking session...');
 		let session;
 		try {
 			session = await checkSession();
-			console.log('[TITEN CALLBACK] session result', {
-				authenticated: session.authenticated,
-				requiresAuth: session.requires_auth,
-				version: (session as Record<string, unknown>).version
-			});
-		} catch (e) {
-			console.error('[TITEN CALLBACK] session check threw', e);
+		} catch {
 			session = { authenticated: false, requires_auth: true };
 		}
 
 		if (!session.authenticated) {
-			console.warn('[TITEN CALLBACK] NOT authenticated, redirecting to login');
 			const redirect = encodeURIComponent(`/auth/callback${url.search}`);
 			window.location.href = `/login?redirect=${redirect}`;
 			return;
 		}
-
-		console.log('[TITEN CALLBACK] authenticated, proceeding with token exchange');
 
 		// Read OAuth config from localStorage (set in Settings)
 		let appId = '';
@@ -64,33 +44,21 @@
 		} catch { /* ignore */ }
 		const redirectUri = localStorage.getItem('titen_oauth_redirect_uri') || `${window.location.origin}/auth/callback`;
 
-		console.log('[TITEN CALLBACK] oauth config', {
-			hasAppId: !!appId,
-			appIdLen: appId.length,
-			hasAppSecret: !!appSecret,
-			appSecretLen: appSecret.length,
-			redirectUri
-		});
-
 		if (!appId || !appSecret) {
-			console.error('[TITEN CALLBACK] missing app credentials');
 			status = 'error';
 			errorMessage = 'Threads App ID and Secret not configured. Go to Settings to set them up.';
 			return;
 		}
 
 		try {
-			console.log('[TITEN CALLBACK] calling oauthExchange...');
 			await oauthExchange({
 				code,
 				app_id: appId,
 				app_secret: appSecret,
 				redirect_uri: redirectUri,
 			});
-			console.log('[TITEN CALLBACK] oauthExchange SUCCESS');
 			status = 'success';
 		} catch (e: unknown) {
-			console.error('[TITEN CALLBACK] oauthExchange FAILED', e);
 			status = 'error';
 			errorMessage = e instanceof Error ? e.message : 'OAuth exchange failed.';
 		}
