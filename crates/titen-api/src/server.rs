@@ -258,6 +258,14 @@ pub async fn serve(
         .route("/api/media/{id}", delete(routes::media::delete_media))
         .route("/api/oauth/exchange", post(routes::oauth::oauth_exchange))
         .route(
+            "/api/settings",
+            get(routes::settings::get_settings).put(routes::settings::update_settings),
+        )
+        .route(
+            "/api/settings/oauth-config",
+            get(routes::settings::get_oauth_config),
+        )
+        .route(
             "/api/threads/container",
             post(routes::threads::create_container),
         )
