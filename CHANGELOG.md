@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-09
+
+### Fixed
+
+11 bugs across scheduler, store, and Threads client — all validated via DB-level integration testing (13/13 tests pass).
+
+- **Timezone mismatch in scheduler query**: `get_due_schedules` compared raw ISO timestamps with `datetime('now')`, causing timezone-aware schedules (e.g. `+07:00`) to be missed or delayed. Fixed to use `datetime(scheduled_at)` for consistent comparison. [#107]
+- **`threads_post_id` not persisted on publish**: Both the immediate-publish path (`POST /api/posts`) and the scheduler path silently dropped the Threads API post ID, making it impossible to delete or manage published posts. Fixed by using `create_post_with_threads_id()`. [#106, #109]
+- **`delete_post()` leaked access token in query string**: The Threads API `DELETE` call passed the access token as a URL query parameter (`.query(&body)`) instead of the `Authorization` header. Fixed to use header-only auth. [#115]
+- **`user_id` derivation via fragile token parsing**: The `/me` lookup split the access token on `|` and took the first segment — a brittle heuristic that breaks with non-standard token formats. Replaced with a fallback to the Graph API `/me` endpoint. [#116]
+- **`published_at` and `result_post_id` never set**: `update_schedule_status()` updated only the `status` column, leaving `published_at` and `result_post_id` null even after successful publishing. Fixed to set both fields when status transitions to `published`. [#112]
+- **Schedule edit caused data loss (delete + recreate)**: The `PUT /api/schedules/{id}` handler deleted the schedule and recreated it, losing `created_at`, `result_json`, and audit metadata. Replaced with a direct `UPDATE` that preserves all fields. [#113]
+- **Schedule editable in `pending` state**: Schedules could be edited after approval (`pending`), creating a race condition with the scheduler. Restricted to `draft` state only. [#114]
+- **`list_upcoming` included past schedules**: The "upcoming" endpoint returned all pending schedules regardless of timestamp, including ones already past due. Fixed to filter on `scheduled_at > now`. [#117]
+- **Inactive accounts still processed by scheduler**: The scheduler tick did not check `accounts.is_active`, attempting to publish for deactivated accounts. Fixed to skip inactive accounts. [#117]
+- **PUT handler always returned HTTP 200**: Error responses (conflict, not found) were returned with HTTP 200 status. Fixed to return correct status codes (409, 404, 500). [#122]
+- **PUT handler silently dropped `text_attachment`**: `CreateSchedule` has both `caption` and `text_attachment`, but the PUT handler only read `caption`. Fixed with `caption.or(text_attachment)` merge. [#122]
+
 ## [0.5.4] - 2026-08-09
 
 ### Added
