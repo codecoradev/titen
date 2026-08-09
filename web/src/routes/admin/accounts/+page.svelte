@@ -3,11 +3,13 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { listAccounts, createAccount, deleteAccount, refreshToken } from '$lib/api';
+	import { formatDate as formatDateTz } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Account } from '$lib/types';
 
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
+	let loaded = $state(false);
 	let showAddModal = $state(false);
 	let deletingId = $state<string | null>(null);
 	let refreshingId = $state<string | null>(null);
@@ -21,12 +23,8 @@
 	let formAppSecret = $state('');
 
 	function formatDate(iso: string | null): string {
-		if (!iso) return '—';
-		return new Date(iso).toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		});
+		if (!iso) return '\u2014';
+		return formatDateTz(iso);
 	}
 
 	function statusFromAccount(account: Account): string {
@@ -47,6 +45,7 @@
 			toast(e.message || 'Failed to load accounts', 'error');
 		} finally {
 			loading = false;
+			loaded = true;
 		}
 	}
 
@@ -146,8 +145,9 @@
 		window.location.href = url;
 	}
 
+	// Fetch once on mount — avoid infinite $effect re-runs
 	$effect(() => {
-		loadAccounts();
+		if (!loaded) loadAccounts();
 	});
 </script>
 

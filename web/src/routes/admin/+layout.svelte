@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
-	import { getIcon } from '$lib/icons';
+	import Icon from '$lib/components/Icon.svelte';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
 	import { checkSession, logout } from '$lib/api';
@@ -108,14 +108,14 @@
 					aria-current={isActive(item.href) ? 'page' : undefined}
 					onclick={closeSidebar}
 				>
-					{@html getIcon(item.icon)}
+						<Icon name={item.icon} />
 					{item.label}
 				</a>
 			{/each}
 		</nav>
 		<div class="sidebar-footer">
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
-			<span class="sidebar-version">v0.4.0 · admin</span>
+			<span class="sidebar-version">v0.5.5 · admin</span>
 		</div>
 	</aside>
 

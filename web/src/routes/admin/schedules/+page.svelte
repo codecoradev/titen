@@ -16,12 +16,14 @@
 	import type { Schedule, Account } from '$lib/types';
 	import { toast } from '$lib/toast.svelte';
 	import { formatDateTime, toDatetimeInput, getTimezone } from '$lib/tz';
+	import { truncate } from '$lib/format';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
 
 	let schedules = $state<Schedule[]>([]);
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
+	let loaded = $state(false);
 	let creating = $state(false);
 
 	// Detail modal
@@ -34,7 +36,7 @@
 		detailSchedule = null;
 	}
 	async function onDetailAction() {
-		await loadSchedules();
+		await loadData();
 	}
 
 	let filterAccountId = $state('');
@@ -260,11 +262,6 @@
 		}
 	}
 
-	function truncate(s: string, max: number = 60): string {
-		if (s.length <= max) return s;
-		return s.slice(0, max).trimEnd() + '…';
-	}
-
 	// Format schedule time using TZ from backend
 	function fmtDate(iso: string): string {
 		return formatDateTime(iso);
@@ -274,7 +271,10 @@
 	let draftCount = $derived(schedules.filter((s) => s.status === 'draft').length);
 
 	$effect(() => {
-		loadData();
+		if (!loaded) {
+			loadData();
+			loaded = true;
+		}
 	});
 </script>
 
@@ -446,7 +446,7 @@
 	<div class="confirm-overlay" onclick={closeCreateModal} role="dialog" aria-modal="true" aria-label="New Schedule">
 		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>New Schedule</h3>
-			<p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
+			<p style="color: var(--color-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
 				New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
 			</p>
 			<div style="display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md);">
@@ -557,7 +557,7 @@
 	<div class="confirm-overlay" onclick={closeEditModal} role="dialog" aria-modal="true" aria-label="Edit Schedule">
 		<div class="confirm-dialog" style="max-width: 36rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>Edit Schedule</h3>
-			<p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
+			<p style="color: var(--color-muted); font-size: 0.85rem; margin-bottom: var(--space-md);">
 				Status: <StatusBadge status={editTarget.status} />
 			</p>
 			<div style="display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md);">
@@ -733,7 +733,7 @@
 	}
 	.tz-badge {
 		font-size: 0.75rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-muted);
 		background: var(--color-bg-elevated, #f3f4f6);
 		padding: 0.25rem 0.625rem;
 		border-radius: 0.375rem;
@@ -763,7 +763,7 @@
 	.form-hint {
 		display: block;
 		font-size: 0.75rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-muted);
 		margin-top: 0.25rem;
 	}
 

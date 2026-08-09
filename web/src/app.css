@@ -40,6 +40,41 @@
 	--color-info-dim: oklch(94% 0.05 260);
 	--color-info-ink: oklch(98% 0.005 260);
 
+	/* ── Semantic aliases (backward compat — maps to Hallmark primary tokens) ── */
+	/* These exist because admin pages were written against a different naming
+	 * convention. They alias the Hallmark tokens so all pages resolve correctly. */
+	--color-bg: var(--color-paper);
+	--color-bg-elevated: var(--surface-raised);
+	--color-bg-hover: var(--color-paper-2);
+	--color-text: var(--color-ink);
+	--color-text-muted: var(--color-muted);
+	--color-border: var(--color-rule);
+	--color-border-hover: var(--color-rule-2);
+	--color-surface: var(--surface-raised);
+	--color-primary: var(--color-accent);
+	--color-primary-bg: var(--color-accent-dim);
+	--color-danger: var(--color-error);
+	--color-danger-bg: var(--color-error-dim);
+	--color-danger-border: oklch(80% 0.10 25);
+	--color-warning-bg: var(--color-warning-dim);
+	--color-warning-bg-subtle: oklch(97% 0.02 85);
+	--color-warning-border: oklch(80% 0.10 85);
+	--color-warning-text: var(--color-warning-ink);
+	--color-muted-bg: var(--color-paper-3);
+	--color-success-bg: var(--color-success-dim);
+
+	/* ── Additional radii ── */
+	--radius-2xs: 2px;
+
+	/* ── Additional shadows ── */
+	--shadow-lg: var(--shadow-overlay);
+
+	/* ── Overlay scrim ── */
+	--overlay-scrim: oklch(15% 0.008 260 / 0.5);
+
+	/* ── Additional type scale ── */
+	--text-2xs: 0.5rem;
+
 	/* ── Spacing scale — 4pt base ── */
 	--space-3xs: 0.125rem;
 	--space-2xs: 0.25rem;

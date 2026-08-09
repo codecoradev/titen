@@ -4,10 +4,12 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PostDetail from '$lib/components/PostDetail.svelte';
 	import { listPosts, deletePost, getPostInsights, listAccounts } from '$lib/api';
+	import { formatDateShort } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Post, Account } from '$lib/types';
 
 	let loading = $state(true);
+	let loaded = $state(false);
 	let posts = $state<Post[]>([]);
 	let accounts = $state<Account[]>([]);
 	let filterAccount = $state('');
@@ -37,8 +39,8 @@
 	});
 
 	function formatDate(iso: string | null): string {
-		if (!iso) return '—';
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+		if (!iso) return '\u2014';
+		return formatDateShort(iso);
 	}
 
 	async function loadPosts() {
@@ -54,6 +56,7 @@
 			toast('Failed to load posts', 'error');
 		} finally {
 			loading = false;
+			loaded = true;
 		}
 	}
 
@@ -95,7 +98,7 @@
 	}
 
 	$effect(() => {
-		loadPosts();
+		if (!loaded) loadPosts();
 	});
 </script>
 
@@ -171,7 +174,7 @@
 
 <!-- Post Detail Modal -->
 {#if detailPost}
-	{@const postWithAccount = { ...detailPost, account: accounts.find(a => a.id === detailPost.account_id) }}
+	{@const postWithAccount = { ...detailPost, account: accounts.find(a => a.id === detailPost?.account_id) }}
 	<PostDetail post={postWithAccount} onClose={closeDetail} />
 {/if}
 
