@@ -246,12 +246,18 @@ pub async fn create_post(
 
             // Create post record
             let db_id = Uuid::now_v7().to_string();
-            match state.store.create_post(&db_id, &effective_input).await {
+            // #106 fix: Use create_post_with_threads_id to persist threads_post_id.
+            // Previously create_post() was called which doesn't store threads_post_id,
+            // making it impossible to delete or fetch insights for the post later.
+            match state
+                .store
+                .create_post_with_threads_id(&db_id, &effective_input, &post_id)
+                .await
+            {
                 Ok(post) => (
                     StatusCode::CREATED,
                     Json(serde_json::json!({
                         "data": post,
-                        "threads_post_id": post_id,
                     })),
                 ),
                 Err(e) => (

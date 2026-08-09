@@ -73,6 +73,8 @@ pub async fn get_schedule_by_id(
     security(("api_key" = [])),
 )]
 pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Value> {
+    // #117 fix: list_upcoming should return only future schedules, not all pending.
+    // Sort by scheduled_at ascending and filter to only upcoming items.
     match state
         .store
         .list_schedules(&ScheduleFilter {
@@ -82,7 +84,17 @@ pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Va
         .await
     {
         Ok(schedules) => {
-            let upcoming: Vec<_> = schedules.into_iter().take(10).collect();
+            let now = chrono::Utc::now();
+            let upcoming: Vec<_> = schedules
+                .into_iter()
+                .filter(|s| {
+                    // Parse scheduled_at — only include items in the future
+                    chrono::DateTime::parse_from_rfc3339(&s.scheduled_at)
+                        .map(|dt| dt.with_timezone(&chrono::Utc) > now)
+                        .unwrap_or(true) // include if we can't parse (defensive)
+                })
+                .take(10)
+                .collect();
             Json(serde_json::json!({ "data": upcoming }))
         }
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
@@ -183,12 +195,32 @@ pub async fn update_schedule(
     Path(id): Path<String>,
     Json(input): Json<CreateSchedule>,
 ) -> Json<serde_json::Value> {
-    match state.store.delete_schedule(&id).await {
-        Ok(()) => match state.store.create_schedule(&id, &input).await {
-            Ok(schedule) => Json(serde_json::json!({ "data": schedule })),
-            Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "UPDATE_FAILED" })),
-        },
-        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    // #113 fix: Replaced delete+recreate with direct update to prevent data loss.
+    // The old implementation deleted the schedule (losing created_at, result_json,
+    // published_at, etc.) and recreated it. Now we delegate to update_schedule_fields
+    // which preserves existing data via COALESCE.
+    match state
+        .store
+        .update_schedule_fields(
+            &id,
+            input.caption.as_deref(),
+            input.media_type.as_deref(),
+            input.media_urls.clone(),
+            Some(&input.scheduled_at),
+        )
+        .await
+    {
+        Ok(schedule) => Json(serde_json::json!({ "data": schedule })),
+        Err(e) => {
+            let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
+                "NOT_FOUND"
+            } else if matches!(e, titen_core::TitenError::InvalidRequest(_)) {
+                "CONFLICT"
+            } else {
+                "UPDATE_FAILED"
+            };
+            Json(serde_json::json!({ "error": e.to_string(), "code": code }))
+        }
     }
 }
 

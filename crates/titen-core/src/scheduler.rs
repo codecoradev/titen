@@ -173,6 +173,18 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             }
         };
 
+        // #117 fix: Skip schedules for inactive accounts
+        if !account.is_active {
+            warn!(
+                "Schedule {} skipped — account @{} is inactive",
+                schedule.id, account.username
+            );
+            let _ = store
+                .update_schedule_status(&schedule.id, "failed", None, Some("Account is inactive"))
+                .await;
+            continue;
+        }
+
         // Check token is still valid — auto-refresh if expiring
         let account = match account.token_status() {
             "valid" => account,
@@ -352,7 +364,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     .unwrap_or("")
                     .to_string();
 
-                // Create post record
+                // Create post record with threads_post_id (#109 fix)
                 let post_id_uuid = uuid::Uuid::now_v7().to_string();
                 let create_post = crate::models::CreatePost {
                     account_id: schedule.account_id.clone(),
@@ -365,7 +377,9 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     media_ids: None,
                     alt_text: None,
                 };
-                let _ = store.create_post(&post_id_uuid, &create_post).await;
+                let _ = store
+                    .create_post_with_threads_id(&post_id_uuid, &create_post, &post_id)
+                    .await;
 
                 // Mark schedule as published
                 let _ = store

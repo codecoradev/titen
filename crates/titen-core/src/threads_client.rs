@@ -228,10 +228,18 @@ impl ThreadsClient {
             })
             .to_string();
 
-        // If user_id is empty, try to extract from access_token (JWT format)
+        // If user_id is empty, resolve via /me endpoint (#116 fix)
+        // Token format is opaque — splitting on '|' doesn't reliably extract user_id.
+        // Fallback to calling /me to get the real user_id.
         let user_id = if user_id.is_empty() {
-            // Try to decode user_id from the token (Meta tokens sometimes embed it)
-            access_token.split('|').next().unwrap_or("").to_string()
+            tracing::warn!("No user_id in token exchange, resolving via /me");
+            match self.resolve_account(&access_token).await {
+                Ok((uid, _username)) => uid,
+                Err(e) => {
+                    tracing::error!("Failed to resolve user_id via /me: {e}");
+                    String::new()
+                }
+            }
         } else {
             user_id
         };
@@ -668,14 +676,14 @@ impl ThreadsClient {
         threads_post_id: &str,
     ) -> Result<()> {
         let url = format!("{THREADS_GRAPH_API}/v1.0/{threads_post_id}");
-        let body = serde_json::json!({
-            "access_token": account.access_token,
-        });
 
+        // #115 fix: Use query parameter properly — the Threads API DELETE endpoint
+        // expects access_token as a single query param, not a JSON body.
+        // serde_json::Value serialized as query produces broken encoding.
         let resp = self
             .http
             .delete(&url)
-            .query(&body)
+            .query(&[("access_token", &account.access_token)])
             .send()
             .await
             .map_err(|e| {
