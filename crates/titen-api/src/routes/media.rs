@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::server::AppState;
 use titen_core::models::MediaFilter;
-use titen_core::storage::{S3Storage, Storage};
+use titen_core::storage::{S3Storage, detect_backend};
 
 #[utoipa::path(
     get,
@@ -44,12 +44,14 @@ pub async fn upload_media(
     State(state): State<AppState>,
     mut multipart: axum::extract::Multipart,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let s3 = match S3Storage::from_env() {
+    let storage = match detect_backend() {
         Ok(s) => s,
         Err(e) => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": e.to_string(), "code": "S3_NOT_CONFIGURED" })),
+                Json(
+                    serde_json::json!({ "error": e.to_string(), "code": "STORAGE_NOT_CONFIGURED" }),
+                ),
             );
         }
     };
@@ -75,7 +77,7 @@ pub async fn upload_media(
         };
 
         let s3_key = S3Storage::build_key(&filename);
-        let s3_url = match s3.upload(&s3_key, &data, &content_type).await {
+        let media_url = match storage.upload(&s3_key, &data, &content_type).await {
             Ok(url) => url,
             Err(e) => {
                 return (
@@ -94,7 +96,7 @@ pub async fn upload_media(
                 &content_type,
                 data.len() as i64,
                 &s3_key,
-                Some(&s3_url),
+                Some(&media_url),
             )
             .await
         {
@@ -134,13 +136,13 @@ pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    // Get media record by ID to find S3 key
+    // Get media record by ID to find storage key
     match state.store.get_media_asset(&id).await {
         Ok(media) => {
-            // Try to delete from S3 (best effort)
-            if let Ok(s3) = S3Storage::from_env() {
-                if let Err(e) = s3.delete(&media.s3_key).await {
-                    tracing::warn!("Failed to delete S3 object {}: {e}", media.s3_key);
+            // Try to delete from storage backend (best effort)
+            if let Ok(storage) = detect_backend() {
+                if let Err(e) = storage.delete(&media.s3_key).await {
+                    tracing::warn!("Failed to delete media {}: {e}", media.s3_key);
                 }
             }
         }
