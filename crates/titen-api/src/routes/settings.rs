@@ -156,7 +156,7 @@ pub async fn get_oauth_config(
 
             let authorize_url = settings.threads_app_id.as_ref().map(|app_id| {
                 format!(
-                    "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_content_publish&response_type=code",
+                    "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_content_publish,threads_location_tagging&response_type=code",
                     urlencode(app_id),
                     urlencode(&redirect_uri),
                 )

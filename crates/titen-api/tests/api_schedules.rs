@@ -59,6 +59,7 @@ async fn list_schedules() {
                     text_attachment: None,
                     media_urls: None,
                     scheduled_at: format!("2099-07-{:02}T12:00:00Z", i + 10),
+                    location_id: None,
                     auto_approve: true,
                 },
             )
@@ -100,6 +101,7 @@ async fn list_schedules_filters_by_account() {
                 text_attachment: None,
                 media_urls: None,
                 scheduled_at: "2099-08-01T12:00:00Z".to_string(),
+                location_id: None,
                 auto_approve: true,
             },
         )
