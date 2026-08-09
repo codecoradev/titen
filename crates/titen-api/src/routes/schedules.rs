@@ -9,6 +9,16 @@ use uuid::Uuid;
 use crate::server::AppState;
 use titen_core::models::*;
 
+#[utoipa::path(
+    get,
+    path = "/api/schedules",
+    tag = "schedules",
+    params(("filter" = Option<ScheduleFilter>, Query, description = "Schedule filter")),
+    responses(
+        (status = 200, description = "List of schedules", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_schedules(
     State(state): State<AppState>,
     Query(filter): Query<ScheduleFilter>,
@@ -19,6 +29,17 @@ pub async fn list_schedules(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    responses(
+        (status = 200, description = "Schedule details", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn get_schedule_by_id(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -42,6 +63,15 @@ pub async fn get_schedule_by_id(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/schedules/upcoming",
+    tag = "schedules",
+    responses(
+        (status = 200, description = "Upcoming schedules", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state
         .store
@@ -59,6 +89,17 @@ pub async fn list_upcoming(State(state): State<AppState>) -> Json<serde_json::Va
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/schedules",
+    tag = "schedules",
+    request_body = CreateSchedule,
+    responses(
+        (status = 201, description = "Schedule created", body = serde_json::Value),
+        (status = 500, description = "Internal server error", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn create_schedule(
     State(state): State<AppState>,
     Json(input): Json<CreateSchedule>,
@@ -76,8 +117,19 @@ pub async fn create_schedule(
     }
 }
 
-/// PATCH /api/schedules/{id} — partial update of editable fields.
-/// Only works on schedules in 'draft' or 'pending' state.
+#[utoipa::path(
+    patch,
+    path = "/api/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    request_body = UpdateSchedule,
+    responses(
+        (status = 200, description = "Schedule patched", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+        (status = 409, description = "Conflict — invalid state", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn patch_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -114,6 +166,18 @@ pub async fn patch_schedule(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    request_body = CreateSchedule,
+    responses(
+        (status = 200, description = "Schedule updated", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn update_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -128,6 +192,17 @@ pub async fn update_schedule(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    responses(
+        (status = 200, description = "Schedule deleted", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn delete_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -140,8 +215,18 @@ pub async fn delete_schedule(
 
 // ─── HITL: Approve / Reject ──────────────────────────────
 
-/// POST /api/schedules/{id}/approve
-/// Transitions a schedule from 'draft' → 'pending' (ready for auto-publish).
+#[utoipa::path(
+    post,
+    path = "/api/schedules/{id}/approve",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    responses(
+        (status = 200, description = "Schedule approved", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+        (status = 409, description = "Conflict — invalid state", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn approve_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -175,6 +260,18 @@ pub struct RejectBody {
     pub reason: Option<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/schedules/{id}/reject",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule ID")),
+    responses(
+        (status = 200, description = "Schedule rejected", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+        (status = 409, description = "Conflict — invalid state", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn reject_schedule(
     State(state): State<AppState>,
     Path(id): Path<String>,

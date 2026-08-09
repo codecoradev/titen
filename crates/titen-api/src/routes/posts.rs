@@ -8,6 +8,16 @@ use uuid::Uuid;
 use crate::server::AppState;
 use titen_core::models::*;
 
+#[utoipa::path(
+    get,
+    path = "/api/posts",
+    tag = "posts",
+    params(("filter" = Option<PostFilter>, Query, description = "Post filter")),
+    responses(
+        (status = 200, description = "List of posts", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_posts(
     State(state): State<AppState>,
     Query(filter): Query<PostFilter>,
@@ -18,6 +28,17 @@ pub async fn list_posts(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/posts/{id}",
+    tag = "posts",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Post details", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn get_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -28,6 +49,20 @@ pub async fn get_post(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/posts",
+    tag = "posts",
+    request_body = CreatePost,
+    responses(
+        (status = 201, description = "Post created", body = serde_json::Value),
+        (status = 400, description = "Bad request", body = serde_json::Value),
+        (status = 404, description = "Account not found", body = serde_json::Value),
+        (status = 429, description = "Rate limited", body = serde_json::Value),
+        (status = 502, description = "Threads API error", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn create_post(
     State(state): State<AppState>,
     Json(input): Json<CreatePost>,
@@ -232,6 +267,17 @@ pub async fn create_post(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/posts/{id}",
+    tag = "posts",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Post deleted", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn delete_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -261,6 +307,17 @@ pub async fn delete_post(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/posts/{id}/insights",
+    tag = "posts",
+    params(("id" = String, Path, description = "Post ID")),
+    responses(
+        (status = 200, description = "Post insights", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn get_insights(
     State(state): State<AppState>,
     Path(id): Path<String>,

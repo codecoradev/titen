@@ -108,7 +108,11 @@ All config via environment variables:
 
 Base URL: `http://localhost:7845`
 
-All endpoints except `/health` require `X-API-Key` authentication when `TITEN_API_KEY` is set. Use a plain header (not Bearer):
+**Interactive docs (Swagger UI):** `http://localhost:7845/api/docs` — explore and test all endpoints directly from the browser.
+
+**OpenAPI JSON:** `http://localhost:7845/api/docs/openapi.json`
+
+All endpoints except `/health` and `/api/docs` require `X-API-Key` authentication when `TITEN_API_KEY` is set. Use a plain header (not Bearer):
 
 ```
 X-API-Key: your-key-here

@@ -22,6 +22,16 @@ fn safe_account_json(account: &titen_core::models::Account) -> serde_json::Value
     })
 }
 
+/// List all accounts (safe view — no tokens).
+#[utoipa::path(
+    get,
+    path = "/api/accounts",
+    tag = "accounts",
+    responses(
+        (status = 200, description = "List of accounts", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.store.list_accounts().await {
         Ok(accounts) => {
@@ -32,6 +42,18 @@ pub async fn list_accounts(State(state): State<AppState>) -> Json<serde_json::Va
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/accounts",
+    tag = "accounts",
+    request_body = CreateAccount,
+    responses(
+        (status = 201, description = "Account created", body = serde_json::Value),
+        (status = 400, description = "Bad request", body = serde_json::Value),
+        (status = 409, description = "Conflict", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn create_account(
     State(state): State<AppState>,
     Json(mut input): Json<CreateAccount>,
@@ -108,6 +130,18 @@ pub async fn create_account(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/accounts/{id}",
+    tag = "accounts",
+    params(("id" = String, Path, description = "Account ID")),
+    request_body = UpdateAccount,
+    responses(
+        (status = 200, description = "Account updated", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn update_account(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -119,6 +153,17 @@ pub async fn update_account(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/accounts/{id}",
+    tag = "accounts",
+    params(("id" = String, Path, description = "Account ID")),
+    responses(
+        (status = 200, description = "Account deleted", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn delete_account(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -129,6 +174,17 @@ pub async fn delete_account(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/accounts/{id}/refresh-token",
+    tag = "accounts",
+    params(("id" = String, Path, description = "Account ID")),
+    responses(
+        (status = 200, description = "Token refreshed", body = serde_json::Value),
+        (status = 404, description = "Not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
 pub async fn refresh_token(
     State(state): State<AppState>,
     Path(id): Path<String>,

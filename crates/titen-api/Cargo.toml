@@ -29,6 +29,8 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 subtle = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
