@@ -93,7 +93,9 @@ export const checkAllTokens = (): Promise<Account[]> =>
 	request<Account[]>('/accounts/check-tokens');
 
 export const getThreadsProfile = (accountId: string): Promise<ThreadsProfile> =>
-	request<ThreadsProfile>(`/accounts/${accountId}/profile`);
+	request<{ data: ThreadsProfile } & ThreadsProfile>(`/accounts/${accountId}/profile`).then(
+		(r) => r.data ?? r
+	);
 
 export const getPublishingLimit = (accountId: string): Promise<unknown> =>
 	request<unknown>(`/accounts/${accountId}/publishing-limit`);
@@ -285,10 +287,13 @@ export const checkTokens = (): Promise<unknown> =>
 
 // ── Threads: Mentions & Reply ──
 export const fetchMentions = (accountId: string, limit?: number): Promise<Mention[]> =>
-	request<Mention[]>('/threads/mentions', {
-		method: 'POST',
-		body: JSON.stringify({ account_id: accountId, limit: limit ?? 25 }),
-	});
+	request<{ data: Mention[]; fetched: number; stored: number; failed: number } & Mention[]>(
+		'/threads/mentions',
+		{
+			method: 'POST',
+			body: JSON.stringify({ account_id: accountId, limit: limit ?? 25 }),
+		}
+	).then((r) => r.data ?? r);
 
 export const createReply = (data: {
 	account_id: string;
