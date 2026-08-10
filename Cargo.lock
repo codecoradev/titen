@@ -2431,6 +2431,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sqlx",
  "titen-api",
  "titen-core",
  "tokio",

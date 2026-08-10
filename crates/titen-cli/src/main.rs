@@ -8,6 +8,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use std::time::SystemTime;
 
 use titen_cli::{Cli, Commands, commands};
 
@@ -24,5 +25,90 @@ async fn main() -> Result<()> {
         Commands::Analytics { action } => commands::analytics::run(action).await,
         Commands::Media { action } => commands::media::run(action).await,
         Commands::TokenCheck => commands::account::token_check().await,
+        Commands::Backup { output } => backup_database(output).await,
+        Commands::Restore { input, yes } => restore_database(&input, yes).await,
     }
+}
+
+/// Get the database path from TITEN_DB_PATH env or default.
+fn db_path() -> String {
+    std::env::var("TITEN_DB_PATH").unwrap_or_else(|_| "titen.db".to_string())
+}
+
+/// Backup the SQLite database using `VACUUM INTO` for a consistent snapshot.
+async fn backup_database(output: Option<String>) -> Result<()> {
+    let source = db_path();
+
+    if !std::path::Path::new(&source).exists() {
+        anyhow::bail!("Database file not found: {source}");
+    }
+
+    let dest = match output {
+        Some(p) => p,
+        None => {
+            let timestamp = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_secs();
+            let datetime = chrono::DateTime::from_timestamp(timestamp as i64, 0)
+                .unwrap_or_default()
+                .format("%Y%m%d-%H%M%S");
+            format!("titen-backup-{datetime}.db")
+        }
+    };
+
+    eprintln!("Backing up {source} → {dest}");
+
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite://{source}"))
+        .await?;
+    sqlx::query(&format!("VACUUM INTO '{dest}'"))
+        .execute(&pool)
+        .await?;
+    pool.close().await;
+
+    let size = std::fs::metadata(&dest)?.len();
+    eprintln!("✅ Backup complete: {dest} ({size} bytes)");
+    Ok(())
+}
+
+/// Restore the SQLite database from a backup file.
+async fn restore_database(input: &str, yes: bool) -> Result<()> {
+    if !std::path::Path::new(input).exists() {
+        anyhow::bail!("Backup file not found: {input}");
+    }
+
+    let dest = db_path();
+
+    if !yes {
+        eprintln!("⚠️  This will REPLACE the current database: {dest}");
+        eprintln!("   Source: {input}");
+        eprint!("   Continue? [y/N] ");
+        let mut buf = String::new();
+        std::io::stdin().read_line(&mut buf)?;
+        if !buf.trim().eq_ignore_ascii_case("y") {
+            eprintln!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    // Backup current DB before overwriting (safety net)
+    if std::path::Path::new(&dest).exists() {
+        let backup_name = format!("{dest}.pre-restore");
+        eprintln!("Saving current database to {backup_name}");
+        std::fs::copy(&dest, &backup_name)?;
+    }
+
+    // Stop any active connections by removing the WAL/SHM files
+    let wal_path = format!("{dest}-wal");
+    let shm_path = format!("{dest}-shm");
+    let _ = std::fs::remove_file(&wal_path);
+    let _ = std::fs::remove_file(&shm_path);
+
+    eprintln!("Restoring {input} → {dest}");
+    std::fs::copy(input, &dest)?;
+
+    let size = std::fs::metadata(&dest)?.len();
+    eprintln!("✅ Restore complete: {dest} ({size} bytes)");
+    Ok(())
 }
