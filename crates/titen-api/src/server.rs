@@ -185,10 +185,14 @@ pub async fn api_key_auth(
     let normalized = path.trim_end_matches('/');
     let is_health = matches!(normalized, "/health" | "/api/health" | "/ready");
 
-    // /metrics requires auth unless explicitly made public via env var
-    let metrics_public = std::env::var("TITEN_PUBLIC_METRICS")
-        .map(|v| v == "true" || v == "1")
-        .unwrap_or(false);
+    // /metrics requires auth unless explicitly made public via env var.
+    // Use OnceLock to avoid scanning the environment on every request.
+    static METRICS_PUBLIC: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let metrics_public = *METRICS_PUBLIC.get_or_init(|| {
+        std::env::var("TITEN_PUBLIC_METRICS")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false)
+    });
     let is_public_metrics = normalized == "/metrics" && metrics_public;
 
     if is_health || is_public_metrics {

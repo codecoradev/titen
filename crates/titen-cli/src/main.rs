@@ -62,10 +62,19 @@ async fn backup_database(output: Option<String>) -> Result<()> {
         .max_connections(1)
         .connect(&format!("sqlite://{source}"))
         .await?;
-    // Escape single quotes to prevent SQL injection via VACUUM INTO path.
-    // SQLite VACUUM INTO doesn't support bound parameters, so manual escaping is required.
-    let dest_safe = dest.replace('\'', "''");
-    sqlx::query(&format!("VACUUM INTO '{dest_safe}'"))
+    // Validate path to prevent SQL injection via VACUUM INTO.
+    // SQLite VACUUM INTO doesn't support bound parameters, so we use a strict
+    // allowlist of safe path characters before interpolation.
+    if !dest
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+    {
+        anyhow::bail!(
+            "Invalid backup path: '{dest}' contains unsafe characters. \
+             Only alphanumeric, '/', '-', '_', and '.' are allowed."
+        );
+    }
+    sqlx::query(&format!("VACUUM INTO '{dest}'"))
         .execute(&pool)
         .await?;
     pool.close().await;
