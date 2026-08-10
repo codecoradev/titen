@@ -1,35 +1,54 @@
 <script lang="ts">
+	import { Badge } from "$lib/components/ui/badge";
+	import type { Snippet } from "svelte";
+
 	interface Props {
 		status: string;
+		children?: Snippet;
 	}
 
-	let { status }: Props = $props();
+	let { status, children }: Props = $props();
 
-		function mapToVariant(s: string): 'success' | 'warning' | 'error' | 'info' | 'neutral' {
-		const map: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
-			active: 'success',
-			ok: 'success',
-			valid: 'success',
-			published: 'success',
-			completed: 'success',
-			positive: 'success',
-			suspended: 'warning',
-			expired: 'warning',
-			pending: 'warning',
-			processing: 'info',
-			draft: 'info',
-			inactive: 'info',
-			unknown: 'neutral',
-			negative: 'error',
-			failed: 'error',
-			deleted: 'neutral',
-			cancelled: 'neutral',
-			neutral: 'neutral',
+	type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+	function mapToVariant(s: string): { variant: BadgeVariant; class: string } {
+		const successVariants: Record<string, true> = {
+			active: true,
+			ok: true,
+			valid: true,
+			published: true,
+			completed: true,
+			positive: true,
 		};
-		return map[s] ?? 'neutral';
+		const warningVariants: Record<string, true> = {
+			suspended: true,
+			expired: true,
+			pending: true,
+		};
+		const errorVariants: Record<string, true> = {
+			negative: true,
+			failed: true,
+		};
+
+		if (successVariants[s]) {
+			return { variant: "default", class: "bg-[var(--color-success)] text-[var(--color-success-ink)]" };
+		}
+		if (warningVariants[s]) {
+			return { variant: "default", class: "bg-[var(--color-warning)] text-[var(--color-warning-ink)]" };
+		}
+		if (errorVariants[s]) {
+			return { variant: "destructive", class: "" };
+		}
+		return { variant: "secondary", class: "" };
 	}
 
-	const variant = $derived(mapToVariant(status));
+	const mapped = $derived(mapToVariant(status));
 </script>
 
-<span class="badge badge--{variant}">{status}</span>
+<Badge variant={mapped.variant} class={mapped.class}>
+	{#if children}
+		{@render children()}
+	{:else}
+		{status}
+	{/if}
+</Badge>

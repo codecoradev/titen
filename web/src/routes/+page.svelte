@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { buttonVariants } from '$lib/components/ui/button';
 	const features = [
 		{ label: 'Post scheduling', desc: 'Threads has no native scheduling. Titen queues and publishes on your clock.' },
 		{ label: 'Multi-account', desc: 'Manage multiple Threads profiles from a single instance. Switch without re-auth.' },
@@ -14,14 +15,14 @@
 	<div class="container nav__inner">
 		<a href="/" class="nav__wordmark" aria-label="Titen home">titen</a>
 		<div class="nav__actions">
-			<a href="/login" class="btn-outline nav__signin">
+			<a href="/login" class="{buttonVariants({ variant: 'outline' })} nav__signin">
 				Sign in
 			</a>
 			<a
 				href="https://github.com/codecoradev/titen"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="btn-outline nav__cta"
+				class="{buttonVariants({ variant: 'outline' })} nav__cta"
 			>
 				GitHub ↗
 			</a>
@@ -47,11 +48,11 @@
 					href="https://github.com/codecoradev/titen"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="btn-primary"
+					class={buttonVariants({ variant: 'default' })}
 				>
 					View on GitHub
 				</a>
-				<a href="#install" class="btn-outline">Install</a>
+				<a href="#install" class={buttonVariants({ variant: 'outline' })}>Install</a>
 			</div>
 			<div class="hero__stack">
 				<span><code>Rust</code> core</span>
