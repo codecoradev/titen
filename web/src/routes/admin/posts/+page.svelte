@@ -4,6 +4,8 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PostDetail from '$lib/components/PostDetail.svelte';
 	import { listPosts, deletePost, getPostInsights, listAccounts } from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
 	import { formatDateShort } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Post, Account } from '$lib/types';
@@ -105,19 +107,31 @@
 <PageHeader title="Posts" description="Manage and monitor your Threads content.">
 	{#snippet action()}
 		<div style="display: flex; gap: var(--space-xs); align-items: center;">
-			<select class="form-input" bind:value={filterAccount} style="width: auto; font-size: var(--text-sm);">
-				<option value="">All Accounts</option>
-				{#each accounts as account}
-					<option value={account.id}>@{account.username}</option>
-				{/each}
-			</select>
-			<select class="form-input" bind:value={filterStatus} style="width: auto; font-size: var(--text-sm);">
-				<option value="">All Status</option>
-				<option value="draft">Draft</option>
-				<option value="published">Published</option>
-				<option value="failed">Failed</option>
-				<option value="deleted">Deleted</option>
-			</select>
+			<Select.Root type="single" bind:value={filterAccount}>
+				<Select.Trigger>
+					{filterAccount ? `@${accounts.find((a) => a.id === filterAccount)?.username ?? ''}` : 'All Accounts'}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="" label="All Accounts">All Accounts</Select.Item>
+					{#each accounts as account (account.id)}
+						<Select.Item value={account.id} label={`@${account.username}`}>
+							@{account.username}
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+			<Select.Root type="single" bind:value={filterStatus}>
+				<Select.Trigger>
+					{filterStatus === '' ? 'All Status' : filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="" label="All Status">All Status</Select.Item>
+					<Select.Item value="draft" label="Draft">Draft</Select.Item>
+					<Select.Item value="published" label="Published">Published</Select.Item>
+					<Select.Item value="failed" label="Failed">Failed</Select.Item>
+					<Select.Item value="deleted" label="Deleted">Deleted</Select.Item>
+				</Select.Content>
+			</Select.Root>
 		</div>
 	{/snippet}
 </PageHeader>
@@ -157,13 +171,13 @@
 						<td><span class="tabular-nums">{formatDate(post.published_at)}</span></td>
 						<td onclick={(e) => e.stopPropagation()}>
 							<div style="display:flex;gap:var(--space-2xs);">
-								<button class="btn-outline btn-sm" onclick={() => openDetail(post)}>Detail</button>
-								<button class="btn-ghost btn-sm" onclick={() => (confirmDelete = { open: true, post })}>
+								<Button variant="outline" size="sm" onclick={() => openDetail(post)}>Detail</Button>
+								<Button variant="ghost" size="sm" onclick={() => (confirmDelete = { open: true, post })}>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
 										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
-								</button>
-							</div>
+									</Button>
+									</div>
 						</td>
 					</tr>
 				{/each}

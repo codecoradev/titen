@@ -17,6 +17,9 @@
 	import { toast } from '$lib/toast.svelte';
 	import { formatDateTime, toDatetimeInput, getTimezone } from '$lib/tz';
 	import { truncate } from '$lib/format';
+	import { Button } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
 
@@ -284,33 +287,45 @@
 			{#if draftCount > 0}
 				<span class="badge-draft">{draftCount} draft{draftCount > 1 ? 's' : ''} pending review</span>
 			{/if}
-			<button class="btn-primary" onclick={openCreateModal}>New Schedule</button>
+			<Button variant="default" onclick={openCreateModal}>New Schedule</Button>
 		{/snippet}
 	</PageHeader>
 
 	<!-- Filters -->
 	<div class="filter-bar">
 		<div class="form-group">
-			<label class="form-label" for="filter-account">Account</label>
-			<select class="form-input" id="filter-account" bind:value={filterAccountId}>
-				<option value="">All accounts</option>
-				{#each accounts as acct}
-					<option value={acct.id}>{acct.username}</option>
-				{/each}
-			</select>
+			<label class="form-label">Account</label>
+			<Select.Root type="single" bind:value={filterAccountId}>
+				<Select.Trigger>
+					{filterAccountId ? accounts.find((a) => a.id === filterAccountId)?.username ?? 'Unknown' : 'All accounts'}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="" label="All accounts">All accounts</Select.Item>
+					{#each accounts as acct (acct.id)}
+						<Select.Item value={acct.id} label={acct.username}>
+							{acct.username}
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
 		</div>
 
 		<div class="form-group">
-			<label class="form-label" for="filter-status">Status</label>
-			<select class="form-input" id="filter-status" bind:value={filterStatus}>
-				<option value="all">All</option>
-				<option value="draft">Draft (Needs Review)</option>
-				<option value="pending">Pending (Approved)</option>
-				<option value="processing">Processing</option>
-				<option value="published">Published</option>
-				<option value="failed">Failed</option>
-				<option value="rejected">Rejected</option>
-			</select>
+			<label class="form-label">Status</label>
+			<Select.Root type="single" bind:value={filterStatus}>
+				<Select.Trigger>
+					{filterStatus === 'all' ? 'All' : filterStatus === 'draft' ? 'Draft (Needs Review)' : filterStatus === 'pending' ? 'Pending (Approved)' : filterStatus === 'processing' ? 'Processing' : filterStatus === 'published' ? 'Published' : filterStatus === 'failed' ? 'Failed' : filterStatus === 'rejected' ? 'Rejected' : 'All'}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="all" label="All">All</Select.Item>
+					<Select.Item value="draft" label="Draft (Needs Review)">Draft (Needs Review)</Select.Item>
+					<Select.Item value="pending" label="Pending (Approved)">Pending (Approved)</Select.Item>
+					<Select.Item value="processing" label="Processing">Processing</Select.Item>
+					<Select.Item value="published" label="Published">Published</Select.Item>
+					<Select.Item value="failed" label="Failed">Failed</Select.Item>
+					<Select.Item value="rejected" label="Rejected">Rejected</Select.Item>
+				</Select.Content>
+			</Select.Root>
 		</div>
 
 		<div class="form-group tz-info">
@@ -326,7 +341,7 @@
 			description="Create your first scheduled post. New schedules start as drafts and need approval before publishing."
 		>
 			{#snippet action()}
-				<button class="btn-primary btn-sm" onclick={openCreateModal}>New Schedule</button>
+				<Button variant="default" size="sm" onclick={openCreateModal}>New Schedule</Button>
 			{/snippet}
 		</EmptyState>
 	{:else}
@@ -396,53 +411,60 @@
 								</td>
 								<td class="col-actions" onclick={(e) => e.stopPropagation()}>
 									{#if schedule.status === 'draft'}
-										<button
-											class="btn-success btn-sm"
+										<Button
+											variant="default"
+											size="sm"
+											class="bg-[var(--color-success)]"
 											onclick={() => handleApprove(schedule)}
 											disabled={approvingId === schedule.id}
 											title="Approve — will publish when due"
 										>
 											{approvingId === schedule.id ? '…' : 'Approve'}
-										</button>
-										<button
-											class="btn-ghost btn-sm"
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
 											onclick={() => openEditModal(schedule)}
 											title="Edit"
 										>
 											Edit
-										</button>
-										<button
-											class="btn-danger btn-sm"
+										</Button>
+										<Button
+											variant="destructive"
+											size="sm"
 											onclick={() => openRejectModal(schedule)}
 											title="Reject"
 										>
 											Reject
-										</button>
+										</Button>
 									{:else if schedule.status === 'pending'}
-										<button
-											class="btn-ghost btn-sm"
+										<Button
+											variant="ghost"
+											size="sm"
 											onclick={() => openEditModal(schedule)}
 											title="Edit"
 										>
 											Edit
-										</button>
-										<button
-											class="btn-ghost btn-sm"
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
 											onclick={() => confirmDelete(schedule)}
 											disabled={deleting}
 											title="Cancel schedule"
 										>
 											Cancel
-										</button>
+										</Button>
 									{:else}
-										<button
-											class="btn-ghost btn-sm"
+										<Button
+											variant="ghost"
+											size="sm"
 											onclick={() => confirmDelete(schedule)}
 											disabled={deleting}
 											title="Delete"
 										>
 											Delete
-										</button>
+										</Button>
 									{/if}
 								</td>
 							</tr>
@@ -464,12 +486,19 @@
 			</p>
 			<div class="modal-stack">
 				<div class="form-group">
-					<label class="form-label" for="modal-account">Account <span class="required">*</span></label>
-					<select class="form-input" id="modal-account" bind:value={modalAccountId}>
-						{#each accounts as acct}
-							<option value={acct.id}>{acct.username}</option>
-						{/each}
-					</select>
+					<label class="form-label">Account <span class="required">*</span></label>
+					<Select.Root type="single" bind:value={modalAccountId}>
+						<Select.Trigger>
+							{modalAccountId ? accounts.find((a) => a.id === modalAccountId)?.username ?? 'Unknown' : 'Select account...'}
+						</Select.Trigger>
+						<Select.Content>
+							{#each accounts as acct (acct.id)}
+								<Select.Item value={acct.id} label={acct.username}>
+									{acct.username}
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</div>
 
 				<div class="form-row">
@@ -485,12 +514,17 @@
 					</div>
 
 					<div class="form-group" style="flex: 1;">
-						<label class="form-label" for="modal-media-type">Media Type</label>
-						<select class="form-input" id="modal-media-type" bind:value={modalMediaType}>
-							<option value="text">Text Only</option>
-							<option value="IMAGE">Single Image</option>
-							<option value="CAROUSEL">Carousel (2-20)</option>
-						</select>
+						<label class="form-label">Media Type</label>
+						<Select.Root type="single" bind:value={modalMediaType}>
+							<Select.Trigger>
+								{modalMediaType === 'text' ? 'Text Only' : modalMediaType === 'IMAGE' ? 'Single Image' : modalMediaType === 'CAROUSEL' ? 'Carousel (2-20)' : 'Text Only'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="text" label="Text Only">Text Only</Select.Item>
+								<Select.Item value="IMAGE" label="Single Image">Single Image</Select.Item>
+								<Select.Item value="CAROUSEL" label="Carousel (2-20)">Carousel (2-20)</Select.Item>
+							</Select.Content>
+						</Select.Root>
 					</div>
 				</div>
 
@@ -519,23 +553,26 @@
 									bind:value={modalCarouselUrls[idx]}
 								/>
 								{#if modalCarouselUrls.length > 2}
-									<button
-										class="btn-ghost btn-sm carousel-remove"
-										onclick={() => removeCarouselUrl(idx)}
-										title="Remove"
-										type="button"
-									>✕</button>
-								{/if}
+										<Button
+											variant="ghost"
+											size="sm"
+											class="carousel-remove"
+											onclick={() => removeCarouselUrl(idx)}
+											title="Remove"
+											type="button"
+										>✕</Button>
+									{/if}
 							</div>
 						{/each}
 						{#if modalCarouselUrls.length < 20}
-							<button
-								class="btn-outline btn-sm"
-								onclick={addCarouselUrl}
-								type="button"
-								style="margin-top: 0.5rem;"
-							>+ Add Image</button>
-						{/if}
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={addCarouselUrl}
+									type="button"
+									style="margin-top: 0.5rem;"
+								>+ Add Image</Button>
+							{/if}
 					</div>
 				{/if}
 
@@ -546,26 +583,27 @@
 							{modalCaption.length}/500
 						</span>
 					</label>
-					<textarea
-						class="form-input"
+					<Textarea
 						id="modal-caption"
 						bind:value={modalCaption}
 						placeholder="Write your post caption..."
-						rows="4"
-						maxlength="500"
-					></textarea>
+						rows={4}
+						maxlength={500}
+						class="form-input"
+					/>
 				</div>
 			</div>
 
 			<div class="confirm-actions">
-				<button class="btn-outline btn-sm" onclick={closeCreateModal}>Cancel</button>
-				<button
-					class="btn-primary btn-sm"
+				<Button variant="outline" size="sm" onclick={closeCreateModal}>Cancel</Button>
+				<Button
+					variant="default"
+					size="sm"
 					onclick={handleCreate}
 					disabled={creating}
 				>
 					{creating ? 'Creating…' : 'Create as Draft'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -598,26 +636,27 @@
 							{editCaption.length}/500
 						</span>
 					</label>
-					<textarea
-						class="form-input"
+					<Textarea
 						id="edit-caption"
 						bind:value={editCaption}
 						placeholder="Write your post caption..."
-						rows="4"
-						maxlength="500"
-					></textarea>
+						rows={4}
+						maxlength={500}
+						class="form-input"
+					/>
 				</div>
 			</div>
 
 			<div class="confirm-actions">
-				<button class="btn-outline btn-sm" onclick={closeEditModal}>Cancel</button>
-				<button
-					class="btn-primary btn-sm"
+				<Button variant="outline" size="sm" onclick={closeEditModal}>Cancel</Button>
+				<Button
+					variant="default"
+					size="sm"
 					onclick={handleEditSave}
 					disabled={editing}
 				>
 					{editing ? 'Saving…' : 'Save Changes'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -630,25 +669,25 @@
 			<h3>Reject Schedule</h3>
 			<div style="margin-bottom: var(--space-md);">
 				<div class="form-group">
-					<label class="form-label" for="reject-reason">Reason (optional)</label>
-					<textarea
-						class="form-input"
-						id="reject-reason"
-						bind:value={rejectReason}
-						placeholder="Why is this schedule being rejected?"
-						rows="3"
-					></textarea>
-				</div>
+							<label class="form-label">Reason (optional)</label>
+							<Textarea
+								bind:value={rejectReason}
+								placeholder="Why is this schedule being rejected?"
+								rows={3}
+								class="form-input"
+							/>
+						</div>
 			</div>
 			<div class="confirm-actions">
-				<button class="btn-outline btn-sm" onclick={closeRejectModal}>Cancel</button>
-				<button
-					class="btn-danger btn-sm"
+				<Button variant="outline" size="sm" onclick={closeRejectModal}>Cancel</Button>
+				<Button
+					variant="destructive"
+					size="sm"
 					onclick={handleReject}
 					disabled={rejecting}
 				>
 					{rejecting ? 'Rejecting…' : 'Reject'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -758,11 +797,6 @@
 		flex-shrink: 0;
 	}
 
-	.btn-success:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
 	/* TZ badge */
 	.tz-info {
 		display: flex;
@@ -775,21 +809,6 @@
 		padding: 0.25rem 0.625rem;
 		border-radius: 0.375rem;
 		white-space: nowrap;
-	}
-
-	/* Media type tag in table */
-	.media-tag {
-		display: inline-block;
-		font-size: 0.625rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		background: var(--color-primary-bg, #dbeafe);
-		color: var(--color-primary, #2563eb);
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.25rem;
-		margin-right: 0.375rem;
-		vertical-align: middle;
 	}
 
 	/* Form helpers */
@@ -821,11 +840,6 @@
 	}
 	.carousel-url-row .form-input {
 		flex: 1;
-	}
-	.carousel-remove {
-		flex-shrink: 0;
-		padding: 0.375rem 0.5rem;
-		color: var(--color-danger, #dc2626);
 	}
 
 	@media (max-width: 640px) {

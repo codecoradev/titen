@@ -4,6 +4,9 @@
 	import { fetchMentions, createReply, listAccounts } from '$lib/api';
 	import type { Mention, Account } from '$lib/types';
 	import { formatDateTimeShort } from '$lib/tz';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import { truncate } from '$lib/format';
 	import { toast } from '$lib/toast.svelte';
 
@@ -91,24 +94,32 @@
 
 <PageHeader title="Mentions" description="Posts where your account is mentioned — reply directly">
 	{#snippet action()}
-		<button
-			class="btn-primary btn-sm"
+		<Button
+			variant="default"
+			size="sm"
 			onclick={handleFetch}
 			disabled={!selectedAccountId || fetchLoading}
 		>
 			{fetchLoading ? 'Fetching...' : 'Fetch Mentions'}
-		</button>
+		</Button>
 	{/snippet}
 </PageHeader>
 
 {#if accounts.length > 0}
 <div class="filter-row">
-	<label for="account-filter" class="filter-label">Account:</label>
-	<select id="account-filter" class="select" bind:value={selectedAccountId}>
-		{#each accounts as account}
-			<option value={account.id}>@{account.username}</option>
-		{/each}
-	</select>
+	<label class="filter-label">Account:</label>
+	<Select.Root type="single" bind:value={selectedAccountId}>
+		<Select.Trigger>
+			{selectedAccountId ? `@${accounts.find((a) => a.id === selectedAccountId)?.username ?? ''}` : 'Select account...'}
+		</Select.Trigger>
+		<Select.Content>
+			{#each accounts as account (account.id)}
+				<Select.Item value={account.id} label={`@${account.username}`}>
+					@{account.username}
+				</Select.Item>
+			{/each}
+		</Select.Content>
+	</Select.Root>
 </div>
 {/if}
 
@@ -144,9 +155,9 @@
 						<td class="mention-text-cell" title={mention.text}>{truncate(mention.text, 80)}</td>
 						<td>{formatDate(mention.timestamp)}</td>
 						<td>
-							<button class="btn-ghost btn-sm" onclick={() => startReply(mention)}>Reply</button>
+							<Button variant="ghost" size="sm" onclick={() => startReply(mention)}>Reply</Button>
 							{#if mention.permalink}
-								<a href={mention.permalink} target="_blank" rel="noopener" class="btn-ghost btn-sm">View</a>
+								<a href={mention.permalink} target="_blank" rel="noopener" class={buttonVariants({ variant: 'ghost', size: 'sm' })}>View</a>
 							{/if}
 						</td>
 					</tr>
@@ -161,18 +172,18 @@
 	<div class="reply-modal">
 		<h3>Reply to @{replyingTo.username ?? 'unknown'}</h3>
 		<p class="reply-original">{replyingTo.text}</p>
-		<textarea
+		<Textarea
 			bind:value={replyText}
 			placeholder="Type your reply..."
-			rows="4"
-			maxlength="500"
+			rows={4}
+			maxlength={500}
 			class="reply-textarea"
-		></textarea>
+		/>
 		<div class="reply-actions">
-			<button class="btn-ghost" onclick={cancelReply} disabled={replyLoading}>Cancel</button>
-			<button class="btn-primary" onclick={handleReply} disabled={!replyText.trim() || replyLoading}>
+			<Button variant="ghost" onclick={cancelReply} disabled={replyLoading}>Cancel</Button>
+			<Button variant="default" onclick={handleReply} disabled={!replyText.trim() || replyLoading}>
 				{replyLoading ? 'Posting...' : 'Post Reply'}
-			</button>
+			</Button>
 		</div>
 	</div>
 </div>

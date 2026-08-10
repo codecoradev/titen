@@ -2,6 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { getHealth, getSettings, updateSettings, ApiError } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import type { HealthResponse } from '$lib/types';
 
 	// ── State ──
@@ -237,9 +238,9 @@
 		</div>
 
 		<div class="settings-actions">
-			<button class="btn-primary" onclick={saveGeneral} disabled={saving}>
+			<Button variant="default" onclick={saveGeneral} disabled={saving}>
 				{saving ? 'Saving…' : 'Save Changes'}
-			</button>
+			</Button>
 		</div>
 	</section>
 
@@ -247,9 +248,9 @@
 	<section class="settings-section">
 		<div class="settings-section-row">
 			<h2 class="settings-section-title">System Health</h2>
-			<button class="btn-outline btn-sm" onclick={refreshHealth} disabled={healthLoading}>
+			<Button variant="outline" size="sm" onclick={refreshHealth} disabled={healthLoading}>
 				{healthLoading ? 'Checking…' : 'Refresh'}
-			</button>
+			</Button>
 		</div>
 		{#if health}
 			<div class="settings-card">
@@ -298,22 +299,22 @@
 						bind:value={threadsAppId}
 						placeholder="Threads App ID"
 					/>
-					<button class="btn-ghost reveal-btn" type="button" onclick={() => (showAppId = !showAppId)} aria-label={showAppId ? 'Hide' : 'Show'}>
+					<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppId = !showAppId)} aria-label={showAppId ? 'Hide' : 'Show'}>
 						{#if showAppId}
 							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
 						{:else}
 							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
 						{/if}
-					</button>
-				</div>
-			</div>
+						</Button>
+						</div>
+						</div>
 
 			<div class="form-group">
 				<label class="form-label" for="threads-app-secret">App Secret</label>
 				{#if secretIsSet && !secretDirty}
 					<div class="secret-status">
 						<span class="badge badge--success">✓ Configured</span>
-						<button class="btn-ghost btn-sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</button>
+						<Button variant="ghost" size="sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</Button>
 					</div>
 				{:else}
 					<div class="input-reveal">
@@ -326,22 +327,22 @@
 							placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
 							autocomplete="off"
 						/>
-						<button class="btn-ghost reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
+						<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
 							{#if showAppSecret}
 								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
 							{:else}
 								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
 							{/if}
-						</button>
-					</div>
+							</Button>
+							</div>
 				{/if}
 			</div>
 		</div>
 
 		<div class="settings-actions">
-			<button class="btn-primary" onclick={saveApiKeys} disabled={saving}>
+			<Button variant="default" onclick={saveApiKeys} disabled={saving}>
 				{saving ? 'Saving…' : 'Save API Keys'}
-			</button>
+			</Button>
 		</div>
 	</section>
 {/if}
@@ -365,13 +366,12 @@
 					placeholder="PURGE"
 				/>
 			</div>
-			<button
-				class="btn-primary btn-danger"
-				onclick={purgeFailedPosts}
-				disabled={confirmPurgeText !== 'PURGE'}
-			>
+			<Button variant="destructive"
+			onclick={purgeFailedPosts}
+			disabled={confirmPurgeText !== 'PURGE'}
+		>
 				Purge Failed Posts
-			</button>
+			</Button>
 		</div>
 
 		<div class="settings-card settings-card--danger">
@@ -390,13 +390,12 @@
 					placeholder="DELETE ALL"
 				/>
 			</div>
-			<button
-				class="btn-primary btn-danger"
-				onclick={deleteAllSchedules}
-				disabled={confirmDeleteText !== 'DELETE ALL'}
-			>
+			<Button variant="destructive"
+			onclick={deleteAllSchedules}
+			disabled={confirmDeleteText !== 'DELETE ALL'}
+		>
 				Delete All Schedules
-			</button>
+			</Button>
 		</div>
 	</section>
 {/if}
@@ -565,16 +564,6 @@
 
 	.input-reveal .form-input {
 		flex: 1;
-	}
-
-	.reveal-btn {
-		flex-shrink: 0;
-		color: var(--color-muted);
-	}
-
-	.reveal-btn svg {
-		width: 1.125rem;
-		height: 1.125rem;
 	}
 
 	/* ── Save actions ── */

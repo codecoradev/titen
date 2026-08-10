@@ -5,6 +5,11 @@
 	import type { MediaItem } from '$lib/types';
 	import { formatDateTime } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import * as Table from '$lib/components/ui/table';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
+	import Upload from '@lucide/svelte/icons/upload';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
 
 	let media = $state<MediaItem[]>([]);
 	let loading = $state(true);
@@ -68,89 +73,85 @@
 
 <PageHeader title="Media" description="Manage uploaded media files">
 	{#snippet action()}
-		<label class="btn-primary btn-sm upload-label">
+		<Button size="sm" class="relative cursor-pointer">
+			<Upload class="size-4" />
 			Upload
 			<input
 				type="file"
-				class="media-upload-input"
+				class="absolute inset-0 size-full cursor-pointer opacity-0"
 				onchange={handleUpload}
 			/>
-		</label>
+		</Button>
 	{/snippet}
 </PageHeader>
 
 <div class="data-table-wrap">
 	{#if loading}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Preview</th>
-					<th>Filename</th>
-					<th>Type</th>
-					<th>Size</th>
-					<th>Uploaded</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head>Preview</Table.Head>
+					<Table.Head>Filename</Table.Head>
+					<Table.Head>Type</Table.Head>
+					<Table.Head>Size</Table.Head>
+					<Table.Head>Uploaded</Table.Head>
+					<Table.Head>Actions</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each Array(5) as _}
-						<tr>
-							<td><div class="skeleton" style="height: 2.5rem; width: 2.5rem;"></div></td>
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
-						</tr>
+					<Table.Row>
+						<Table.Cell><Skeleton class="size-10 rounded" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{:else if media.length === 0}
 		<div class="empty-state">
 			<p class="empty-state-title">No media files</p>
 			<p class="empty-state-desc">Upload images, videos, or other media to your S3 storage.</p>
 		</div>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Preview</th>
-					<th>Filename</th>
-					<th>Type</th>
-					<th>Size</th>
-					<th>Uploaded</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head>Preview</Table.Head>
+					<Table.Head>Filename</Table.Head>
+					<Table.Head>Type</Table.Head>
+					<Table.Head>Size</Table.Head>
+					<Table.Head>Uploaded</Table.Head>
+					<Table.Head>Actions</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each media as item (item.id)}
-						<tr>
-							<td>
-								<img
-									src={item.s3_url || ''}
-									alt={item.filename}
-									class="media-thumb"
-									onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }}
-								/>
-							</td>
-							<td class="media-filename-cell" title={item.filename}>{item.filename}</td>
-							<td>{item.content_type}</td>
-							<td>{formatSize(item.size_bytes)}</td>
-							<td>{formatDate(item.uploaded_at)}</td>
-							<td>
-								<button
-									class="btn-ghost btn-sm"
-									onclick={() => (deleteTarget = item)}
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
-										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
-									</svg>
-								</button>
-							</td>
-						</tr>
+					<Table.Row>
+						<Table.Cell>
+							<img
+								src={item.s3_url || ''}
+								alt={item.filename}
+								class="size-10 rounded object-cover"
+								onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }}
+							/>
+						</Table.Cell>
+						<Table.Cell class="max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap" title={item.filename}>{item.filename}</Table.Cell>
+						<Table.Cell>{item.content_type}</Table.Cell>
+						<Table.Cell>{formatSize(item.size_bytes)}</Table.Cell>
+						<Table.Cell>{formatDate(item.uploaded_at)}</Table.Cell>
+						<Table.Cell>
+							<Button variant="ghost" size="sm" onclick={() => (deleteTarget = item)}>
+								<Trash2 class="size-4 text-destructive" />
+							</Button>
+						</Table.Cell>
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{/if}
 </div>
 
@@ -163,31 +164,3 @@
 	onconfirm={handleDelete}
 	oncancel={() => (deleteTarget = null)}
 />
-
-<style>
-	.upload-label {
-		cursor: pointer;
-	}
-
-	.media-upload-input {
-		position: absolute;
-		width: 0;
-		height: 0;
-		opacity: 0;
-		pointer-events: none;
-	}
-
-	.media-thumb {
-		width: 2.5rem;
-		height: 2.5rem;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-	}
-
-	.media-filename-cell {
-		max-width: 12rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-</style>

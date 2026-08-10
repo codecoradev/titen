@@ -8,6 +8,9 @@
 		updateCommentReply,
 		replyToComment,
 	} from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
+	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import type { Comment, Post } from '$lib/types';
 	import { formatDateTime } from '$lib/tz';
 	import { truncate } from '$lib/format';
@@ -163,20 +166,27 @@
 
 <PageHeader title="Comments" description="Comment inbox with reply workflow & sentiment analysis">
 	{#snippet action()}
-		<button class="btn-primary btn-sm" onclick={handleFetch} disabled={!selectedPostId || fetchLoading}>
+		<Button variant="default" size="sm" onclick={handleFetch} disabled={!selectedPostId || fetchLoading}>
 			{fetchLoading ? 'Fetching...' : 'Fetch New'}
-		</button>
+		</Button>
 	{/snippet}
 </PageHeader>
 
 {#if posts.length > 0}
 <div class="filter-row">
-	<label for="post-filter" class="filter-label">Post:</label>
-	<select id="post-filter" class="select" bind:value={selectedPostId}>
-		{#each posts as post}
-			<option value={post.id}>{post.id.slice(0, 8)}... {truncate(post.caption || '(no caption)', 40)}</option>
-		{/each}
-	</select>
+	<label class="filter-label">Post:</label>
+	<Select.Root type="single" bind:value={selectedPostId}>
+		<Select.Trigger>
+			{selectedPostId ? posts.find((p) => p.id === selectedPostId) ? `${selectedPostId.slice(0, 8)}... ${truncate(posts.find((p) => p.id === selectedPostId)?.caption || '(no caption)', 40)}` : 'Select post...' : 'Select post...'}
+		</Select.Trigger>
+		<Select.Content>
+			{#each posts as post (post.id)}
+				<Select.Item value={post.id} label={`${post.id.slice(0, 8)}... ${truncate(post.caption || '(no caption)', 40)}`}>
+					{post.id.slice(0, 8)}... {truncate(post.caption || '(no caption)', 40)}
+				</Select.Item>
+			{/each}
+		</Select.Content>
+	</Select.Root>
 </div>
 {/if}
 
@@ -202,22 +212,32 @@
 <div class="filter-bar">
 	<div class="filter-group">
 		<label class="filter-label">Status:</label>
-		<select class="select select--sm" bind:value={replyStatusFilter}>
-			<option value="">All</option>
-			<option value="new">New</option>
-			<option value="needs_reply">Needs Reply</option>
-			<option value="replied">Replied</option>
-			<option value="skipped">Skipped</option>
-		</select>
+		<Select.Root type="single" bind:value={replyStatusFilter}>
+			<Select.Trigger size="sm">
+				{replyStatusFilter === '' ? 'All' : replyStatusFilter === 'new' ? 'New' : replyStatusFilter === 'needs_reply' ? 'Needs Reply' : replyStatusFilter === 'replied' ? 'Replied' : replyStatusFilter === 'skipped' ? 'Skipped' : 'All'}
+			</Select.Trigger>
+			<Select.Content>
+				<Select.Item value="" label="All">All</Select.Item>
+				<Select.Item value="new" label="New">New</Select.Item>
+				<Select.Item value="needs_reply" label="Needs Reply">Needs Reply</Select.Item>
+				<Select.Item value="replied" label="Replied">Replied</Select.Item>
+				<Select.Item value="skipped" label="Skipped">Skipped</Select.Item>
+			</Select.Content>
+		</Select.Root>
 	</div>
 	<div class="filter-group">
 		<label class="filter-label">Sentiment:</label>
-		<select class="select select--sm" bind:value={sentimentFilter}>
-			<option value="">All</option>
-			<option value="positive">Positive</option>
-			<option value="negative">Negative</option>
-			<option value="neutral">Neutral</option>
-		</select>
+		<Select.Root type="single" bind:value={sentimentFilter}>
+			<Select.Trigger size="sm">
+				{sentimentFilter === '' ? 'All' : sentimentFilter === 'positive' ? 'Positive' : sentimentFilter === 'negative' ? 'Negative' : sentimentFilter === 'neutral' ? 'Neutral' : 'All'}
+			</Select.Trigger>
+			<Select.Content>
+				<Select.Item value="" label="All">All</Select.Item>
+				<Select.Item value="positive" label="Positive">Positive</Select.Item>
+				<Select.Item value="negative" label="Negative">Negative</Select.Item>
+				<Select.Item value="neutral" label="Neutral">Neutral</Select.Item>
+			</Select.Content>
+		</Select.Root>
 	</div>
 	<div class="filter-group filter-group--grow">
 		<input
@@ -281,54 +301,58 @@
 				<!-- Reply input (inline) -->
 				{#if replyingTo === comment.id}
 					<div class="reply-box">
-						<textarea
-							class="textarea textarea--sm"
+						<Textarea
 							placeholder="Type your reply..."
 							bind:value={replyText}
-							rows="2"
-						></textarea>
+							rows={2}
+							class="textarea textarea--sm"
+						/>
 						<div class="reply-actions">
-							<button
-								class="btn-primary btn-sm"
+							<Button
+								variant="default"
+								size="sm"
 								onclick={() => handleReply(comment.id)}
 								disabled={replyLoading || !replyText.trim()}
 							>
 								{replyLoading ? 'Publishing...' : 'Publish Reply'}
-							</button>
-							<button class="btn-ghost btn-sm" onclick={cancelReply} disabled={replyLoading}>
+							</Button>
+							<Button variant="ghost" size="sm" onclick={cancelReply} disabled={replyLoading}>
 								Cancel
-							</button>
+							</Button>
 						</div>
 					</div>
 				{:else}
 					<!-- Action buttons -->
 					<div class="comment-actions">
 						{#if comment.reply_status !== 'replied' && comment.threads_comment_id}
-							<button
-								class="btn-ghost btn-sm"
+							<Button
+								variant="ghost"
+								size="sm"
 								onclick={() => startReply(comment.id)}
 								disabled={actionLoading === comment.id}
 							>
 								Reply
-							</button>
+							</Button>
 						{/if}
 						{#if comment.reply_status !== 'needs_reply'}
-							<button
-								class="btn-ghost btn-sm"
+							<Button
+								variant="ghost"
+								size="sm"
 								onclick={() => handleStatusChange(comment.id, 'needs_reply')}
 								disabled={actionLoading === comment.id}
 							>
 								Mark Pending
-							</button>
+							</Button>
 						{/if}
 						{#if comment.reply_status !== 'skipped'}
-							<button
-								class="btn-ghost btn-sm"
+							<Button
+								variant="ghost"
+								size="sm"
 								onclick={() => handleStatusChange(comment.id, 'skipped')}
 								disabled={actionLoading === comment.id}
 							>
 								Skip
-							</button>
+							</Button>
 						{/if}
 					</div>
 				{/if}
