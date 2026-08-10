@@ -467,13 +467,13 @@
 										>
 											Delete
 										</Button>
-									{/if}
-									</Table.Cell>
-									</Table.Row>
-									{/each}
-									{/if}
-									</Table.Body>
-									</Table.Root>
+					{/if}
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					{/if}
+				</Table.Body>
+			</Table.Root>
 		</div>
 	{/if}
 </div>

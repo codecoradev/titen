@@ -305,39 +305,39 @@
 						{:else}
 							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
 						{/if}
-						</Button>
-						</div>
-						</div>
+			</Button>
+			</div>
+			</div>
 
 			<div class="form-group">
-				<label class="form-label" for="threads-app-secret">App Secret</label>
-				{#if secretIsSet && !secretDirty}
-					<div class="secret-status">
-						<span class="badge badge--success">✓ Configured</span>
-						<Button variant="ghost" size="sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</Button>
-					</div>
-				{:else}
-					<div class="input-reveal">
-						<input
-							id="threads-app-secret"
-							class="form-input"
-							type={showAppSecret ? 'text' : 'password'}
-							bind:value={threadsAppSecret}
-							oninput={() => { secretDirty = true; }}
-							placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
-							autocomplete="off"
-						/>
-						<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
-							{#if showAppSecret}
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-							{:else}
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-							{/if}
-							</Button>
-							</div>
-				{/if}
+			<label class="form-label" for="threads-app-secret">App Secret</label>
+			{#if secretIsSet && !secretDirty}
+			<div class="secret-status">
+				<span class="badge badge--success">✓ Configured</span>
+				<Button variant="ghost" size="sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</Button>
 			</div>
-		</div>
+			{:else}
+			<div class="input-reveal">
+				<input
+					id="threads-app-secret"
+					class="form-input"
+					type={showAppSecret ? 'text' : 'password'}
+					bind:value={threadsAppSecret}
+					oninput={() => { secretDirty = true; }}
+					placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
+					autocomplete="off"
+				/>
+				<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
+					{#if showAppSecret}
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1 2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+					{:else}
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+					{/if}
+				</Button>
+			</div>
+			{/if}
+			</div>
+			</div>
 
 		<div class="settings-actions">
 			<Button variant="default" onclick={saveApiKeys} disabled={saving}>
