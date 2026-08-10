@@ -62,7 +62,10 @@ async fn backup_database(output: Option<String>) -> Result<()> {
         .max_connections(1)
         .connect(&format!("sqlite://{source}"))
         .await?;
-    sqlx::query(&format!("VACUUM INTO '{dest}'"))
+    // Escape single quotes to prevent SQL injection via VACUUM INTO path.
+    // SQLite VACUUM INTO doesn't support bound parameters, so manual escaping is required.
+    let dest_safe = dest.replace('\'', "''");
+    sqlx::query(&format!("VACUUM INTO '{dest_safe}'"))
         .execute(&pool)
         .await?;
     pool.close().await;
@@ -81,7 +84,10 @@ async fn restore_database(input: &str, yes: bool) -> Result<()> {
     let dest = db_path();
 
     if !yes {
-        eprintln!("⚠️  This will REPLACE the current database: {dest}");
+        eprintln!("⚠️  WARNING: Ensure the titen server is stopped before restoring.");
+        eprintln!("   Restoring while the server is running may cause data corruption.");
+        eprintln!();
+        eprintln!("   This will REPLACE the current database: {dest}");
         eprintln!("   Source: {input}");
         eprint!("   Continue? [y/N] ");
         let mut buf = String::new();
@@ -94,7 +100,13 @@ async fn restore_database(input: &str, yes: bool) -> Result<()> {
 
     // Backup current DB before overwriting (safety net)
     if std::path::Path::new(&dest).exists() {
-        let backup_name = format!("{dest}.pre-restore");
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs();
+        let datetime = chrono::DateTime::from_timestamp(timestamp as i64, 0)
+            .unwrap_or_default()
+            .format("%Y%m%d-%H%M%S");
+        let backup_name = format!("{dest}.pre-restore-{datetime}");
         eprintln!("Saving current database to {backup_name}");
         std::fs::copy(&dest, &backup_name)?;
     }
