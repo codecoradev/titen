@@ -1,7 +1,7 @@
 <!--
-PR title must follow Conventional Commits. It becomes the squash commit message.
+PR title must follow Conventional Commits — it becomes the squash commit message.
 Format: type(scope): short description
-Examples: fix(store): handle empty token without panic / feat(scheduler): add cron-based publishing / docs(readme): update install instructions
+Examples: fix(token): handle expiry without panic / feat(scheduler): add cron-based publishing / docs(readme): update install instructions
 -->
 
 ## What
@@ -18,11 +18,10 @@ Examples: fix(store): handle empty token without panic / feat(scheduler): add cr
 - [ ] `cargo test --workspace` passes
 - [ ] `cargo fmt --all -- --check` passes
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
-- [ ] `cargo build --all-targets --release` passes
-- [ ] [Cora review](https://github.com/codecoradev/cora-code) run locally (`cora review --base origin/develop`)
+- [ ] [Cora review](https://github.com/codecoradev/cora-cli) run locally (`cora review --base origin/develop`)
 - [ ] Manual smoke-test of the affected feature <!-- describe what you tested -->
 
-<!-- If you touched a load-bearing subsystem (token management, Threads API client, scheduler, schema migration, API routes), add specific test details here. -->
+<!-- If you touched a load-bearing subsystem (token management, Threads API client, scheduler, schema migration, API routes, MCP handlers), add specific test details here. -->
 
 <!-- If you changed frontend code (web/), also confirm: -->
 - [ ] `bun run check` passes
