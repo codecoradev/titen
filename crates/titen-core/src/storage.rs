@@ -407,14 +407,19 @@ impl Storage for S3Storage {
             self.access_key, date_stamp, self.region
         );
 
-        // Build canonical query string components
+        // Build canonical query string — all values URL-encoded per SigV4 spec.
+        // Note: X-Amz-Algorithm and X-Amz-SignedHeaders values are literal
+        // constants (no special chars), so encoding is a no-op for them but
+        // we encode anyway for consistency and future-proofing.
         let credential_enc = url_encode(&credential);
+        let algorithm_enc = url_encode("AWS4-HMAC-SHA256");
+        let signed_headers_enc = url_encode("host");
         let query = format!(
-            "X-Amz-Algorithm=AWS4-HMAC-SHA256\
+            "X-Amz-Algorithm={algorithm_enc}\
              &X-Amz-Credential={credential_enc}\
              &X-Amz-Date={amz_date}\
              &X-Amz-Expires={expires_secs}\
-             &X-Amz-SignedHeaders=host"
+             &X-Amz-SignedHeaders={signed_headers_enc}"
         );
 
         let url = self.object_url(key);
