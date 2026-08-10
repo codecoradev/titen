@@ -38,7 +38,7 @@ EXPOSE 3000
 ENTRYPOINT ["bun", "run", "index.js"]
 
 # ── API target: Rust Axum API (backend-only, no static files) ──────────
-FROM rust:1.88-alpine AS api-builder
+FROM rust:1.97-alpine AS api-builder
 
 RUN apk add --no-cache \
         musl-dev \
