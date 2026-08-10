@@ -297,8 +297,12 @@ pub async fn serve(
         .pragma("journal_mode", "WAL")
         .pragma("busy_timeout", "5000")
         .pragma("synchronous", "normal");
+    let max_conn = std::env::var("TITEN_DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(5);
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .max_connections(5)
+        .max_connections(max_conn)
         .acquire_timeout(std::time::Duration::from_secs(5))
         .connect_with(db_opts)
         .await?;
