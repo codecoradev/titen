@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
+A developer experience and operability release. Introduces observability endpoints, database backup/restore, centralized error sanitization, and comprehensive test coverage for MCP and CLI.
+
+### Added
+
+- **Observability endpoints.** New `/ready` (readiness probe with DB liveness check) and `/metrics` (uptime, DB size, record counts) endpoints for Docker healthchecks and monitoring. Enhanced `/health` now reports DB connectivity status. [#v0.7-5]
+- **Database backup/restore CLI.** `titen backup` creates a consistent snapshot via SQLite `VACUUM INTO`. `titen restore` recovers from a backup file with a safety-net pre-restore backup and confirmation prompt. [#v0.7-6]
+- **Error sanitization.** Centralized `ApiError` newtype implementing `IntoResponse` — maps `TitenError` variants to proper HTTP status codes while sanitizing internal details (SQL fragments, file paths, connection strings) from API responses. 11 tests covering all variant mappings. [#v0.7-7]
+- **Configurable connection pool.** SQLite pool size now reads from `TITEN_DB_MAX_CONNECTIONS` env var (default: 5). [#v0.7-8b]
+- **MCP test suite.** 53 tests covering all 34 MCP tool handlers — account CRUD, post management, scheduling, comments, analytics, media, token expiry checks. [#v0.7-3]
+- **CLI test suite.** 27 tests covering argument parsing for all CLI subcommands including serve, account, post, schedule, comment, analytics, media, and token-check. [#v0.7-4]
+- **CONTRIBUTING.md.** Development setup guide, code style conventions, PR process, and commit message format. [#v0.7-8a]
+- **Session persistence.** Authentication sessions now persist to SQLite, surviving server restarts. [#v0.7-2]
+- **Apache-2.0 license.** Changed from dual MIT/Apache to Apache-2.0 only. [#v0.7-1]
+
+### Changed
+
+- CLI `host` argument now uses `-H` short flag (was `-h`, which conflicted with clap's built-in help).
+
 ## [0.6.1] - 2026-08-10
 
 ### Fixed
