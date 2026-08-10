@@ -58,4 +58,19 @@ pub enum Commands {
     },
     /// Check all account token expiry status
     TokenCheck,
+    /// Backup the SQLite database to a file
+    Backup {
+        /// Output file path (default: titen-backup-YYYYMMDD-HHMMSS.db)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Restore the SQLite database from a backup file
+    Restore {
+        /// Backup file to restore from
+        #[arg(short, long)]
+        input: String,
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 }
