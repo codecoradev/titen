@@ -3,7 +3,7 @@ use clap::Subcommand;
 
 use crate::api::{TitenApi, TitenConfig, print_data};
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 pub enum AnalyticsAction {
     /// Show account post analytics
     Posts {
