@@ -80,7 +80,7 @@ pub async fn api_key_auth(
         .map(|s| s.to_string());
 
     // Check session cookie (P5.4: opaque token → resolve via session store)
-    let cookie_key = req
+    let cookie_token = req
         .headers()
         .get(axum::http::header::COOKIE)
         .and_then(|v| v.to_str().ok())
@@ -90,8 +90,12 @@ pub async fn api_key_auth(
                 .map(|c| c.trim())
                 .find(|c| c.starts_with("titen_session="))
                 .map(|c| c.trim_start_matches("titen_session=").to_string())
-        })
-        .and_then(|token| crate::routes::auth::validate_session(&token));
+        });
+
+    let cookie_key = match cookie_token {
+        Some(ref token) => crate::routes::auth::validate_session(token).await,
+        None => None,
+    };
 
     // Combine: either header key or session-resolved key
     let provided = header_key.or(cookie_key);
@@ -197,6 +201,10 @@ pub async fn serve(
         .await?;
     let store = Store::new(pool.clone());
     store.migrate().await?;
+
+    // v0.7: Inject the pool into the session store so sessions persist to SQLite
+    // and survive restarts (replaces the old in-memory DashMap).
+    crate::routes::auth::init_session_pool(pool.clone());
 
     let store = Arc::new(store);
     let threads_client = Arc::new(ThreadsClient::new(store.clone()));
