@@ -8,6 +8,83 @@ use uuid::Uuid;
 use crate::server::AppState;
 use titen_core::models::*;
 
+/// Validate that a URL is HTTPS and well-formed.
+/// Meta Threads API requires HTTPS for all media URLs.
+fn validate_media_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
+    if parsed.scheme() != "https" {
+        return Err(format!(
+            "Media URL must use HTTPS, got '{}'",
+            parsed.scheme()
+        ));
+    }
+    let host = parsed.host_str().ok_or("URL missing host")?;
+    if host.is_empty() {
+        return Err("URL host is empty".to_string());
+    }
+
+    // Block internal/private addresses to prevent SSRF.
+    // Handles hostname, IPv4 (including decimal/octal/hex encoding), and IPv6.
+    let is_internal = is_internal_host(host);
+
+    if is_internal {
+        return Err("Internal addresses are not allowed for media URLs".to_string());
+    }
+    Ok(())
+}
+
+/// Check if a host string resolves to or represents an internal/private address.
+/// Handles: hostnames, IPv4 literals (decimal/octal/hex), IPv6 literals, and bracketed IPv6.
+fn is_internal_host(host: &str) -> bool {
+    // Strip brackets from IPv6 format [::1]
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+
+    // Common internal hostnames
+    if host == "localhost" || host.is_empty() {
+        return true;
+    }
+
+    // Try parsing as IP address — handles decimal (2130706433), octal (0177.0.0.1),
+    // hex (0x7f000001), and standard IPv4/IPv6 formats.
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_internal_ip(&ip);
+    }
+
+    // Check raw string for private IPv4 ranges (for non-standard formats that std::net doesn't parse)
+    host == "0.0.0.0"
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || (host.starts_with("172.") && {
+            if let Some(second) = host.split('.').nth(1) {
+                second.parse::<u8>().is_ok_and(|n| (16..=31).contains(&n))
+            } else {
+                false
+            }
+        })
+        || host.starts_with("169.254.")
+        || host.starts_with("127.")
+}
+
+/// Check if an IP address is internal/private/loopback.
+fn is_internal_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.is_unspecified() || {
+                // Check for IPv4-mapped IPv6 (::ffff:a.b.c.d)
+                v6.to_ipv4()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_private() || v4.is_link_local())
+            }
+        }
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/api/posts",
@@ -171,6 +248,35 @@ pub async fn create_post(
                     "code": "INVALID_CAROUSEL_COUNT"
                 })),
             );
+        }
+    }
+
+    // P3.8: Validate all media URLs (HTTPS-only, no internal addresses).
+    // Prevents SSRF if server-side fetch is ever added and aligns with Meta API requirements.
+    if let Some(ref url) = effective_input.image_url {
+        if let Err(e) = validate_media_url(url) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": e, "code": "INVALID_MEDIA_URL" })),
+            );
+        }
+    }
+    if let Some(ref url) = effective_input.video_url {
+        if let Err(e) = validate_media_url(url) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": e, "code": "INVALID_MEDIA_URL" })),
+            );
+        }
+    }
+    if let Some(ref urls) = effective_input.image_urls {
+        for url in urls {
+            if let Err(e) = validate_media_url(url) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": e, "code": "INVALID_MEDIA_URL" })),
+                );
+            }
         }
     }
 

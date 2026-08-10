@@ -1,13 +1,64 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{HeaderMap, HeaderValue, StatusCode, header::SET_COOKIE},
     response::IntoResponse,
 };
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::server::{AppState, ErrorResponse};
+
+/// Simple in-memory rate limiter for login attempts.
+/// Tracks failed attempts per IP, blocks after MAX_ATTEMPTS within WINDOW.
+const MAX_LOGIN_ATTEMPTS: u32 = 5;
+const LOGIN_WINDOW: Duration = Duration::from_secs(60); // 1 minute
+const LOGIN_LOCKOUT: Duration = Duration::from_secs(300); // 5 minutes
+const MAX_TRACKED_IPS: usize = 10_000; // prevent unbounded memory growth
+
+static LOGIN_ATTEMPTS: Mutex<Option<HashMap<String, Vec<Instant>>>> = Mutex::new(None);
+
+/// Lock the mutex, recovering from poison by taking the inner data.
+fn lock_attempts() -> std::sync::MutexGuard<'static, Option<HashMap<String, Vec<Instant>>>> {
+    LOGIN_ATTEMPTS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Check if an IP is rate-limited. Returns true if the IP should be blocked.
+fn is_rate_limited(ip: &str) -> bool {
+    let mut attempts = lock_attempts();
+    let map = attempts.get_or_insert_with(HashMap::new);
+    let now = Instant::now();
+
+    // Prune entries older than the lockout window
+    let timestamps = map.entry(ip.to_string()).or_default();
+    timestamps.retain(|t| now.duration_since(*t) < LOGIN_LOCKOUT);
+
+    // Count attempts within the sliding window
+    let recent: Vec<_> = timestamps
+        .iter()
+        .filter(|t| now.duration_since(**t) < LOGIN_WINDOW)
+        .collect();
+
+    timestamps.len() >= MAX_LOGIN_ATTEMPTS as usize || recent.len() >= MAX_LOGIN_ATTEMPTS as usize
+}
+
+/// Record a failed login attempt for an IP.
+fn record_failed_attempt(ip: &str) {
+    let mut attempts = lock_attempts();
+    let map = attempts.get_or_insert_with(HashMap::new);
+
+    // Periodic cleanup: remove IPs with no recent attempts to prevent unbounded growth
+    if map.len() > MAX_TRACKED_IPS {
+        let now = Instant::now();
+        map.retain(|_, ts| ts.iter().any(|t| now.duration_since(*t) < LOGIN_LOCKOUT));
+    }
+
+    map.entry(ip.to_string()).or_default().push(Instant::now());
+}
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -28,9 +79,23 @@ struct LoginResponse {
 /// 3. The API key is already a bearer-style secret
 pub async fn login(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(input): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    info!(target: "titen::auth", "LOGIN_ATTEMPT key_len={}", input.api_key.len());
+    let ip = addr.ip().to_string();
+
+    // P2.1: Rate limiting — block IPs with too many failed attempts.
+    if is_rate_limited(&ip) {
+        warn!(target: "titen::auth", "LOGIN_RATE_LIMITED ip={}", ip);
+        let body = ErrorResponse {
+            error: "Too many login attempts. Please try again later.".to_string(),
+            code: "RATE_LIMITED".to_string(),
+        };
+        return (StatusCode::TOO_MANY_REQUESTS, HeaderMap::new(), Json(body)).into_response();
+    }
+
+    info!(target: "titen::auth", "LOGIN_ATTEMPT ip={} key_len={}", ip, input.api_key.len());
 
     let required_key = match &state.api_key {
         Some(key) if !key.is_empty() => key,
@@ -44,18 +109,25 @@ pub async fn login(
     };
 
     if subtle::ConstantTimeEq::ct_eq(input.api_key.as_bytes(), required_key.as_bytes()).into() {
-        let secure = std::env::var("TITEN_COOKIE_SECURE")
+        // P1.3: Auto-detect HTTPS from X-Forwarded-Proto or explicit env var.
+        let is_https = headers
+            .get("X-Forwarded-Proto")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s == "https")
+            .unwrap_or(false);
+        let secure_env = std::env::var("TITEN_COOKIE_SECURE")
             .unwrap_or_else(|_| "false".to_string())
             .parse::<bool>()
             .unwrap_or(false);
+        let secure = secure_env || is_https;
         let secure_attr = if secure { "; Secure" } else { "" };
         let cookie_value = format!(
             "titen_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{secure_attr}",
             input.api_key
         );
-        let mut headers = HeaderMap::new();
+        let mut resp_headers = HeaderMap::new();
         match HeaderValue::from_str(&cookie_value) {
-            Ok(val) => headers.insert(SET_COOKIE, val),
+            Ok(val) => resp_headers.insert(SET_COOKIE, val),
             Err(_) => {
                 warn!(target: "titen::auth", "LOGIN_REJECT invalid chars in API key for cookie");
                 let body = ErrorResponse {
@@ -65,10 +137,16 @@ pub async fn login(
                 return (StatusCode::BAD_REQUEST, HeaderMap::new(), Json(body)).into_response();
             }
         };
-        info!(target: "titen::auth", "LOGIN_SUCCESS secure={} samesite=Lax max_age=604800", secure);
-        (StatusCode::OK, headers, Json(LoginResponse { valid: true })).into_response()
+        info!(target: "titen::auth", "LOGIN_SUCCESS ip={} secure={} samesite=Lax max_age=604800", ip, secure);
+        (
+            StatusCode::OK,
+            resp_headers,
+            Json(LoginResponse { valid: true }),
+        )
+            .into_response()
     } else {
-        warn!(target: "titen::auth", "LOGIN_FAIL key mismatch");
+        warn!(target: "titen::auth", "LOGIN_FAIL ip={} key mismatch", ip);
+        record_failed_attempt(&ip);
         let body = ErrorResponse {
             error: "Invalid API key".to_string(),
             code: "INVALID_API_KEY".to_string(),
