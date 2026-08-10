@@ -159,8 +159,7 @@ async fn show_status() -> Result<()> {
         "SELECT username, user_id, expires_at, is_active FROM accounts ORDER BY username",
     )
     .fetch_all(&pool)
-    .await
-    .unwrap_or_default();
+    .await?;
 
     let total_accounts = accounts.len();
     let active_accounts = accounts.iter().filter(|(.., active)| *active).count();
@@ -187,39 +186,33 @@ async fn show_status() -> Result<()> {
     // ── Posts ──
     let total_posts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM posts")
         .fetch_one(&pool)
-        .await
-        .unwrap_or(0);
+        .await?;
 
     let published_posts: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM posts WHERE threads_post_id IS NOT NULL")
             .fetch_one(&pool)
-            .await
-            .unwrap_or(0);
+            .await?;
 
     // ── Schedules ──
     let pending_schedules: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'pending'")
             .fetch_one(&pool)
-            .await
-            .unwrap_or(0);
+            .await?;
 
     let approved_schedules: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'approved'")
             .fetch_one(&pool)
-            .await
-            .unwrap_or(0);
+            .await?;
 
     // ── Comments ──
     let total_comments: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM comments")
         .fetch_one(&pool)
-        .await
-        .unwrap_or(0);
+        .await?;
 
     // ── Media ──
     let total_media: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media")
         .fetch_one(&pool)
-        .await
-        .unwrap_or(0);
+        .await?;
 
     // ── DB size ──
     let db_size = std::fs::metadata(&path)?.len();
