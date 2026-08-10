@@ -138,19 +138,26 @@ async fn restore_database(input: &str, yes: bool) -> Result<()> {
     Ok(())
 }
 
-/// Show system status: accounts, token health, post/schedule counts, DB info.
-async fn show_status() -> Result<()> {
-    let path = db_path();
+/// Data gathered from the database for status display.
+struct StatusData {
+    version: &'static str,
+    path: String,
+    db_size: u64,
+    total_accounts: usize,
+    active_accounts: usize,
+    expired: usize,
+    expiring_soon: usize,
+    accounts: Vec<(String, String, String, bool)>,
+    total_posts: i64,
+    published_posts: i64,
+    pending_schedules: i64,
+    approved_schedules: i64,
+    total_comments: i64,
+    total_media: i64,
+}
 
-    if !std::path::Path::new(&path).exists() {
-        anyhow::bail!("Database not found: {path}. Start the server first with `titen serve`.");
-    }
-
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect(&format!("sqlite:{path}"))
-        .await?;
-
+/// Query all status data from the database.
+async fn query_status_data(pool: &sqlx::SqlitePool) -> Result<StatusData> {
     // ── Version ──
     let version = env!("CARGO_PKG_VERSION");
 
@@ -158,7 +165,7 @@ async fn show_status() -> Result<()> {
     let accounts: Vec<(String, String, String, bool)> = sqlx::query_as(
         "SELECT username, user_id, expires_at, is_active FROM accounts ORDER BY username",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool)
     .await?;
 
     let total_accounts = accounts.len();
@@ -185,41 +192,93 @@ async fn show_status() -> Result<()> {
 
     // ── Posts ──
     let total_posts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM posts")
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await?;
 
     let published_posts: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM posts WHERE threads_post_id IS NOT NULL")
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await?;
 
     // ── Schedules ──
     let pending_schedules: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'pending'")
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await?;
 
     let approved_schedules: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'approved'")
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await?;
 
     // ── Comments ──
     let total_comments: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM comments")
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await?;
 
     // ── Media ──
     let total_media: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media")
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await?;
 
     // ── DB size ──
-    let db_size = std::fs::metadata(&path)?.len();
+    let db_size = std::fs::metadata(db_path())?.len();
 
+    Ok(StatusData {
+        version,
+        path: db_path(),
+        db_size,
+        total_accounts,
+        active_accounts,
+        expired,
+        expiring_soon,
+        accounts,
+        total_posts,
+        published_posts,
+        pending_schedules,
+        approved_schedules,
+        total_comments,
+        total_media,
+    })
+}
+
+/// Show system status: accounts, token health, post/schedule counts, DB info.
+async fn show_status() -> Result<()> {
+    let path = db_path();
+
+    if !std::path::Path::new(&path).exists() {
+        anyhow::bail!("Database not found: {path}. Start the server first with `titen serve`.");
+    }
+
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite:{path}"))
+        .await?;
+
+    // Query all data; pool is always closed even on error.
+    let data = query_status_data(&pool).await;
     pool.close().await;
+    let data = data?;
+
+    let StatusData {
+        version,
+        path,
+        db_size,
+        total_accounts,
+        active_accounts,
+        expired,
+        expiring_soon,
+        accounts,
+        total_posts,
+        published_posts,
+        pending_schedules,
+        approved_schedules,
+        total_comments,
+        total_media,
+    } = data;
 
     // ── Print ──
+    let now = chrono::Utc::now();
     println!("┌─────────────────────────────────────────────┐");
     println!("│              TITEN STATUS                   │");
     println!("├─────────────────────────────────────────────┤");
