@@ -33,7 +33,7 @@ fn test_serve_defaults() {
     match cli.command {
         Commands::Serve { port, host, mcp } => {
             assert_eq!(port, 7845);
-            assert_eq!(host, "0.0.0.0");
+            assert_eq!(host, "127.0.0.1");
             assert!(!mcp);
         }
         other => panic!("expected Serve, got {other:?}"),
