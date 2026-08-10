@@ -44,8 +44,10 @@ use titen_core::models::{
         RateLimits,
     )),
     paths(
-        // Health
+        // Health & Observability
         crate::server::health_check,
+        crate::server::readiness_check,
+        crate::server::metrics,
         // Accounts
         crate::routes::accounts::list_accounts,
         crate::routes::accounts::create_account,

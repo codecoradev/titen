@@ -72,6 +72,57 @@ impl Store {
         self.cipher.is_some()
     }
 
+    // ── Observability helpers (v0.7-5) ───────────────────────────────
+
+    /// Quick liveness probe — verifies the DB pool can execute `SELECT 1`.
+    pub async fn db_ping(&self) -> Result<bool> {
+        match sqlx::query("SELECT 1").fetch_one(&self.pool).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+
+    /// Count active sessions in the sessions table.
+    pub async fn count_sessions(&self) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sessions WHERE expires_at > datetime('now')")
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row.0)
+    }
+
+    /// Total account count.
+    pub async fn count_accounts(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    /// Total post count.
+    pub async fn count_posts(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    /// Total schedule count.
+    pub async fn count_schedules(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM schedules")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    /// Total comment count.
+    pub async fn count_comments(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM comments")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
     /// Encrypt a sensitive field before writing to DB.
     /// If no cipher is configured, returns the plaintext as-is.
     fn encrypt_field(&self, value: &str) -> Result<String> {
