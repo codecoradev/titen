@@ -60,3 +60,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --workspace
+
+  frontend-audit:
+    name: Frontend Security Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Exit 1 only if high/critical vulnerabilities found.
+      # bun audit --level high still exits 1 on low/moderate — filter output.
+      - run: |
+          output=$(bun audit --level high 2>&1) || true
+          echo "$output"
+          # Fail only if high or critical vulnerabilities exist.
+          if echo "$output" | grep -qE '[1-9][0-9]*\s+(high|critical)'; then
+            echo "::error::High or critical vulnerabilities found"
+            exit 1
+          fi
+          echo "No high/critical vulnerabilities ✅"
