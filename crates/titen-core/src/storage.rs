@@ -28,6 +28,10 @@ pub trait Storage: Send + Sync {
 
     /// List entries with a prefix (stub for now)
     async fn list(&self, prefix: &str) -> Result<Vec<StorageEntry>>;
+
+    /// Generate a time-limited presigned URL for private bucket access.
+    /// Falls back to `get_url` for public buckets or local storage.
+    async fn presigned_url(&self, key: &str, expires_secs: u64) -> Result<String>;
 }
 
 /// S3-compatible storage using reqwest with AWS Signature V4 signing.
@@ -387,10 +391,86 @@ impl Storage for S3Storage {
         }
     }
 
+    /// P5.3: Generate a presigned URL for temporary GET access to a private object.
+    /// Uses AWS SigV4 presigned URL format with query-string signature.
+    async fn presigned_url(&self, key: &str, expires_secs: u64) -> Result<String> {
+        // If bucket has a public URL, no need for presigning
+        if self.public_url.is_some() {
+            return self.get_url(key).await;
+        }
+
+        let now: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
+        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+        let date_stamp = now.format("%Y%m%d").to_string();
+        let credential = format!(
+            "{}/{}/{}/s3/aws4_request",
+            self.access_key, date_stamp, self.region
+        );
+
+        // Build canonical query string components
+        let credential_enc = url_encode(&credential);
+        let query = format!(
+            "X-Amz-Algorithm=AWS4-HMAC-SHA256\
+             &X-Amz-Credential={credential_enc}\
+             &X-Amz-Date={amz_date}\
+             &X-Amz-Expires={expires_secs}\
+             &X-Amz-SignedHeaders=host"
+        );
+
+        let url = self.object_url(key);
+        let (scheme, rest) = url.split_once("://").ok_or_else(|| {
+            crate::error::TitenError::ConfigError(format!("Invalid S3 URL: {url}"))
+        })?;
+        let (authority, _path_and_query) = rest.split_once('/').unwrap_or((rest, ""));
+        let host = authority;
+
+        // Canonical URI (path-style)
+        let full_path = format!("/{}/{}", self.bucket, key);
+
+        // Build canonical request (GET, no body → UNSIGNED-PAYLOAD for presigned)
+        let canonical = Self::build_canonical_request(
+            "GET",
+            &full_path,
+            &query,
+            &[("host", host)],
+            "UNSIGNED-PAYLOAD",
+        );
+
+        // Build string to sign
+        let scope = format!("{}/{}/s3/aws4_request", date_stamp, self.region);
+        let string_to_sign = format!(
+            "AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{}",
+            Self::sha256_hex(canonical.as_bytes())
+        );
+
+        // Sign
+        let signing_key = self.derive_signing_key(&date_stamp);
+        let mut mac =
+            HmacSha256::new_from_slice(&signing_key).expect("HMAC accepts any key length");
+        mac.update(string_to_sign.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+
+        Ok(format!(
+            "{scheme}://{host}{full_path}?{query}&X-Amz-Signature={signature}"
+        ))
+    }
+
     async fn list(&self, _prefix: &str) -> Result<Vec<StorageEntry>> {
         // S3 list API requires signed requests — stub for now
         Ok(Vec::new())
     }
+}
+
+/// URL-encode a string for use in S3 query parameters.
+fn url_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                char::from(b).to_string()
+            }
+            _ => format!("%{:02X}", b),
+        })
+        .collect()
 }
 
 /// Local filesystem storage backend.
@@ -507,6 +587,12 @@ impl Storage for LocalStorage {
 
     async fn get_url(&self, key: &str) -> Result<String> {
         Ok(format!("{}/{}", self.public_url.trim_end_matches('/'), key))
+    }
+
+    /// P5.3: Local storage doesn't need presigning — media is served
+    /// behind authenticated routes. Return the standard URL.
+    async fn presigned_url(&self, key: &str, _expires_secs: u64) -> Result<String> {
+        self.get_url(key).await
     }
 
     async fn list(&self, prefix: &str) -> Result<Vec<StorageEntry>> {

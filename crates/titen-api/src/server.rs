@@ -72,26 +72,29 @@ pub async fn api_key_auth(
         _ => return Ok(next.run(req).await),
     };
 
-    // Check X-API-Key header
-    let provided = req
+    // Check X-API-Key header (raw key — for API/CLI usage)
+    let header_key = req
         .headers()
         .get("X-API-Key")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    // Check session cookie
-    let provided = provided.or_else(|| {
-        req.headers()
-            .get(axum::http::header::COOKIE)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|cookies| {
-                cookies
-                    .split(';')
-                    .map(|c| c.trim())
-                    .find(|c| c.starts_with("titen_session="))
-                    .map(|c| c.trim_start_matches("titen_session=").to_string())
-            })
-    });
+    // Check session cookie (P5.4: opaque token → resolve via session store)
+    let cookie_key = req
+        .headers()
+        .get(axum::http::header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(|c| c.trim())
+                .find(|c| c.starts_with("titen_session="))
+                .map(|c| c.trim_start_matches("titen_session=").to_string())
+        })
+        .and_then(|token| crate::routes::auth::validate_session(&token));
+
+    // Combine: either header key or session-resolved key
+    let provided = header_key.or(cookie_key);
 
     match provided {
         Some(key)

@@ -32,6 +32,8 @@ subtle = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 url = "2.5.8"
+dashmap = "6.2.1"
+getrandom = "0.4.3"
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

@@ -73,8 +73,26 @@ pub async fn list_media(
     State(state): State<AppState>,
     Query(filter): Query<MediaFilter>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+    let offset = filter.offset.unwrap_or(0).max(0);
+
     match state.store.list_media(&filter).await {
-        Ok(media) => (StatusCode::OK, Json(serde_json::json!({ "data": media }))),
+        Ok(media) => {
+            // P5.2: Include total count + pagination metadata
+            let total = state.store.count_media(&filter).await.unwrap_or(0);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "data": media,
+                    "pagination": {
+                        "total": total,
+                        "limit": limit,
+                        "offset": offset,
+                        "has_more": (offset + media.len() as i64) < total,
+                    }
+                })),
+            )
+        }
         Err(e) => {
             tracing::error!("Failed to list media: {e:?}");
             (
