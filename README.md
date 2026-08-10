@@ -1,7 +1,7 @@
 <!-- Badges -->
 [![CI](https://github.com/codecoradev/titen/actions/workflows/ci.yml/badge.svg)](https://github.com/codecoradev/titen/actions/workflows/ci.yml)
 [![Release](https://github.com/codecoradev/titen/actions/workflows/release.yml/badge.svg)](https://github.com/codecoradev/titen/actions/workflows/release.yml)
-[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/Rust-1.85+-orange.svg)](https://www.rust-lang.org/)
 
 # Titen
@@ -427,7 +427,7 @@ docker run -p 7845:7845 \
 
 ## License
 
-[AGPL-3.0-only](LICENSE)
+[Apache-2.0](LICENSE)
 
 ## Contributing
 
