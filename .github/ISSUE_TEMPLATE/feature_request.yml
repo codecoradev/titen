@@ -1,34 +1,31 @@
 name: Feature request
-description: Suggest a feature for Titen
-title: "[FEATURE] "
+description: Suggest a new feature or improvement
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before opening a feature request, check open issues to make sure it hasn't been discussed already.
+        Thanks for the idea! A short conversation here saves everyone time before any code is written.
+
+        Titen is intentionally focused — not every idea will make it in. A "no" is not a judgment of the idea.
 
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What problem does this feature solve? Who runs into it?
+      label: What problem does this solve?
+      description: |
+        The **why**, not the **what**. What were you trying to do when you wished this existed?
+      placeholder: "When I'm scheduling posts, I want to see a preview before publishing so I don't accidentally post the wrong content."
     validations:
       required: true
 
   - type: textarea
-    id: solution
+    id: proposal
     attributes:
       label: Proposed solution
-      description: Describe what you'd like Titen to do.
+      description: How would you imagine using this? CLI flag, API endpoint, MCP tool, frontend feature — anything that helps picture it.
     validations:
       required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Other approaches you've thought about or tried.
 
   - type: dropdown
     id: component
@@ -40,11 +37,29 @@ body:
         - CLI (titen-cli)
         - MCP server (titen-mcp)
         - Frontend (web/)
-        - Docker / deployment
         - Other
 
   - type: textarea
-    id: context
+    id: alternatives
     attributes:
-      label: Additional context
-      description: Screenshots, mockups, links, or examples that help explain the idea.
+      label: Alternatives considered
+      description: What workarounds have you tried? What other tools handle this well?
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Are you willing to contribute the implementation?
+      options:
+        - "Yes, with guidance"
+        - "Yes, I can do it"
+        - "No, just suggesting"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate
+          required: true
