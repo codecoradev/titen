@@ -504,7 +504,7 @@
 				</div>
 
 				<div class="form-row">
-					<div class="form-group" style="flex: 1;">
+					<div class="form-group flex-1">
 						<label class="form-label" for="modal-scheduled">Scheduled At <span class="required">*</span></label>
 						<input
 							class="form-input"
@@ -512,10 +512,10 @@
 							id="modal-scheduled"
 							bind:value={modalScheduledAt}
 						/>
-						<span class="form-hint">Times shown in {tzLabel}</span>
+						<span class="form-helper">Times shown in {tzLabel}</span>
 					</div>
 
-					<div class="form-group" style="flex: 1;">
+					<div class="form-group flex-1">
 						<label class="form-label">Media Type</label>
 						<Select.Root type="single" bind:value={modalMediaType}>
 							<Select.Trigger>
@@ -540,12 +540,12 @@
 							bind:value={modalImageUrl}
 							placeholder="https://example.com/image.jpg"
 						/>
-						<span class="form-hint">Direct link to image (JPG, PNG)</span>
+						<span class="form-helper">Direct link to image (JPG, PNG)</span>
 					</div>
 				{:else if modalMediaType === 'CAROUSEL'}
 					<div class="form-group">
 						<label class="form-label">Carousel Image URLs <span class="required">*</span></label>
-						<span class="form-hint">2–20 image URLs. Each becomes a carousel slide.</span>
+						<span class="form-helper">2–20 image URLs. Each becomes a carousel slide.</span>
 						{#each modalCarouselUrls as _, idx}
 							<div class="carousel-url-row">
 								<input
@@ -572,7 +572,7 @@
 									size="sm"
 									onclick={addCarouselUrl}
 									type="button"
-									style="margin-top: 0.5rem;"
+									class="mt-2xs"
 								>+ Add Image</Button>
 							{/if}
 					</div>
@@ -628,7 +628,7 @@
 						id="edit-scheduled"
 						bind:value={editScheduledAt}
 					/>
-					<span class="form-hint">Times shown in {tzLabel}</span>
+					<span class="form-helper">Times shown in {tzLabel}</span>
 				</div>
 
 				<div class="form-group">
@@ -669,7 +669,7 @@
 	<div class="confirm-overlay" onclick={closeRejectModal} role="dialog" aria-modal="true" aria-label="Reject Schedule">
 		<div class="confirm-dialog modal-narrow" style="max-width: 28rem;" onclick={(e) => e.stopPropagation()}>
 			<h3>Reject Schedule</h3>
-			<div style="margin-bottom: var(--space-md);">
+			<div class="mb-md">
 				<div class="form-group">
 							<label class="form-label">Reason (optional)</label>
 							<Textarea

@@ -108,7 +108,7 @@
 
 <PageHeader title="Posts" description="Manage and monitor your Threads content.">
 	{#snippet action()}
-		<div style="display: flex; gap: var(--space-xs); align-items: center;">
+		<div class="row-gap-sm">
 			<Select.Root type="single" bind:value={filterAccount}>
 				<Select.Trigger>
 					{filterAccount ? `@${accounts.find((a) => a.id === filterAccount)?.username ?? ''}` : 'All Accounts'}
@@ -172,7 +172,7 @@
 			<Table.Body>
 				{#each filtered as post (post.id)}
 					<Table.Row class="row-clickable" onclick={() => openDetail(post)} role="button" tabindex={0} onkeydown={(e) => e.key === 'Enter' && openDetail(post)}>
-						<Table.Cell class="truncate" style="max-width:40ch;">
+						<Table.Cell class="truncate truncate-mw-40">
 							{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
 						</Table.Cell>
 						<Table.Cell><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></Table.Cell>
@@ -180,11 +180,11 @@
 						<Table.Cell><StatusBadge status={post.status} /></Table.Cell>
 						<Table.Cell><span class="tabular-nums">{formatDate(post.published_at)}</span></Table.Cell>
 						<Table.Cell onclick={(e) => e.stopPropagation()}>
-							<div style="display:flex;gap:var(--space-2xs);">
+							<div class="row-gap-xs">
 								<Button variant="outline" size="sm" onclick={() => openDetail(post)}>Detail</Button>
 								<Button variant="ghost" size="sm" onclick={() => (confirmDelete = { open: true, post })}>
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
-										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm-danger">
+											<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
 								</Button>
 							</div>

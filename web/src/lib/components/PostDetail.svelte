@@ -67,22 +67,22 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div class="modal-overlay" onclick={onClose} role="presentation">
+<div class="detail-overlay" onclick={onClose} role="presentation">
 	<div
-		class="modal-content"
+		class="detail-dialog"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Post detail"
 		onclick={(e) => e.stopPropagation()}
 	>
 		<!-- Header -->
-		<div class="modal-header">
-			<h2 class="modal-title">Post Detail</h2>
-			<button class="close-btn" onclick={onClose} aria-label="Close">&times;</button>
+		<div class="detail-header">
+			<h2 class="detail-title">Post Detail</h2>
+			<button class="detail-close" onclick={onClose} aria-label="Close">&times;</button>
 		</div>
 
 		<!-- Body -->
-		<div class="modal-body">
+		<div class="detail-body">
 			<!-- Status -->
 			<div class="detail-row">
 				<span class="detail-label">Status</span>
@@ -153,8 +153,8 @@
 					<div class="metrics-grid">
 						{#each Array(5) as _}
 							<div class="metric-card">
-								<div class="skeleton" style="height: 1.5rem; width: 3rem;"></div>
-								<div class="skeleton" style="height: 0.75rem; width: 2rem;"></div>
+								<div class="skeleton skeleton-line-lg"></div>
+								<div class="skeleton skeleton-line-sm"></div>
 							</div>
 						{/each}
 					</div>
@@ -217,72 +217,13 @@
 		</div>
 
 		<!-- Footer -->
-		<div class="modal-footer">
-			<button class="btn btn-secondary" onclick={onClose}>Close</button>
+		<div class="detail-footer">
+			<button class="btn-secondary" onclick={onClose}>Close</button>
 		</div>
 	</div>
 </div>
 
 <style>
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: var(--overlay-scrim, oklch(0% 0 0 / 0.5));
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-modal);
-		padding: var(--space-md);
-	}
-
-	.modal-content {
-		background: var(--color-paper);
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
-		max-width: 42rem;
-		width: 100%;
-		max-height: 85vh;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-md);
-		border-bottom: 1px solid var(--color-rule);
-	}
-
-	.modal-title {
-		font-size: var(--text-lg);
-		font-weight: 700;
-		margin: 0;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		cursor: pointer;
-		color: var(--color-muted);
-		padding: 0 var(--space-xs);
-		line-height: 1;
-	}
-
-	.close-btn:hover {
-		color: var(--color-ink);
-	}
-
-	.modal-body {
-		padding: var(--space-md);
-		overflow-y: auto;
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-
 	.detail-row {
 		display: flex;
 		align-items: center;
@@ -437,26 +378,5 @@
 	@keyframes pulse {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0.5; }
-	}
-
-	/* Footer */
-	.modal-footer {
-		display: flex;
-		gap: var(--space-xs);
-		padding: var(--space-md);
-		border-top: 1px solid var(--color-rule);
-		justify-content: flex-end;
-	}
-
-	@media (max-width: 30rem) {
-		.modal-overlay {
-			padding: 0;
-		}
-
-		.modal-content {
-			max-height: 100vh;
-			border-radius: 0;
-			height: 100vh;
-		}
 	}
 </style>

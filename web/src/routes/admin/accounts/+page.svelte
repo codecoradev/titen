@@ -183,7 +183,7 @@
 				{#each accounts as account (account.id)}
 					<Table.Row>
 						<Table.Cell>
-							<div style="display:flex;align-items:center;gap:var(--space-sm);">
+							<div class="row-center">
 								<div>
 									<div style="font-weight:500;">{account.username}</div>
 									{#if account.user_id}
@@ -194,7 +194,7 @@
 						</Table.Cell>
 						<Table.Cell><StatusBadge status={statusFromAccount(account)} /></Table.Cell>
 						<Table.Cell>
-							<span class="tabular-nums" style="font-size:var(--text-sm);">
+							<span class="tabular-nums text-sm">
 								{#if account.expires_at}
 									Expires {formatDate(account.expires_at)}
 								{:else}
@@ -204,7 +204,7 @@
 						</Table.Cell>
 						<Table.Cell><span class="tabular-nums">{formatDate(account.created_at)}</span></Table.Cell>
 						<Table.Cell>
-							<div style="display:flex;gap:var(--space-2xs);">
+							<div class="row-gap-xs">
 								<Button
 									variant="outline"
 									size="sm"
@@ -214,8 +214,8 @@
 									{refreshingId === account.id ? '…' : 'Refresh'}
 								</Button>
 								<Button variant="ghost" size="sm" onclick={() => (deletingId = account.id)}>
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
-										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm-danger">
+														<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
 								</Button>
 							</div>
@@ -248,28 +248,28 @@
 			<div class="oauth-divider"><span>or add manually</span></div>
 
 			<form onsubmit={(e) => { e.preventDefault(); handleAddAccount(); }}>
-				<div class="form-group" style="margin-bottom:var(--space-sm);">
-					<label class="form-label" for="user_id">User ID <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+				<div class="form-group mb-sm">
+					<label class="form-label" for="user_id">User ID <span class="text-hint">(optional)</span></label>
 					<input id="user_id" class="form-input" type="text" bind:value={formUserId} placeholder="e.g. 1234567890" disabled={submitting} />
 				</div>
-				<div class="form-group" style="margin-bottom:var(--space-sm);">
-					<label class="form-label" for="username">Username <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+				<div class="form-group mb-sm">
+					<label class="form-label" for="username">Username <span class="text-hint">(optional)</span></label>
 					<input id="username" class="form-input" type="text" bind:value={formUsername} placeholder="e.g. @username" disabled={submitting} />
 				</div>
-				<div class="form-group" style="margin-bottom:var(--space-sm);">
+				<div class="form-group mb-sm">
 					<label class="form-label" for="access_token">Access Token</label>
 					<input id="access_token" class="form-input" type="password" bind:value={formAccessToken} placeholder="Long-lived access token" disabled={submitting} />
 				</div>
-				<div class="form-group" style="margin-bottom:var(--space-sm);">
-					<label class="form-label" for="expires_at">Expires At <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+				<div class="form-group mb-sm">
+					<label class="form-label" for="expires_at">Expires At <span class="text-hint">(optional)</span></label>
 					<input id="expires_at" class="form-input" type="datetime-local" bind:value={formExpiresAt} disabled={submitting} />
 				</div>
-				<div class="form-group" style="margin-bottom:var(--space-sm);">
-					<label class="form-label" for="app_id">App ID <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+				<div class="form-group mb-sm">
+					<label class="form-label" for="app_id">App ID <span class="text-hint">(optional)</span></label>
 					<input id="app_id" class="form-input" type="text" bind:value={formAppId} placeholder="Facebook App ID" disabled={submitting} />
 				</div>
-				<div class="form-group" style="margin-bottom:var(--space-md);">
-					<label class="form-label" for="app_secret">App Secret <span style="color:var(--color-muted);font-weight:400;">(optional)</span></label>
+				<div class="form-group mb-md">
+					<label class="form-label" for="app_secret">App Secret <span class="text-hint">(optional)</span></label>
 					<input id="app_secret" class="form-input" type="password" bind:value={formAppSecret} placeholder="Facebook App Secret" disabled={submitting} />
 				</div>
 				<div class="confirm-actions">
