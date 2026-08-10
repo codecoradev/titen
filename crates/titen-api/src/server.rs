@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Instant;
 
 use axum::{
     Router,
@@ -17,6 +19,9 @@ use crate::openapi;
 use crate::routes;
 use titen_core::{Store, ThreadsClient};
 
+/// Server start time for uptime reporting.
+static START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
+
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
@@ -31,6 +36,120 @@ pub struct HealthResponse {
     version: &'static str,
     db: &'static str,
     timezone: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    db_connected: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    uptime_seconds: Option<u64>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse),
+    ),
+)]
+pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
+    let db_connected = state.store.db_ping().await.unwrap_or(false);
+    let uptime = START_TIME.elapsed().as_secs();
+    Json(HealthResponse {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+        db: if db_connected { "ok" } else { "degraded" },
+        timezone: titen_core::config::timezone(),
+        db_connected: Some(db_connected),
+        uptime_seconds: Some(uptime),
+    })
+}
+
+#[utoipa::path(
+    get,
+    path = "/ready",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is ready"),
+        (status = 503, description = "Service is not ready"),
+    ),
+)]
+pub async fn readiness_check(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut checks = serde_json::json!({});
+    let mut all_ready = true;
+
+    // Database connectivity with timing
+    let db_start = Instant::now();
+    let db_ok = state.store.db_ping().await.unwrap_or(false);
+    let db_latency_ms = db_start.elapsed().as_millis();
+    checks["database"] = serde_json::json!({
+        "status": if db_ok { "ok" } else { "failed" },
+        "latency_ms": db_latency_ms
+    });
+    if !db_ok {
+        all_ready = false;
+    }
+
+    // Encryption status
+    let encrypted = state.store.is_encrypted();
+    checks["encryption"] = serde_json::json!({
+        "status": "ok",
+        "mode": if encrypted { "encrypted" } else { "plaintext" }
+    });
+
+    // Active sessions (non-fatal if table doesn't exist)
+    let sessions = state.store.count_sessions().await.unwrap_or(-1);
+    checks["sessions"] = serde_json::json!({
+        "status": if sessions >= 0 { "ok" } else { "unknown" },
+        "active": sessions
+    });
+
+    let status_code = if all_ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+
+    (
+        status_code,
+        Json(serde_json::json!({
+            "ready": all_ready,
+            "checks": checks,
+            "version": env!("CARGO_PKG_VERSION"),
+            "uptime_seconds": START_TIME.elapsed().as_secs(),
+        })),
+    )
+}
+
+#[utoipa::path(
+    get,
+    path = "/metrics",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service metrics"),
+    ),
+)]
+pub async fn metrics(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let accounts = state.store.count_accounts().await.unwrap_or(-1);
+    let posts = state.store.count_posts().await.unwrap_or(-1);
+    let schedules = state.store.count_schedules().await.unwrap_or(-1);
+    let comments = state.store.count_comments().await.unwrap_or(-1);
+    let sessions = state.store.count_sessions().await.unwrap_or(-1);
+
+    Json(serde_json::json!({
+        "counts": {
+            "accounts": accounts,
+            "posts": posts,
+            "schedules": schedules,
+            "comments": comments,
+            "active_sessions": sessions,
+        },
+        "system": {
+            "version": env!("CARGO_PKG_VERSION"),
+            "uptime_seconds": START_TIME.elapsed().as_secs(),
+            "encrypted": state.store.is_encrypted(),
+        }
+    }))
 }
 
 #[derive(serde::Serialize)]
@@ -61,8 +180,9 @@ pub async fn api_key_auth(
     req: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Result<axum::http::Response<axum::body::Body>, (StatusCode, Json<ErrorResponse>)> {
-    // Skip auth for health endpoint
-    if req.uri().path() == "/health" {
+    // Skip auth for health/readiness/metrics endpoints
+    let path = req.uri().path();
+    if path == "/health" || path == "/api/health" || path == "/ready" || path == "/metrics" {
         return Ok(next.run(req).await);
     }
 
@@ -112,23 +232,6 @@ pub async fn api_key_auth(
             "Invalid or missing API key",
         )),
     }
-}
-
-#[utoipa::path(
-    get,
-    path = "/health",
-    tag = "health",
-    responses(
-        (status = 200, description = "Service is healthy", body = HealthResponse),
-    ),
-)]
-pub async fn health_check(State(_state): State<AppState>) -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        version: env!("CARGO_PKG_VERSION"),
-        db: "ok",
-        timezone: titen_core::config::timezone(),
-    })
 }
 
 pub async fn serve(
@@ -391,6 +494,8 @@ pub async fn serve(
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
+        .route("/ready", get(readiness_check))
+        .route("/metrics", get(metrics))
         // Auth routes — public (not behind API key middleware)
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/session", get(routes::auth::session))
