@@ -23,6 +23,14 @@
 	let isDragging = $state(false);
 	let uploading = $state(false);
 
+	// P5.2: Pagination state
+	const PAGE_SIZE = 20;
+	let currentPage = $state(0);
+	let totalCount = $state(0);
+	let hasMore = $state(false);
+
+	let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
+
 	function formatSize(bytes: number): string {
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -45,10 +53,25 @@
 
 	async function loadMedia() {
 		try {
-			media = await listMedia();
+			const res = await listMedia({
+				limit: PAGE_SIZE,
+				offset: currentPage * PAGE_SIZE,
+			});
+			media = res.data;
+			totalCount = res.pagination.total;
+			hasMore = res.pagination.has_more;
 		} catch (e: any) {
 			toast(e.message || 'Failed to load media', 'error');
 		}
+	}
+
+	function goToPage(page: number) {
+		if (page < 0 || page >= totalPages) return;
+		currentPage = page;
+		loading = true;
+		loadMedia().then(() => {
+			loading = false;
+		});
 	}
 
 	async function handleUpload(e: Event) {
@@ -61,23 +84,27 @@
 
 	async function uploadFiles(files: File[]) {
 		uploading = true;
-		let success = 0;
-		let failed = 0;
-		for (const file of files) {
-			try {
-				await uploadMedia(file);
-				success++;
-			} catch {
-				failed++;
+		// P5.6: Parallel upload — Promise.allSettled for concurrent transfers
+		// Limit concurrency to 3 to avoid overwhelming the server
+		const CONCURRENCY = 3;
+		const results: { success: number; failed: number } = { success: 0, failed: 0 };
+
+		for (let i = 0; i < files.length; i += CONCURRENCY) {
+			const batch = files.slice(i, i + CONCURRENCY);
+			const settled = await Promise.allSettled(batch.map((f) => uploadMedia(f)));
+			for (const r of settled) {
+				if (r.status === 'fulfilled') results.success++;
+				else results.failed++;
 			}
 		}
+
 		uploading = false;
-		if (success > 0) {
-			toast(`Uploaded ${success} file${success > 1 ? 's' : ''}`, 'success');
+		if (results.success > 0) {
+			toast(`Uploaded ${results.success} file${results.success > 1 ? 's' : ''}`, 'success');
 			await loadMedia();
 		}
-		if (failed > 0) {
-			toast(`${failed} file${failed > 1 ? 's' : ''} failed to upload`, 'error');
+		if (results.failed > 0) {
+			toast(`${results.failed} file${results.failed > 1 ? 's' : ''} failed to upload`, 'error');
 		}
 	}
 
@@ -278,6 +305,26 @@
 		</Table.Root>
 	{/if}
 </div>
+
+<!-- P5.2: Pagination controls -->
+{#if !loading && totalCount > PAGE_SIZE}
+	<div class="flex items-center justify-between px-1 py-3">
+		<p class="text-sm text-muted-foreground">
+			Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+		</p>
+		<div class="flex gap-2">
+			<Button size="sm" variant="outline" disabled={currentPage === 0} onclick={() => goToPage(currentPage - 1)}>
+				Previous
+			</Button>
+			<span class="flex items-center px-2 text-sm text-muted-foreground">
+				Page {currentPage + 1} of {totalPages}
+			</span>
+			<Button size="sm" variant="outline" disabled={!hasMore} onclick={() => goToPage(currentPage + 1)}>
+				Next
+			</Button>
+		</div>
+	</div>
+{/if}
 
 <!-- Lightbox / Preview Dialog -->
 {#if previewItem}

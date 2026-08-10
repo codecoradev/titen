@@ -1134,6 +1134,26 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// Count total media assets matching a filter (for pagination metadata).
+    pub async fn count_media(&self, filter: &MediaFilter) -> Result<i64> {
+        let mut query = String::from("SELECT COUNT(*) as count FROM media_assets WHERE 1=1");
+        if filter.content_type.is_some() {
+            query.push_str(" AND content_type = ?");
+        }
+        if filter.search.is_some() {
+            query.push_str(" AND filename LIKE ? COLLATE NOCASE");
+        }
+
+        let mut q = sqlx::query_scalar::<_, i64>(&query);
+        if let Some(ref ct) = filter.content_type {
+            q = q.bind(ct);
+        }
+        if let Some(ref search) = filter.search {
+            q = q.bind(format!("%{search}%"));
+        }
+        q.fetch_one(&self.pool).await.map_err(Into::into)
+    }
+
     /// Get a single media asset by ID.
     pub async fn get_media_asset(&self, id: &str) -> Result<MediaAsset> {
         sqlx::query_as::<_, MediaAsset>("SELECT * FROM media_assets WHERE id = ?")

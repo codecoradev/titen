@@ -266,8 +266,31 @@ export const getAnalyticsTrend = (postId: string, period?: string): Promise<Anal
 };
 
 // ── Media ──
-export const listMedia = (): Promise<MediaItem[]> =>
-	request<MediaItem[]>('/media');
+export interface MediaPagination {
+	total: number;
+	limit: number;
+	offset: number;
+	has_more: boolean;
+}
+
+export interface MediaListResponse {
+	data: MediaItem[];
+	pagination: MediaPagination;
+}
+
+export const listMedia = (params?: {
+	limit?: number;
+	offset?: number;
+	search?: string;
+}): Promise<MediaListResponse> => {
+	const q = new URLSearchParams();
+	if (params?.limit !== undefined) q.set('limit', String(params.limit));
+	if (params?.offset !== undefined) q.set('offset', String(params.offset));
+	if (params?.search) q.set('search', params.search);
+	const qs = q.toString();
+	// Backend returns { data, pagination } — extract .data for backward compat
+	return request<MediaListResponse>(`/media${qs ? `?${qs}` : ''}`);
+};
 
 export const uploadMedia = (file: File): Promise<MediaItem> => {
 	const form = new FormData();
