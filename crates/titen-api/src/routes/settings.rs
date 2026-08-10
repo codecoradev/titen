@@ -12,7 +12,8 @@ use titen_core::models::{AppSettingsResponse, UpdateAppSettings};
 ///
 /// Priority:
 /// 1. `TITEN_OAUTH_REDIRECT_URI` env var (explicit, safest)
-/// 2. Host header — ONLY if it matches an entry in `TITEN_ALLOWED_HOSTS`
+/// 2. `APP_URL` env var (already used for CORS and canonical URL)
+/// 3. Host header — ONLY if it matches an entry in `TITEN_ALLOWED_HOSTS`
 ///    allowlist (comma-separated, e.g. "titen.ajianaz.dev,localhost:7845")
 ///
 /// We never blindly trust the Host header because it can be spoofed by
@@ -25,7 +26,25 @@ fn derive_redirect_uri(headers: &HeaderMap) -> String {
         }
     }
 
-    // 2. Host header — only if allowlisted
+    // 2. APP_URL — already the canonical public URL, trusted by config
+    if let Ok(app_url) = std::env::var("APP_URL") {
+        let app_url = app_url.trim_end_matches('/');
+        if !app_url.is_empty() {
+            // Enforce HTTPS for non-localhost (OAuth security requirement)
+            let is_localhost =
+                app_url.starts_with("http://localhost") || app_url.starts_with("http://127.0.0.1");
+            if app_url.starts_with("https://") || is_localhost {
+                return format!("{app_url}/auth/callback");
+            } else {
+                warn!(
+                    "APP_URL '{app_url}' is not HTTPS; refusing to use for OAuth redirect URI. \
+                     Use https:// or set TITEN_OAUTH_REDIRECT_URI explicitly."
+                );
+            }
+        }
+    }
+
+    // 3. Host header — only if allowlisted
     let allowed = std::env::var("TITEN_ALLOWED_HOSTS").unwrap_or_default();
     let allowed_hosts: Vec<&str> = allowed
         .split(',')
@@ -36,7 +55,7 @@ fn derive_redirect_uri(headers: &HeaderMap) -> String {
     if allowed_hosts.is_empty() {
         // No allowlist configured — refuse to derive from Host header
         warn!(
-            "TITEN_OAUTH_REDIRECT_URI not set and TITEN_ALLOWED_HOSTS is empty; \
+            "TITEN_OAUTH_REDIRECT_URI and APP_URL not set, TITEN_ALLOWED_HOSTS is empty; \
              OAuth redirect URI will be empty. Configure one of these env vars."
         );
         return String::new();
