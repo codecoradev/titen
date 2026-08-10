@@ -345,6 +345,16 @@ pub async fn serve(
             "/api/threads/share-to-instagram",
             post(routes::threads::share_to_instagram),
         )
+        // P3.1: Static media files behind auth — prevents unauthorized access
+        // to uploaded content. Cookie-based session works for <img> tags.
+        .nest_service(
+            "/media",
+            ServeDir::new(
+                std::env::var("TITEN_LOCAL_STORAGE_DIR")
+                    .unwrap_or_else(|_| "/data/media".to_string()),
+            )
+            .append_index_html_on_directories(false),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api_key_auth,
@@ -373,15 +383,6 @@ pub async fn serve(
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/session", get(routes::auth::session))
         .route("/api/auth/logout", post(routes::auth::logout))
-        // Static media files — served from local filesystem when S3 is not
-        // configured. Path from TITEN_LOCAL_STORAGE_DIR (default: /data/media).
-        .nest_service(
-            "/media",
-            ServeDir::new(
-                std::env::var("TITEN_LOCAL_STORAGE_DIR")
-                    .unwrap_or_else(|_| "/data/media".to_string()),
-            ),
-        )
         .merge(docs_layer)
         .merge(protected_routes)
         .layer(TraceLayer::new_for_http())

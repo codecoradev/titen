@@ -9,6 +9,56 @@ use crate::server::AppState;
 use titen_core::models::MediaFilter;
 use titen_core::storage::{S3Storage, detect_backend};
 
+/// Allowed MIME types for media uploads.
+const ALLOWED_MIME_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "video/mp4",
+    "video/webm",
+];
+
+/// Validate file content using magic bytes (first 16 bytes).
+/// Returns the detected MIME type, or an error message if the file type is not allowed.
+fn validate_magic_bytes(data: &[u8]) -> Result<String, &'static str> {
+    if data.len() < 12 {
+        return Err("File too small to validate");
+    }
+
+    let mime = if data.starts_with(b"\xFF\xD8\xFF") {
+        "image/jpeg"
+    } else if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        "image/png"
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        "image/gif"
+    } else if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        "image/webp"
+    } else if data.len() >= 12 && &data[4..8] == b"ftyp" {
+        // MP4/MOV family — check brand (mp4, m4v, mov, etc.)
+        let brand = &data[8..12];
+        if brand.starts_with(b"mp4")
+            || brand.starts_with(b"m4v")
+            || brand == b"qt  "
+            || brand == b"isom"
+        {
+            "video/mp4"
+        } else {
+            return Err("Unsupported video format");
+        }
+    } else if data.len() >= 4 && &data[0..4] == b"\x1A\x45\xDF\xA3" {
+        // WebM/Matroska
+        "video/webm"
+    } else {
+        return Err("Unrecognized file type");
+    };
+
+    if !ALLOWED_MIME_TYPES.contains(&mime) {
+        return Err("File type not allowed");
+    }
+
+    Ok(mime.to_string())
+}
 #[utoipa::path(
     get,
     path = "/api/media",
@@ -69,10 +119,8 @@ pub async fn upload_media(
 
     if let Ok(Some(field)) = multipart.next_field().await {
         let filename = field.file_name().unwrap_or("unknown").to_string();
-        let content_type = field
-            .content_type()
-            .unwrap_or("application/octet-stream")
-            .to_string();
+        // Note: content_type is validated from magic bytes after reading data,
+        // not from the client-provided Content-Type header (which can be spoofed).
 
         // Read bytes
         let data = match field.bytes().await {
@@ -84,6 +132,21 @@ pub async fn upload_media(
                     Json(serde_json::json!({
                         "error": "Failed to read uploaded file",
                         "code": "READ_FAILED"
+                    })),
+                );
+            }
+        };
+
+        // P3.4: Validate file type using magic bytes (not client-provided Content-Type)
+        let content_type = match validate_magic_bytes(&data) {
+            Ok(mime) => mime,
+            Err(reason) => {
+                tracing::warn!("Upload rejected: {reason} ({} bytes)", data.len());
+                return (
+                    StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                    Json(serde_json::json!({
+                        "error": reason,
+                        "code": "INVALID_FILE_TYPE"
                     })),
                 );
             }
