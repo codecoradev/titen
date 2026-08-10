@@ -65,6 +65,9 @@ async fn backup_database(output: Option<String>) -> Result<()> {
     // Validate path to prevent SQL injection via VACUUM INTO.
     // SQLite VACUUM INTO doesn't support bound parameters, so we use a strict
     // allowlist of safe path characters before interpolation.
+    // CRITICAL: Single quote (') must NEVER be added to this allowlist —
+    // it would reintroduce SQL injection. The allowlist approach deliberately
+    // excludes it rather than relying on a denylist.
     if !dest
         .chars()
         .all(|c| c.is_alphanumeric() || matches!(c, '/' | '\\' | '-' | '_' | '.' | ' ' | ':'))
