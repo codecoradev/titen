@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-10
+
+A security and reliability focused release. This version hardens the production attack surface, encrypts stored settings, and cleans up a large backlog of frontend consistency issues.
+
+### Added
+
+- **Carousel thumbnail preview in schedule list.** Scheduled posts that include multiple media items now display a visual thumbnail strip, making it easier to distinguish carousel posts at a glance. [#76]
+- **Location tagging for scheduled posts.** Posts can now carry location metadata through the full publish flow. [#68]
+- **Encrypted application settings.** Instance-wide configuration (API keys, webhook secrets) moved from browser localStorage to the server-side SQLite database with AES-256-GCM encryption at rest.
+
+### Changed
+
+- **UI component standardization.** All admin interfaces migrated to shadcn-svelte primitives (Dialog, Table, Select, Badge). Removes ad-hoc CSS components in favor of a single, maintained design system.
+
+### Fixed
+
+- **Security hardening (PR #142, #143, #144).** Production attack surface reduced through multiple fixes:
+  - Session tokens are now 256-bit opaque hex strings — no longer derivable from account identity.
+  - Rate limiting migrated from `Mutex<HashMap>` to `DashMap` for lock-free throughput under load.
+  - Media downloads switched from direct S3 reads to time-limited presigned URLs.
+  - List endpoints now enforce pagination caps to prevent unbounded query results.
+  - SigV4 canonical query string encoding made consistent across upload and download paths.
+- **Token drift and reactive loop bugs (PR #134).** Frontend `$effect` loops, analytics math errors, and an XSS vector in media rendering were resolved.
+- **Caption length validation (PR #137).** The API now rejects captions exceeding 500 characters before they reach Threads, matching the platform limit. [#136]
+- **Frontend consistency cleanup (PR #138, #145).** Consolidated duplicate modal CSS into shared global styles, removed 33 inline `style` declarations in favor of utility classes, fixed mismatched `form-hint`/`form-helper` naming, and standardized button class usage. [#125–#132]
+- **Eight CSS/UX issues resolved (PR #138).** Backdrop blur on confirm dialogs, image fallback handlers, and responsive layout fixes across admin pages.
+
 ## [0.5.5] - 2026-08-09
 
 ### Fixed
