@@ -104,22 +104,22 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div class="modal-overlay" onclick={onClose} role="presentation">
+<div class="detail-overlay" onclick={onClose} role="presentation">
 	<div
-		class="modal-content"
+		class="detail-dialog"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Schedule detail"
 		onclick={(e) => e.stopPropagation()}
 	>
 		<!-- Header -->
-		<div class="modal-header">
-			<h2 class="modal-title">Schedule Detail</h2>
-			<button class="close-btn" onclick={onClose} aria-label="Close">&times;</button>
+		<div class="detail-header">
+			<h2 class="detail-title">Schedule Detail</h2>
+			<button class="detail-close" onclick={onClose} aria-label="Close">&times;</button>
 		</div>
 
 		<!-- Body -->
-		<div class="modal-body">
+		<div class="detail-body">
 			<!-- Status + scheduled time -->
 			<div class="detail-row">
 				<span class="detail-label">Status</span>
@@ -216,21 +216,21 @@
 		</div>
 
 		<!-- Footer actions -->
-		<div class="modal-footer">
+		<div class="detail-footer">
 			{#if schedule.status === 'draft'}
-				<button class="btn btn-success" onclick={handleApprove} disabled={acting}>
+				<button class="btn-success" onclick={handleApprove} disabled={acting}>
 					{acting ? '...' : 'Approve'}
 				</button>
-				<button class="btn btn-danger" onclick={handleReject} disabled={acting}>
+				<button class="btn-danger" onclick={handleReject} disabled={acting}>
 					{acting ? '...' : showRejectInput ? 'Confirm reject' : 'Reject'}
 				</button>
 			{/if}
 			{#if ['draft', 'rejected', 'failed'].includes(schedule.status)}
-				<button class="btn btn-ghost" onclick={() => (showDeleteConfirm = true)} disabled={acting}>
+				<button class="btn-ghost" onclick={() => (showDeleteConfirm = true)} disabled={acting}>
 					Delete
 				</button>
 			{/if}
-			<button class="btn btn-secondary" onclick={onClose}>Close</button>
+			<button class="btn-secondary" onclick={onClose}>Close</button>
 		</div>
 	</div>
 </div>
@@ -246,65 +246,6 @@
 />
 
 <style>
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: var(--overlay-scrim, oklch(0% 0 0 / 0.5));
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-modal);
-		padding: var(--space-md);
-	}
-
-	.modal-content {
-		background: var(--color-paper);
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
-		max-width: 42rem;
-		width: 100%;
-		max-height: 85vh;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-md);
-		border-bottom: 1px solid var(--color-rule);
-	}
-
-	.modal-title {
-		font-size: var(--text-lg);
-		font-weight: 700;
-		margin: 0;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		cursor: pointer;
-		color: var(--color-muted);
-		padding: 0 var(--space-xs);
-		line-height: 1;
-	}
-
-	.close-btn:hover {
-		color: var(--color-ink);
-	}
-
-	.modal-body {
-		padding: var(--space-md);
-		overflow-y: auto;
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-
 	.detail-row {
 		display: flex;
 		align-items: center;
@@ -479,30 +420,8 @@
 		resize: vertical;
 	}
 
-	/* Footer */
-	.modal-footer {
-		display: flex;
-		gap: var(--space-xs);
-		padding: var(--space-md);
-		border-top: 1px solid var(--color-rule);
-		justify-content: flex-end;
-		flex-wrap: wrap;
-	}
-
 	.mono {
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
-	}
-
-	@media (max-width: 30rem) {
-		.modal-overlay {
-			padding: 0;
-		}
-
-		.modal-content {
-			max-height: 100vh;
-			border-radius: 0;
-			height: 100vh;
-		}
 	}
 </style>

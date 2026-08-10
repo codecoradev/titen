@@ -170,7 +170,7 @@
 			<div class="stat-card-value tabular-nums">{publishedPosts.toLocaleString()}</div>
 		</div>
 		{#if draftSchedules > 0}
-			<div class="stat-card" style="border-color: var(--color-warning-border, #fcd34d);">
+			<div class="stat-card border-warning">
 				<div class="stat-card-label">Drafts (Needs Review)</div>
 				<div class="stat-card-value tabular-nums">{draftSchedules.toLocaleString()}</div>
 			</div>
@@ -182,7 +182,7 @@
 		{#if health}
 			<div class="stat-card">
 				<div class="stat-card-label">System Health</div>
-				<div class="stat-card-value" style="padding-top: var(--space-2xs);">
+				<div class="stat-card-value pt-2xs">
 					<StatusBadge status={health.status} />
 				</div>
 			</div>
@@ -261,7 +261,7 @@
 						{:else if card.profileError}
 							<div class="account-metrics">
 								<div class="metric metric-error">
-									<span style="font-size: var(--text-xs); color: var(--color-muted);">
+									<span class="text-xs-muted">
 										Profile unavailable
 									</span>
 								</div>
@@ -308,8 +308,8 @@
 			<h2 class="section-heading">Recent Posts</h2>
 			<div class="data-table-wrap">
 				{#if recentPosts.length === 0}
-					<div class="empty-state" style="padding: var(--space-lg);">
-						<p class="empty-state-title" style="font-size: var(--text-sm);">No posts yet</p>
+					<div class="empty-state empty-compact">
+						<p class="empty-state-title text-sm">No posts yet</p>
 					</div>
 				{:else}
 					<ul class="compact-list">
@@ -334,8 +334,8 @@
 			<h2 class="section-heading">Upcoming</h2>
 			<div class="data-table-wrap">
 				{#if upcoming.length === 0}
-					<div class="empty-state" style="padding: var(--space-lg);">
-						<p class="empty-state-title" style="font-size: var(--text-sm);">No upcoming schedules</p>
+					<div class="empty-state empty-compact">
+						<p class="empty-state-title text-sm">No upcoming schedules</p>
 					</div>
 				{:else}
 					<ul class="compact-list">

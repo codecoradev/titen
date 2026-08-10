@@ -98,7 +98,7 @@
 	<!-- Sidebar -->
 	<aside class="admin-sidebar" class:is-open={sidebarOpen} role="navigation" aria-label="Admin navigation">
 		<div class="sidebar-wordmark">
-			<a href="/admin/dashboard" style="text-decoration:none;color:inherit;">Titen</a>
+			<a href="/admin/dashboard" class="link-plain">Titen</a>
 		</div>
 		<nav class="sidebar-nav">
 			{#each navItems as item}
