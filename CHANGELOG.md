@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-10
+
+### Fixed
+
+- **OAuth login broken** — `derive_redirect_uri()` returned empty string when neither `TITEN_OAUTH_REDIRECT_URI` nor `TITEN_ALLOWED_HOSTS` was set, causing Meta error 4476001 ("No redirect present in URI"). Now falls back to `APP_URL` env var (already documented but unused for OAuth). HTTPS enforced for non-localhost.
+
+### Changed
+
+- Documented `TITEN_OAUTH_REDIRECT_URI` and `TITEN_ALLOWED_HOSTS` env vars in `.env.example`.
+
 ## [0.7.1] - 2026-08-10
 
 A targeted patch release fixing token expiry failures and adding a system status command.
