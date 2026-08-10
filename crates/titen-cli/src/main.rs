@@ -67,11 +67,11 @@ async fn backup_database(output: Option<String>) -> Result<()> {
     // allowlist of safe path characters before interpolation.
     if !dest
         .chars()
-        .all(|c| c.is_alphanumeric() || matches!(c, '/' | '-' | '_' | '.' | ' '))
+        .all(|c| c.is_alphanumeric() || matches!(c, '/' | '\\' | '-' | '_' | '.' | ' ' | ':'))
     {
         anyhow::bail!(
             "Invalid backup path: '{dest}' contains unsafe characters. \
-             Only alphanumeric, '/', '-', '_', '.', and spaces are allowed."
+             Only alphanumeric, path separators (/ \\), '-', '_', '.', ':', and spaces are allowed."
         );
     }
     sqlx::query(&format!("VACUUM INTO '{dest}'"))
