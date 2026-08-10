@@ -22,10 +22,19 @@ use titen_core::storage::{S3Storage, detect_backend};
 pub async fn list_media(
     State(state): State<AppState>,
     Query(filter): Query<MediaFilter>,
-) -> Json<serde_json::Value> {
+) -> (StatusCode, Json<serde_json::Value>) {
     match state.store.list_media(&filter).await {
-        Ok(media) => Json(serde_json::json!({ "data": media })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
+        Ok(media) => (StatusCode::OK, Json(serde_json::json!({ "data": media }))),
+        Err(e) => {
+            tracing::error!("Failed to list media: {e:?}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to retrieve media list",
+                    "code": "LIST_FAILED"
+                })),
+            )
+        }
     }
 }
 
@@ -47,11 +56,13 @@ pub async fn upload_media(
     let storage = match detect_backend() {
         Ok(s) => s,
         Err(e) => {
+            tracing::warn!("Storage backend not configured: {e}");
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(
-                    serde_json::json!({ "error": e.to_string(), "code": "STORAGE_NOT_CONFIGURED" }),
-                ),
+                Json(serde_json::json!({
+                    "error": "Storage backend not configured",
+                    "code": "STORAGE_NOT_CONFIGURED"
+                })),
             );
         }
     };
@@ -67,11 +78,13 @@ pub async fn upload_media(
         let data = match field.bytes().await {
             Ok(d) => d.to_vec(),
             Err(e) => {
+                tracing::warn!("Failed to read uploaded file: {e}");
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(
-                        serde_json::json!({ "error": format!("Failed to read file: {e}"), "code": "READ_FAILED" }),
-                    ),
+                    Json(serde_json::json!({
+                        "error": "Failed to read uploaded file",
+                        "code": "READ_FAILED"
+                    })),
                 );
             }
         };
@@ -80,9 +93,13 @@ pub async fn upload_media(
         let media_url = match storage.upload(&s3_key, &data, &content_type).await {
             Ok(url) => url,
             Err(e) => {
+                tracing::error!("Storage upload failed: {e:?}");
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({ "error": e.to_string(), "code": "UPLOAD_FAILED" })),
+                    Json(serde_json::json!({
+                        "error": "Failed to upload file to storage",
+                        "code": "UPLOAD_FAILED"
+                    })),
                 );
             }
         };
@@ -107,9 +124,13 @@ pub async fn upload_media(
                 );
             }
             Err(e) => {
+                tracing::error!("Failed to store media record: {e:?}");
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({ "error": e.to_string(), "code": "DB_FAILED" })),
+                    Json(serde_json::json!({
+                        "error": "Failed to store media record",
+                        "code": "DB_FAILED"
+                    })),
                 );
             }
         }
@@ -135,7 +156,7 @@ pub async fn upload_media(
 pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Json<serde_json::Value> {
+) -> (StatusCode, Json<serde_json::Value>) {
     // Get media record by ID to find storage key
     match state.store.get_media_asset(&id).await {
         Ok(media) => {
@@ -147,12 +168,28 @@ pub async fn delete_media(
             }
         }
         Err(e) => {
-            return Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" }));
+            tracing::warn!("Media asset {} not found: {e}", id);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": "Media asset not found",
+                    "code": "NOT_FOUND"
+                })),
+            );
         }
     }
 
     match state.store.delete_media(&id).await {
-        Ok(()) => Json(serde_json::json!({ "data": null })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "data": null }))),
+        Err(e) => {
+            tracing::error!("Failed to delete media {}: {e:?}", id);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to delete media asset",
+                    "code": "DELETE_FAILED"
+                })),
+            )
+        }
     }
 }
