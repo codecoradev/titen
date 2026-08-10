@@ -2404,6 +2404,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "getrandom 0.4.3",
+ "hex",
  "serde",
  "serde_json",
  "sqlx",

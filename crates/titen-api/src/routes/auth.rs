@@ -37,24 +37,20 @@ struct SessionEntry {
     expires_at: u64, // unix epoch seconds
 }
 
-/// Generate a cryptographically random opaque token.
-fn generate_session_token() -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+/// Generate a cryptographically random opaque token (256-bit entropy).
+/// Returns Result so callers can handle RNG failures gracefully.
+fn generate_session_token() -> Result<String, getrandom::Error> {
+    let mut buf = [0u8; 32]; // 256 bits of entropy
+    getrandom::fill(&mut buf)?;
 
-    // Combine OS randomness with high-resolution time for uniqueness
-    let mut buf = [0u8; 32];
-    getrandom::fill(&mut buf).expect("getrandom failed");
-
-    // Base64-encode for cookie-safe representation
-    let mut hasher = DefaultHasher::new();
-    buf.hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
+    // Hex-encode for cookie-safe representation (64 chars, alphanumeric only)
+    Ok(hex::encode(buf))
 }
 
-/// Issue a session token for a given API key. Returns the token string.
-fn issue_session(api_key: &str) -> String {
-    let token = generate_session_token();
+/// Issue a session token for a given API key. Returns the token string,
+/// or None if the system RNG fails (catastrophic — should never happen).
+fn issue_session(api_key: &str) -> Option<String> {
+    let token = generate_session_token().ok()?;
     let expires_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -78,7 +74,7 @@ fn issue_session(api_key: &str) -> String {
         },
     );
 
-    token
+    Some(token)
 }
 
 /// Validate a session token. Returns the associated API key if valid and not expired.
@@ -196,7 +192,22 @@ pub async fn login(
         let secure_attr = if secure { "; Secure" } else { "" };
 
         // P5.4: Issue opaque session token instead of raw API key
-        let session_token = issue_session(&input.api_key);
+        let session_token = match issue_session(&input.api_key) {
+            Some(t) => t,
+            None => {
+                warn!(target: "titen::auth", "LOGIN_REJECT session token generation failed (RNG failure)");
+                let body = ErrorResponse {
+                    error: "Failed to create session".to_string(),
+                    code: "SESSION_ERROR".to_string(),
+                };
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    HeaderMap::new(),
+                    Json(body),
+                )
+                    .into_response();
+            }
+        };
         let cookie_value = format!(
             "titen_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{secure_attr}",
             session_token
