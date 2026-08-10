@@ -60,7 +60,7 @@ COPY crates/ ./crates/
 RUN cargo build --release --bins
 
 # ── API runtime ──────────────────────────────────────────────────────
-FROM alpine:3.22 AS api
+FROM alpine:3.24 AS api
 
 RUN apk add --no-cache ca-certificates libgcc libstdc++ \
     && addgroup -S -g 1000 titen \
