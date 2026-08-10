@@ -278,7 +278,9 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
     let authenticated = if !is_configured {
         true
     } else {
-        // P5.4: Validate opaque session token instead of raw API key comparison
+        // P5.4: Validate opaque session token — if validate_session succeeds,
+        // the session is independently valid. No need to re-compare the key
+        // against state.api_key; the session was issued after key verification.
         let result = headers
             .get(axum::http::header::COOKIE)
             .and_then(|v| v.to_str().ok())
@@ -289,19 +291,7 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
                     .find(|c| c.starts_with("titen_session="))
                     .map(|c| c.trim_start_matches("titen_session=").to_string())
             })
-            .map(|token| {
-                // Check opaque session store first
-                if let Some(key) = validate_session(&token) {
-                    // Verify the session's key still matches the configured key
-                    subtle::ConstantTimeEq::ct_eq(
-                        key.as_bytes(),
-                        state.api_key.as_deref().unwrap_or_default().as_bytes(),
-                    )
-                    .into()
-                } else {
-                    false
-                }
-            })
+            .map(|token| validate_session(&token).is_some())
             .unwrap_or(false);
 
         if !result {

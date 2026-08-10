@@ -73,13 +73,20 @@ pub async fn list_media(
     State(state): State<AppState>,
     Query(filter): Query<MediaFilter>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // P5.2: Clamp limit/offset BEFORE passing to store query
     let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
     let offset = filter.offset.unwrap_or(0).max(0);
+    let clamped_filter = MediaFilter {
+        limit: Some(limit),
+        offset: Some(offset),
+        content_type: filter.content_type.clone(),
+        search: filter.search.clone(),
+    };
 
-    match state.store.list_media(&filter).await {
+    match state.store.list_media(&clamped_filter).await {
         Ok(media) => {
             // P5.2: Include total count + pagination metadata
-            let total = state.store.count_media(&filter).await.unwrap_or(0);
+            let total = state.store.count_media(&clamped_filter).await.unwrap_or(0);
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
