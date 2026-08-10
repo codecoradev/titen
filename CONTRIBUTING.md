@@ -120,7 +120,6 @@ All PRs must pass these checks before merge:
 | **Frontend Security Audit** | Bun dependency audit |
 | **Cargo Audit** | Rust vulnerability scan |
 | **Trivy FS Scan** | Filesystem security scan |
-| **CLA Check** | Contributor License Agreement (required) |
 
 ### Linear History
 
@@ -209,7 +208,3 @@ MCP tools are defined in `crates/titen-mcp/src/main.rs`:
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [Apache-2.0 License](LICENSE).
-
-## CLA
-
-All contributors must sign the [Contributor License Agreement](https://github.com/codecoradev/.github/blob/main/.cla/signatures.json) before PRs can be merged. The CLA check runs automatically on all PRs.

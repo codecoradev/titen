@@ -21,7 +21,7 @@ pub enum Commands {
     Serve {
         #[arg(short, long, default_value = "7845")]
         port: u16,
-        #[arg(short = 'H', long, default_value = "0.0.0.0")]
+        #[arg(short = 'H', long, default_value = "127.0.0.1")]
         host: String,
         #[arg(long)]
         mcp: bool,
