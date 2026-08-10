@@ -505,12 +505,20 @@ fn handle_tool_call(
                 .get("account_id")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            match store.get_account(account_id).await {
-                Ok(account) => match threads_client.fetch_my_profile(&account).await {
-                    Ok(profile) => Ok(json!(profile)),
-                    Err(e) => Err(format!("Failed to fetch user profile: {e}")),
-                },
-                Err(e) => Err(format!("Account not found: {e}")),
+            let account = match store.get_account(account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
+            };
+
+            match threads_client.fetch_my_profile(&account).await {
+                Ok(profile) => Ok(json!(profile)),
+                Err(e) => Err(format!("Failed to fetch user profile: {e}")),
             }
         }),
         "get_publishing_limit" => rt.block_on(async {
@@ -518,12 +526,20 @@ fn handle_tool_call(
                 .get("account_id")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            match store.get_account(account_id).await {
-                Ok(account) => match threads_client.fetch_publishing_limit(&account).await {
-                    Ok(limits) => Ok(json!(limits)),
-                    Err(e) => Err(format!("Failed to fetch publishing limit: {e}")),
-                },
-                Err(e) => Err(format!("Account not found: {e}")),
+            let account = match store.get_account(account_id).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
+            };
+
+            match threads_client.fetch_publishing_limit(&account).await {
+                Ok(limits) => Ok(json!(limits)),
+                Err(e) => Err(format!("Failed to fetch publishing limit: {e}")),
             }
         }),
         "create_post" => rt.block_on(async {
@@ -714,6 +730,12 @@ fn handle_tool_call(
                 Err(e) => return Err(format!("Account not found: {e}")),
             };
 
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
+            };
+
             // Fetch from Threads API
             let comment_data = match threads_client
                 .fetch_comments(&account, &threads_post_id)
@@ -797,6 +819,12 @@ fn handle_tool_call(
             let account = match store.get_account(&post.account_id).await {
                 Ok(a) => a,
                 Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
             };
 
             match threads_client
@@ -1183,6 +1211,12 @@ fn handle_tool_call(
                 Err(e) => return Err(format!("Account not found: {e}")),
             };
 
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
+            };
+
             // Fetch mentions from Threads API (returns raw JSON)
             let mentions = match threads_client.fetch_mentions(&account, limit).await {
                 Ok(m) => m,
@@ -1279,6 +1313,12 @@ fn handle_tool_call(
                 Err(e) => return Err(format!("Account not found: {e}")),
             };
 
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
+            };
+
             match threads_client.search_keyword(&account, keyword, None).await {
                 Ok(results) => Ok(json!(results)),
                 Err(e) => Err(format!("Search failed: {e}")),
@@ -1327,6 +1367,12 @@ fn handle_tool_call(
             let account = match store.get_account(&post.account_id).await {
                 Ok(a) => a,
                 Err(e) => return Err(format!("Account not found: {e}")),
+            };
+
+            // Auto-refresh token if expiring or expired
+            let account = match threads_client.ensure_valid_token(&account).await {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Token check failed for @{}: {e}", account.username)),
             };
 
             match threads_client

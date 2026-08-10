@@ -25,6 +25,7 @@ async fn main() -> Result<()> {
         Commands::Analytics { action } => commands::analytics::run(action).await,
         Commands::Media { action } => commands::media::run(action).await,
         Commands::TokenCheck => commands::account::token_check().await,
+        Commands::Status => show_status().await,
         Commands::Backup { output } => backup_database(output).await,
         Commands::Restore { input, yes } => restore_database(&input, yes).await,
     }
@@ -135,4 +136,166 @@ async fn restore_database(input: &str, yes: bool) -> Result<()> {
     let size = std::fs::metadata(&dest)?.len();
     eprintln!("✅ Restore complete: {dest} ({size} bytes)");
     Ok(())
+}
+
+/// Show system status: accounts, token health, post/schedule counts, DB info.
+async fn show_status() -> Result<()> {
+    let path = db_path();
+
+    if !std::path::Path::new(&path).exists() {
+        anyhow::bail!("Database not found: {path}. Start the server first with `titen serve`.");
+    }
+
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite:{path}"))
+        .await?;
+
+    // ── Version ──
+    let version = env!("CARGO_PKG_VERSION");
+
+    // ── Accounts ──
+    let accounts: Vec<(String, String, String, bool)> = sqlx::query_as(
+        "SELECT username, user_id, expires_at, is_active FROM accounts ORDER BY username",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    let total_accounts = accounts.len();
+    let active_accounts = accounts.iter().filter(|(.., active)| *active).count();
+
+    // Token expiry analysis
+    let now = chrono::Utc::now();
+    let mut expired = 0;
+    let mut expiring_soon = 0;
+
+    for (_, _, expires_at, _) in &accounts {
+        match chrono::DateTime::parse_from_rfc3339(expires_at) {
+            Ok(dt) => {
+                let remaining = dt.with_timezone(&chrono::Utc) - now;
+                if remaining.num_seconds() <= 0 {
+                    expired += 1;
+                } else if remaining.num_hours() < 24 {
+                    expiring_soon += 1;
+                }
+            }
+            Err(_) => expired += 1, // unparseable = treat as expired
+        }
+    }
+
+    // ── Posts ──
+    let total_posts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM posts")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(0);
+
+    let published_posts: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM posts WHERE threads_post_id IS NOT NULL")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or(0);
+
+    // ── Schedules ──
+    let pending_schedules: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'pending'")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or(0);
+
+    let approved_schedules: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'approved'")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or(0);
+
+    // ── Comments ──
+    let total_comments: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM comments")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(0);
+
+    // ── Media ──
+    let total_media: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(0);
+
+    // ── DB size ──
+    let db_size = std::fs::metadata(&path)?.len();
+
+    pool.close().await;
+
+    // ── Print ──
+    println!("┌─────────────────────────────────────────────┐");
+    println!("│              TITEN STATUS                   │");
+    println!("├─────────────────────────────────────────────┤");
+    println!("│ Version:    {version:<33}│");
+    println!("│ Database:   {path:<33}│");
+    println!(
+        "│ DB Size:    {:>8} bytes ({:>7})      │",
+        db_size,
+        format_size(db_size)
+    );
+    println!("├─────────────────────────────────────────────┤");
+    println!("│ ACCOUNTS                                    │");
+    println!("│   Total:     {total_accounts:<30} │");
+    println!("│   Active:    {active_accounts:<30} │");
+    println!("│   Expired:   {expired:<30} │");
+    println!("│   Expiring:  {expiring_soon:<30} │");
+    println!("├─────────────────────────────────────────────┤");
+    println!("│ CONTENT                                     │");
+    println!("│   Posts:     {total_posts:<4} ({published_posts} published)        │");
+    println!("│   Schedules: {pending_schedules:<4} pending, {approved_schedules} approved   │");
+    println!("│   Comments:  {total_comments:<30} │");
+    println!("│   Media:     {total_media:<30} │");
+    println!("├─────────────────────────────────────────────┤");
+
+    // Token status per account
+    if total_accounts > 0 {
+        println!("│ TOKEN DETAILS                               │");
+        for (username, _, expires_at, is_active) in &accounts {
+            let status = match chrono::DateTime::parse_from_rfc3339(expires_at) {
+                Ok(dt) => {
+                    let remaining = dt.with_timezone(&chrono::Utc) - now;
+                    if remaining.num_seconds() <= 0 {
+                        "EXPIRED".to_string()
+                    } else if remaining.num_hours() < 24 {
+                        format!("{}h left", remaining.num_hours())
+                    } else {
+                        format!("{}d left", remaining.num_days())
+                    }
+                }
+                Err(_) => "INVALID".to_string(),
+            };
+            let active_tag = if *is_active { "ON" } else { "OFF" };
+            let line = format!("  @{username:<14} [{active_tag}]  {status}");
+            println!("│ {line:<44}│",);
+        }
+        println!("├─────────────────────────────────────────────┤");
+    }
+
+    // Health summary
+    let health = if expired > 0 {
+        "DEGRADED".to_string()
+    } else if expiring_soon > 0 {
+        "WARNING".to_string()
+    } else {
+        "HEALTHY".to_string()
+    };
+    println!("│ Overall:    {health:<31} │");
+    println!("└─────────────────────────────────────────────┘");
+
+    Ok(())
+}
+
+/// Format bytes into human-readable string.
+fn format_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
 }
