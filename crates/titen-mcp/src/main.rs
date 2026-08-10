@@ -1560,3 +1560,7 @@ fn validate_magic_bytes(data: &[u8], ext: &str) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;
