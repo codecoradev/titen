@@ -30,7 +30,17 @@ fn derive_redirect_uri(headers: &HeaderMap) -> String {
     if let Ok(app_url) = std::env::var("APP_URL") {
         let app_url = app_url.trim_end_matches('/');
         if !app_url.is_empty() {
-            return format!("{app_url}/auth/callback");
+            // Enforce HTTPS for non-localhost (OAuth security requirement)
+            let is_localhost =
+                app_url.starts_with("http://localhost") || app_url.starts_with("http://127.0.0.1");
+            if app_url.starts_with("https://") || is_localhost {
+                return format!("{app_url}/auth/callback");
+            } else {
+                warn!(
+                    "APP_URL '{app_url}' is not HTTPS; refusing to use for OAuth redirect URI. \
+                     Use https:// or set TITEN_OAUTH_REDIRECT_URI explicitly."
+                );
+            }
         }
     }
 
