@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-10
+
+A targeted patch release fixing token expiry failures and adding a system status command.
+
+### Added
+
+- **`titen status` command.** Shows a complete system overview in one glance — version, database path and size, account counts (total/active/expired/expiring), content counts (posts, schedules, comments, media), and per-account token expiry details with remaining time. Calculates overall health as `HEALTHY`, `WARNING` (tokens expiring <24h), or `DEGRADED` (tokens expired). Works via direct SQLite access — no server required.
+
+### Fixed
+
+- **Token expiry auto-refresh in MCP handlers.** All 7 Threads API-calling MCP handlers now call `ensure_valid_token` before hitting the Threads API, automatically refreshing expired or soon-to-expire tokens. Previously only the scheduler refreshed tokens — MCP handlers would fail with API errors when tokens expired. Affected handlers: `get_user_profile`, `get_publishing_limit`, `fetch_comments`, `get_post_insights`, `fetch_mentions`, `search_keyword`, `reply_to_comment`.
+
 ## [0.7.0] - 2026-08-10
 
 A developer experience and operability release. Introduces observability endpoints, database backup/restore, centralized error sanitization, and comprehensive test coverage for MCP and CLI.

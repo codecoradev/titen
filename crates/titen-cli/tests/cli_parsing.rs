@@ -413,6 +413,17 @@ fn test_token_check() {
     }
 }
 
+// ── Status subcommand ───────────────────────────────────────────────
+
+#[test]
+fn test_status() {
+    let cli = Cli::parse_from(["titen", "status"]);
+    match cli.command {
+        Commands::Status => {}
+        other => panic!("expected Status, got {other:?}"),
+    }
+}
+
 // ── Invalid input ───────────────────────────────────────────────────
 
 #[test]
