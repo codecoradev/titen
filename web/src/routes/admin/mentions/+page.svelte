@@ -6,6 +6,8 @@
 	import { formatDateTimeShort } from '$lib/tz';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import * as Table from '$lib/components/ui/table';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import { truncate } from '$lib/format';
 	import { toast } from '$lib/toast.svelte';
@@ -125,45 +127,49 @@
 
 <div class="data-table-wrap">
 	{#if loading}
-		<table class="data-table">
-			<thead><tr><th>Author</th><th>Post</th><th>Date</th><th>Action</th></tr></thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header><Table.Row><Table.Head>Author</Table.Head><Table.Head>Post</Table.Head><Table.Head>Date</Table.Head><Table.Head>Action</Table.Head></Table.Row></Table.Header>
+			<Table.Body>
 				{#each Array(3) as _}
-					<tr>{#each Array(4) as _}<td><div class="skeleton" style="height: 1rem;"></div></td>{/each}</tr>
+					<Table.Row>
+						{#each Array(4) as _}
+							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						{/each}
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{:else if mentions.length === 0}
 		<div class="empty-state">
 			<p class="empty-state-title">No mentions loaded</p>
 			<p class="empty-state-desc">Select an account above, then click "Fetch Mentions" to pull recent mentions.</p>
 		</div>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Author</th>
-					<th>Post</th>
-					<th>Date</th>
-					<th>Action</th>
-				</tr>
-			</thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head>Author</Table.Head>
+					<Table.Head>Post</Table.Head>
+					<Table.Head>Date</Table.Head>
+					<Table.Head>Action</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each mentions as mention (mention.id)}
-					<tr>
-						<td>@{mention.username ?? 'unknown'}</td>
-						<td class="mention-text-cell" title={mention.text}>{truncate(mention.text, 80)}</td>
-						<td>{formatDate(mention.timestamp)}</td>
-						<td>
+					<Table.Row>
+						<Table.Cell>@{mention.username ?? 'unknown'}</Table.Cell>
+						<Table.Cell class="mention-text-cell" title={mention.text}>{truncate(mention.text, 80)}</Table.Cell>
+						<Table.Cell>{formatDate(mention.timestamp)}</Table.Cell>
+						<Table.Cell>
 							<Button variant="ghost" size="sm" onclick={() => startReply(mention)}>Reply</Button>
 							{#if mention.permalink}
 								<a href={mention.permalink} target="_blank" rel="noopener" class={buttonVariants({ variant: 'ghost', size: 'sm' })}>View</a>
 							{/if}
-						</td>
-					</tr>
+						</Table.Cell>
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{/if}
 </div>
 

@@ -19,6 +19,8 @@
 	import { truncate } from '$lib/format';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import * as Table from '$lib/components/ui/table';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
@@ -346,39 +348,39 @@
 		</EmptyState>
 	{:else}
 		<div class="data-table-wrap">
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th>Content</th>
-						<th>Account</th>
-						<th>Scheduled</th>
-						<th>Status</th>
-						<th>Error</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
+			<Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head>Content</Table.Head>
+						<Table.Head>Account</Table.Head>
+						<Table.Head>Scheduled</Table.Head>
+						<Table.Head>Status</Table.Head>
+						<Table.Head>Error</Table.Head>
+						<Table.Head>Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
 					{#if loading}
 						{#each Array(5) as _}
-							<tr>
-								<td><div class="skeleton" style="height: 1rem; width: 12rem;"></div></td>
-								<td><div class="skeleton" style="height: 1rem; width: 6rem;"></div></td>
-								<td><div class="skeleton" style="height: 1rem; width: 8rem;"></div></td>
-								<td><div class="skeleton" style="height: 1rem; width: 5rem;"></div></td>
-								<td><div class="skeleton" style="height: 1rem; width: 6rem;"></div></td>
-								<td><div class="skeleton" style="height: 1rem; width: 4rem;"></div></td>
-							</tr>
+							<Table.Row>
+								<Table.Cell><Skeleton class="h-4 w-48" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-32" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-20" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-16" /></Table.Cell>
+							</Table.Row>
 						{/each}
 					{:else}
 						{#each schedules as schedule (schedule.id)}
-							<tr
+							<Table.Row
 								class={schedule.status === 'draft' ? 'row-draft row-clickable' : 'row-clickable'}
 								onclick={() => openDetail(schedule)}
 								onkeydown={(e) => e.key === 'Enter' && openDetail(schedule)}
 								role="button"
-								tabindex="0"
+								tabindex={0}
 							>
-							<td class="truncate" title={schedule.caption || '—'}>
+								<Table.Cell class="truncate" title={schedule.caption || '—'}>
 									<div class="caption-cell">
 										{#if schedule.media_urls}
 											{#each schedule.media_urls.split(',').filter(Boolean).slice(0, 3) as url, i}
@@ -396,20 +398,20 @@
 										{/if}
 										<span>{truncate(schedule.caption || '—', 60)}</span>
 									</div>
-								</td>
-								<td>
+								</Table.Cell>
+								<Table.Cell>
 									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
-								</td>
-								<td class="tabular-nums">
+								</Table.Cell>
+								<Table.Cell class="tabular-nums">
 									{fmtDate(schedule.scheduled_at)}
-								</td>
-								<td>
+								</Table.Cell>
+								<Table.Cell>
 									<StatusBadge status={schedule.status} />
-								</td>
-								<td class="col-error" title={schedule.error ?? ''}>
+								</Table.Cell>
+								<Table.Cell class="col-error" title={schedule.error ?? ''}>
 									{schedule.error ?? '—'}
-								</td>
-								<td class="col-actions" onclick={(e) => e.stopPropagation()}>
+								</Table.Cell>
+								<Table.Cell class="col-actions" onclick={(e) => e.stopPropagation()}>
 									{#if schedule.status === 'draft'}
 										<Button
 											variant="default"
@@ -466,12 +468,12 @@
 											Delete
 										</Button>
 									{/if}
-								</td>
-							</tr>
-						{/each}
-					{/if}
-				</tbody>
-			</table>
+									</Table.Cell>
+									</Table.Row>
+									{/each}
+									{/if}
+									</Table.Body>
+									</Table.Root>
 		</div>
 	{/if}
 </div>

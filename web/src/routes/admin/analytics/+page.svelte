@@ -6,6 +6,7 @@
 	import { listAnalytics, listAccounts, ApiError } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import type { AnalyticsSnap, Account } from '$lib/types';
 
 	// ── State ──
@@ -213,7 +214,7 @@
 		{#if trendLoading}
 			<div class="trend-chart">
 				<div class="trend-loading">
-					<div class="skeleton" style="height: 100%;"></div>
+					<Skeleton class="h-full w-full" />
 				</div>
 			</div>
 		{:else if trend.length > 0}

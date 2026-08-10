@@ -6,6 +6,8 @@
 	import { listPosts, deletePost, getPostInsights, listAccounts } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import * as Table from '$lib/components/ui/table';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import { formatDateShort } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Post, Account } from '$lib/types';
@@ -138,51 +140,59 @@
 
 <div class="data-table-wrap">
 	{#if loading}
-		<table class="data-table">
-			<thead><tr><th>Content</th><th>Account</th><th>Type</th><th>Status</th><th>Published</th><th>Actions</th></tr></thead>
-			<tbody>{#each Array(4) as _}<tr>{#each Array(6) as _}<td><div class="skeleton" style="height: 1rem;"></div></td>{/each}</tr>{/each}</tbody>
-		</table>
+		<Table.Root>
+			<Table.Header><Table.Row><Table.Head>Content</Table.Head><Table.Head>Account</Table.Head><Table.Head>Type</Table.Head><Table.Head>Status</Table.Head><Table.Head>Published</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
+			<Table.Body>
+				{#each Array(4) as _}
+					<Table.Row>
+						{#each Array(6) as _}
+							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						{/each}
+					</Table.Row>
+				{/each}
+			</Table.Body>
+		</Table.Root>
 	{:else if filtered.length === 0}
 		<div class="empty-state">
 			<p class="empty-state-title">No posts yet</p>
 			<p class="empty-state-desc">Posts will appear here once you publish content.</p>
 		</div>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Content</th>
-					<th>Account</th>
-					<th>Type</th>
-					<th>Status</th>
-					<th>Published</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head>Content</Table.Head>
+					<Table.Head>Account</Table.Head>
+					<Table.Head>Type</Table.Head>
+					<Table.Head>Status</Table.Head>
+					<Table.Head>Published</Table.Head>
+					<Table.Head>Actions</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each filtered as post (post.id)}
-					<tr class="row-clickable" onclick={() => openDetail(post)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openDetail(post)}>
-						<td class="truncate" style="max-width:40ch;">
+					<Table.Row class="row-clickable" onclick={() => openDetail(post)} role="button" tabindex={0} onkeydown={(e) => e.key === 'Enter' && openDetail(post)}>
+						<Table.Cell class="truncate" style="max-width:40ch;">
 							{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
-						</td>
-						<td><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></td>
-						<td>{post.media_type}</td>
-						<td><StatusBadge status={post.status} /></td>
-						<td><span class="tabular-nums">{formatDate(post.published_at)}</span></td>
-						<td onclick={(e) => e.stopPropagation()}>
+						</Table.Cell>
+						<Table.Cell><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></Table.Cell>
+						<Table.Cell>{post.media_type}</Table.Cell>
+						<Table.Cell><StatusBadge status={post.status} /></Table.Cell>
+						<Table.Cell><span class="tabular-nums">{formatDate(post.published_at)}</span></Table.Cell>
+						<Table.Cell onclick={(e) => e.stopPropagation()}>
 							<div style="display:flex;gap:var(--space-2xs);">
 								<Button variant="outline" size="sm" onclick={() => openDetail(post)}>Detail</Button>
 								<Button variant="ghost" size="sm" onclick={() => (confirmDelete = { open: true, post })}>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
 										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
-									</Button>
-									</div>
-						</td>
-					</tr>
+								</Button>
+							</div>
+						</Table.Cell>
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{/if}
 </div>
 

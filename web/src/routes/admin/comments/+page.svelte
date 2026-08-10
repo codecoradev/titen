@@ -10,6 +10,7 @@
 	} from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import type { Comment, Post } from '$lib/types';
 	import { formatDateTime } from '$lib/tz';
@@ -254,7 +255,7 @@
 	{#if loading || commentsLoading}
 		<div class="comment-card comment-card--skeleton">
 			{#each Array(5) as _}
-				<div class="skeleton" style="height: 4rem; margin-bottom: var(--space-sm);"></div>
+				<Skeleton class="h-16 w-full" />
 			{/each}
 		</div>
 	{:else if comments.length === 0}
