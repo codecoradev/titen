@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-10
+
+### Fixed
+- `/api/health` returning 404 in production. Backend only registered `/health`
+  (no `/api` prefix), but the frontend proxy forwards `/api/health`. Added
+  `/api/health` route alias pointing to the same handler.
+
 ## [0.6.0] - 2026-08-10
 
 A security and reliability focused release. This version hardens the production attack surface, encrypts stored settings, and cleans up a large backlog of frontend consistency issues.

@@ -382,6 +382,7 @@ pub async fn serve(
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/api/health", get(health_check))
         // Auth routes — public (not behind API key middleware)
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/session", get(routes::auth::session))
