@@ -4,7 +4,7 @@ use serde_json::json;
 
 use crate::api::{TitenApi, TitenConfig, print_data};
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 pub enum ScheduleAction {
     /// List scheduled posts
     List {
