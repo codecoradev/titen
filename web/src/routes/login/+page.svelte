@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { loginWithApiKey } from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
 
 	let apiKey = $state('');
 	let error = $state('');
@@ -71,14 +72,14 @@
 				{/if}
 			</div>
 
-			<button class="btn-primary login-submit" type="submit" disabled={loading}>
+			<Button variant="default" class="login-submit" type="submit" disabled={loading}>
 				{#if loading}
 					<span class="login-spinner"></span>
 					Verifying…
 				{:else}
 					Sign in
 				{/if}
-			</button>
+				</Button>
 		</form>
 
 		<div class="login-hint">
@@ -145,14 +146,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-md);
-	}
-
-	.login-submit {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-2xs);
-		width: 100%;
 	}
 
 	.login-spinner {

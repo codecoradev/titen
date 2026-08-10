@@ -2,6 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatSkeleton from '$lib/components/StatSkeleton.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import {
 		getHealth,
 		listAccounts,
@@ -252,8 +253,8 @@
 							<div class="account-metrics">
 								{#each Array(3) as _}
 									<div class="metric">
-										<div class="skeleton" style="height: 1.5rem; width: 3rem;"></div>
-										<div class="skeleton" style="height: 0.75rem; width: 2rem;"></div>
+										<Skeleton class="h-6 w-12" />
+										<Skeleton class="h-3 w-8" />
 									</div>
 								{/each}
 							</div>
@@ -283,8 +284,8 @@
 							<div class="account-insights-row">
 								{#each Array(4) as _}
 									<div class="insight-mini">
-										<div class="skeleton" style="height: 0.75rem; width: 2.5rem;"></div>
-										<div class="skeleton" style="height: 1rem; width: 2rem;"></div>
+										<Skeleton class="h-3 w-10" />
+										<Skeleton class="h-4 w-8" />
 									</div>
 								{/each}
 							</div>
@@ -521,13 +522,6 @@
 		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
-	}
-
-	/* ── Skeleton ── */
-	.skeleton {
-		background: var(--color-bg-hover);
-		border-radius: var(--radius-2xs);
-		animation: pulse 1.5s ease-in-out infinite;
 	}
 
 	/* ── Legacy ── */

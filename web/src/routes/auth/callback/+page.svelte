@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { oauthExchange, checkSession } from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
 
 	let status: 'loading' | 'success' | 'error' = $state('loading');
 	let errorMessage = $state('');
@@ -70,7 +71,7 @@
 				<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
 			</svg>
 			<p class="callback-text">Account connected successfully</p>
-			<button class="btn-primary" onclick={() => goto('/admin/accounts')}>Go to Accounts</button>
+			<Button variant="default" onclick={() => goto('/admin/accounts')}>Go to Accounts</Button>
 		</div>
 	{:else}
 		<div class="callback-card">
@@ -79,8 +80,8 @@
 				<path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
 			</svg>
 			<p class="callback-text">{errorMessage}</p>
-			<button class="btn-outline" onclick={() => goto('/admin/accounts')}>Back to Accounts</button>
-			<button class="btn-outline" onclick={() => goto('/admin/settings')}>Open Settings</button>
+			<Button variant="outline" onclick={() => goto('/admin/accounts')}>Back to Accounts</Button>
+			<Button variant="outline" onclick={() => goto('/admin/settings')}>Open Settings</Button>
 		</div>
 	{/if}
 </div>

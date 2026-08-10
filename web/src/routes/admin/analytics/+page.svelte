@@ -4,6 +4,9 @@
 	import StatSkeleton from '$lib/components/StatSkeleton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { listAnalytics, listAccounts, ApiError } from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
+	import * as Select from '$lib/components/ui/select';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import type { AnalyticsSnap, Account } from '$lib/types';
 
 	// ── State ──
@@ -120,26 +123,30 @@
 <PageHeader title="Analytics" description="Post performance and engagement metrics">
 	{#snippet action()}
 		<div class="filter-bar">
-			<select
-				class="form-input form-select"
-				bind:value={selectedAccountId}
-				aria-label="Filter by account"
-			>
-				<option value="">All accounts</option>
-				{#each accounts as acct}
-					<option value={acct.id}>{acct.username}</option>
-				{/each}
-			</select>
+			<Select.Root type="single" bind:value={selectedAccountId}>
+				<Select.Trigger aria-label="Filter by account">
+					{selectedAccountId ? accounts.find((a) => a.id === selectedAccountId)?.username ?? 'Unknown' : 'All accounts'}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="" label="All accounts">All accounts</Select.Item>
+					{#each accounts as acct (acct.id)}
+						<Select.Item value={acct.id} label={acct.username}>
+							{acct.username}
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
 			<div class="period-toggle">
 				{#each periods as p}
-					<button
-						class="btn-outline btn-sm period-btn"
-						class:period-active={selectedPeriod === p.value}
+					<Button
+						variant="outline"
+						size="sm"
+						class="period-btn {selectedPeriod === p.value ? 'period-active' : ''}"
 						onclick={() => (selectedPeriod = p.value)}
 						type="button"
 					>
 						{p.label}
-					</button>
+					</Button>
 				{/each}
 			</div>
 		</div>
@@ -152,7 +159,7 @@
 			<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
 		</svg>
 		<span>{error}</span>
-		<button class="btn-ghost btn-sm" onclick={loadAnalytics} type="button">Retry</button>
+		<Button variant="ghost" size="sm" onclick={loadAnalytics} type="button">Retry</Button>
 	</div>
 {/if}
 
@@ -207,7 +214,7 @@
 		{#if trendLoading}
 			<div class="trend-chart">
 				<div class="trend-loading">
-					<div class="skeleton" style="height: 100%;"></div>
+					<Skeleton class="h-full w-full" />
 				</div>
 			</div>
 		{:else if trend.length > 0}
@@ -283,34 +290,9 @@
 		flex-wrap: wrap;
 	}
 
-	.form-select {
-		appearance: none;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a6a6a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: right var(--space-sm) center;
-		background-size: 1rem;
-		padding-right: var(--space-lg);
-		min-width: 10rem;
-	}
-
 	.period-toggle {
 		display: flex;
 		gap: var(--space-3xs);
-	}
-
-	.period-btn {
-		flex-shrink: 0;
-	}
-
-	.period-active {
-		background: var(--color-ink);
-		color: var(--color-paper);
-		border-color: var(--color-ink);
-	}
-
-	.period-active:hover {
-		background: oklch(25% 0.008 260);
-		color: var(--color-paper);
 	}
 
 	/* ── Error banner ── */
@@ -325,11 +307,6 @@
 		margin-bottom: var(--space-lg);
 		font-size: var(--text-sm);
 		color: var(--color-error-ink);
-	}
-
-	.error-banner button {
-		margin-inline-start: auto;
-		flex-shrink: 0;
 	}
 
 	/* ── Section titles ── */
@@ -466,10 +443,6 @@
 		.filter-bar {
 			flex-direction: column;
 			align-items: stretch;
-		}
-
-		.form-select {
-			width: 100%;
 		}
 
 		.trend-bar-group {

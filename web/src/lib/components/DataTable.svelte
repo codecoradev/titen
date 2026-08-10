@@ -1,4 +1,7 @@
 <script lang="ts">
+	import * as Table from "$lib/components/ui/table";
+	import Skeleton from "$lib/components/ui/skeleton/skeleton.svelte";
+
 	interface Column {
 		key: string;
 		label: string;
@@ -14,7 +17,7 @@
 		emptyDesc?: string;
 	}
 
-	let { columns, rows, loading = false, emptyTitle = 'No data', emptyDesc }: Props = $props();
+	let { columns, rows, loading = false, emptyTitle = "No data", emptyDesc }: Props = $props();
 
 	let sortKey = $state<string | null>(null);
 	let sortAsc = $state(true);
@@ -26,7 +29,7 @@
 			const bv = b[sortKey!];
 			if (av == null) return 1;
 			if (bv == null) return -1;
-			if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+			if (typeof av === "number" && typeof bv === "number") return sortAsc ? av - bv : bv - av;
 			return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
 		});
 	});
@@ -47,24 +50,26 @@
 
 <div class="data-table-wrap">
 	{#if loading}
-		<table class="data-table">
-			<thead>
-				<tr>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
 					{#each columns as col}
-						<th>{col.label}</th>
+						<Table.Head>{col.label}</Table.Head>
 					{/each}
-			</tr>
-			</thead>
-			<tbody>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each Array(5) as _}
-						<tr>
-							{#each columns as _}
-								<td><div class="skeleton" style="height: 1rem;"></div></td>
-							{/each}
-						</tr>
+					<Table.Row>
+						{#each columns as _}
+							<Table.Cell>
+								<Skeleton class="h-4 w-full" />
+							</Table.Cell>
+						{/each}
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{:else if rows.length === 0}
 		<div class="empty-state">
 			<p class="empty-state-title">{emptyTitle}</p>
@@ -73,54 +78,33 @@
 			{/if}
 		</div>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
 					{#each columns as col}
-							<th
-								class={col.sortable ? 'sortable' : ''}
-								class:sort-active={sortKey === col.key}
-								onclick={() => col.sortable && toggleSort(col.key)}
-							>
-								{col.label}
-								{#if col.sortable && sortKey === col.key}
-									<span class="sort-arrow">{sortAsc ? '↑' : '↓'}</span>
-								{/if}
-							</th>
+						<Table.Head
+							class={col.sortable ? "cursor-pointer select-none" : ""}
+							onclick={() => col.sortable && toggleSort(col.key)}
+						>
+							{col.label}
+							{#if col.sortable && sortKey === col.key}
+								<span class="ml-1 text-xs">{sortAsc ? "↑" : "↓"}</span>
+							{/if}
+						</Table.Head>
 					{/each}
-				</tr>
-			</thead>
-			<tbody>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each sorted as row (getRowKey(row))}
-						<tr>
-							{#each columns as col}
-								<td class={col.class}>
-									{row[col.key] ?? '—'}
-								</td>
-							{/each}
-						</tr>
+					<Table.Row>
+						{#each columns as col}
+							<Table.Cell class={col.class}>
+								{row[col.key] ?? "—"}
+							</Table.Cell>
+						{/each}
+					</Table.Row>
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	{/if}
 </div>
-
-<style>
-	.sortable {
-		cursor: pointer;
-		user-select: none;
-	}
-
-	.sortable:hover {
-		color: var(--color-ink);
-	}
-
-	.sort-arrow {
-		margin-left: var(--space-3xs);
-		font-size: var(--text-xs);
-	}
-
-	.sort-active {
-		color: var(--color-ink);
-	}
-</style>

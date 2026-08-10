@@ -3,6 +3,9 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig } from '$lib/api';
+	import { Button } from '$lib/components/ui/button';
+	import * as Table from '$lib/components/ui/table';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import { formatDate as formatDateTz } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Account } from '$lib/types';
@@ -142,44 +145,44 @@
 
 <PageHeader title="Accounts">
 	{#snippet action()}
-		<button class="btn-primary" onclick={() => (showAddModal = true)}>Add Account</button>
+		<Button variant="default" onclick={() => (showAddModal = true)}>Add Account</Button>
 	{/snippet}
 </PageHeader>
 
 <div class="data-table-wrap">
 	{#if loading}
-		<table class="data-table">
-			<thead><tr><th>Username</th><th>Status</th><th>Token</th><th>Created</th><th>Actions</th></tr></thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header><Table.Row><Table.Head>Username</Table.Head><Table.Head>Status</Table.Head><Table.Head>Token</Table.Head><Table.Head>Created</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
+			<Table.Body>
 				{#each Array(3) as _}
-					<tr>
+					<Table.Row>
 						{#each Array(5) as _}
-							<td><div class="skeleton" style="height: 1rem;"></div></td>
+							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 						{/each}
-					</tr>
-			{/each}
-			</tbody>
-		</table>
+					</Table.Row>
+				{/each}
+			</Table.Body>
+		</Table.Root>
 	{:else if accounts.length === 0}
 		<div class="empty-state">
 			<p class="empty-state-title">No accounts yet</p>
 			<p class="empty-state-desc">Add a Threads account to get started.</p>
 		</div>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Username</th>
-					<th>Status</th>
-					<th>Token</th>
-					<th>Created</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head>Username</Table.Head>
+					<Table.Head>Status</Table.Head>
+					<Table.Head>Token</Table.Head>
+					<Table.Head>Created</Table.Head>
+					<Table.Head>Actions</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each accounts as account (account.id)}
-					<tr>
-						<td>
+					<Table.Row>
+						<Table.Cell>
 							<div style="display:flex;align-items:center;gap:var(--space-sm);">
 								<div>
 									<div style="font-weight:500;">{account.username}</div>
@@ -188,9 +191,9 @@
 									{/if}
 								</div>
 							</div>
-						</td>
-						<td><StatusBadge status={statusFromAccount(account)} /></td>
-						<td>
+						</Table.Cell>
+						<Table.Cell><StatusBadge status={statusFromAccount(account)} /></Table.Cell>
+						<Table.Cell>
 							<span class="tabular-nums" style="font-size:var(--text-sm);">
 								{#if account.expires_at}
 									Expires {formatDate(account.expires_at)}
@@ -198,32 +201,33 @@
 									—
 								{/if}
 							</span>
-						</td>
-						<td><span class="tabular-nums">{formatDate(account.created_at)}</span></td>
-						<td>
+						</Table.Cell>
+						<Table.Cell><span class="tabular-nums">{formatDate(account.created_at)}</span></Table.Cell>
+						<Table.Cell>
 							<div style="display:flex;gap:var(--space-2xs);">
-								<button
-									class="btn-outline btn-sm"
+								<Button
+									variant="outline"
+									size="sm"
 									disabled={refreshingId === account.id}
 									onclick={() => handleRefreshToken(account.id)}
 								>
 									{refreshingId === account.id ? '…' : 'Refresh'}
-								</button>
-								<button class="btn-ghost btn-sm" onclick={() => (deletingId = account.id)}>
+								</Button>
+								<Button variant="ghost" size="sm" onclick={() => (deletingId = account.id)}>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;color:var(--color-error);">
 										<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
-								</button>
+								</Button>
 							</div>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
-</div>
+						</Table.Cell>
+						</Table.Row>
+						{/each}
+						</Table.Body>
+						</Table.Root>
+						{/if}
+						</div>
 
-<!-- Add Account Modal -->
+						<!-- Add Account Modal -->
 {#if showAddModal}
 	<div class="confirm-overlay" onclick={() => (showAddModal = false)} role="dialog" aria-modal="true" aria-label="Add Account">
 		<div class="confirm-dialog" style="max-width:32rem;" onclick={(e) => e.stopPropagation()}>
@@ -269,8 +273,8 @@
 					<input id="app_secret" class="form-input" type="password" bind:value={formAppSecret} placeholder="Facebook App Secret" disabled={submitting} />
 				</div>
 				<div class="confirm-actions">
-					<button type="button" class="btn-outline btn-sm" onclick={() => (showAddModal = false)}>Cancel</button>
-					<button type="submit" class="btn-primary btn-sm" disabled={submitting}>{submitting ? 'Adding…' : 'Add Account'}</button>
+					<Button type="button" variant="outline" size="sm" onclick={() => (showAddModal = false)}>Cancel</Button>
+					<Button type="submit" variant="default" size="sm" disabled={submitting}>{submitting ? 'Adding…' : 'Add Account'}</Button>
 				</div>
 		</form>
 		</div>
