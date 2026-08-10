@@ -36,7 +36,7 @@ jobs:
             ext: tar.gz
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -80,7 +80,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -143,7 +143,7 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Extract version
         id: version
@@ -212,7 +212,7 @@ jobs:
       matrix:
         target: [api, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Extract version parts
         id: version
