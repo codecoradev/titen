@@ -224,6 +224,19 @@ impl Store {
             }
         }
 
+        // 011 — persistent session store (replaces in-memory DashMap)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/011_sessions_table.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
         Ok(())
     }
 

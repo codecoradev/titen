@@ -6,8 +6,9 @@ use axum::{
 };
 use dashmap::DashMap;
 use serde::Deserialize;
+use sqlx::{Row, SqlitePool};
 use std::net::SocketAddr;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::{debug, info, warn};
 
@@ -27,14 +28,19 @@ static LOGIN_ATTEMPTS: LazyLock<DashMap<String, Vec<Instant>>> = LazyLock::new(D
 /// Instead of storing the raw API key in the cookie, we issue an opaque
 /// random token that maps back to the key server-side. This decouples the
 /// cookie value from the actual secret, enabling rotation and revocation.
-static SESSIONS: LazyLock<DashMap<String, SessionEntry>> = LazyLock::new(DashMap::new);
+///
+/// v0.7: Sessions persist to SQLite so they survive restarts. The pool is
+/// injected at startup via [`init_session_pool`].
+static SESSION_POOL: OnceLock<SqlitePool> = OnceLock::new();
 
 const SESSION_TTL: Duration = Duration::from_secs(604800); // 7 days
-const MAX_SESSIONS: usize = 10_000;
+const MAX_SESSIONS: i64 = 10_000;
 
-struct SessionEntry {
-    api_key: String,
-    expires_at: u64, // unix epoch seconds
+/// Inject the SQLite pool used by the session store. Called once during
+/// server startup (before any request is served). Subsequent calls are
+/// silently ignored — the first pool wins.
+pub fn init_session_pool(pool: SqlitePool) {
+    let _ = SESSION_POOL.set(pool);
 }
 
 /// Generate a cryptographically random opaque token (256-bit entropy).
@@ -47,50 +53,76 @@ fn generate_session_token() -> Result<String, getrandom::Error> {
     Ok(hex::encode(buf))
 }
 
+/// Helper: get the session pool or None (dev mode where init was never called).
+fn session_pool() -> Option<&'static SqlitePool> {
+    SESSION_POOL.get()
+}
+
 /// Issue a session token for a given API key. Returns the token string,
-/// or None if the system RNG fails (catastrophic — should never happen).
-fn issue_session(api_key: &str) -> Option<String> {
+/// or None if the system RNG fails (catastrophic — should never happen) or
+/// no session pool is configured.
+async fn issue_session(api_key: &str) -> Option<String> {
+    let pool = session_pool()?;
     let token = generate_session_token().ok()?;
     let expires_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs()
-        + SESSION_TTL.as_secs();
+        .as_secs() as i64
+        + SESSION_TTL.as_secs() as i64;
 
-    // Periodic cleanup: prune expired sessions
-    if SESSIONS.len() > MAX_SESSIONS {
+    // Periodic cleanup: prune expired sessions when the table grows large.
+    // Cheaper than running on every request — amortized across logins.
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+        .fetch_one(pool)
+        .await
+        .ok()?;
+    if count > MAX_SESSIONS {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs();
-        SESSIONS.retain(|_, entry| entry.expires_at > now);
+            .as_secs() as i64;
+        let _ = sqlx::query("DELETE FROM sessions WHERE expires_at < ?")
+            .bind(now)
+            .execute(pool)
+            .await;
     }
 
-    SESSIONS.insert(
-        token.clone(),
-        SessionEntry {
-            api_key: api_key.to_string(),
-            expires_at,
-        },
-    );
+    let result = sqlx::query("INSERT INTO sessions (token, api_key, expires_at) VALUES (?, ?, ?)")
+        .bind(&token)
+        .bind(api_key)
+        .bind(expires_at)
+        .execute(pool)
+        .await;
 
-    Some(token)
+    if result.is_ok() { Some(token) } else { None }
 }
 
 /// Validate a session token. Returns the associated API key if valid and not expired.
-pub fn validate_session(token: &str) -> Option<String> {
+pub async fn validate_session(token: &str) -> Option<String> {
+    let pool = session_pool()?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
+        .as_secs() as i64;
 
-    SESSIONS.get(token).and_then(|entry| {
-        if entry.expires_at > now {
-            Some(entry.api_key.clone())
-        } else {
-            None
-        }
-    })
+    let row = sqlx::query("SELECT api_key FROM sessions WHERE token = ? AND expires_at > ?")
+        .bind(token)
+        .bind(now)
+        .fetch_optional(pool)
+        .await
+        .ok()?;
+
+    row.map(|r| r.get::<String, _>("api_key"))
+}
+
+/// Delete a session token from the store (server-side logout).
+pub async fn logout_session(token: &str) {
+    if let Some(pool) = session_pool() {
+        let _ = sqlx::query("DELETE FROM sessions WHERE token = ?")
+            .bind(token)
+            .execute(pool)
+            .await;
+    }
 }
 
 /// Check if an IP is rate-limited. Returns true if the IP should be blocked.
@@ -192,7 +224,7 @@ pub async fn login(
         let secure_attr = if secure { "; Secure" } else { "" };
 
         // P5.4: Issue opaque session token instead of raw API key
-        let session_token = match issue_session(&input.api_key) {
+        let session_token = match issue_session(&input.api_key).await {
             Some(t) => t,
             None => {
                 warn!(target: "titen::auth", "LOGIN_REJECT session token generation failed (RNG failure)");
@@ -281,7 +313,7 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
         // P5.4: Validate opaque session token — if validate_session succeeds,
         // the session is independently valid. No need to re-compare the key
         // against state.api_key; the session was issued after key verification.
-        let result = headers
+        let token_opt = headers
             .get(axum::http::header::COOKIE)
             .and_then(|v| v.to_str().ok())
             .and_then(|cookies| {
@@ -290,9 +322,12 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
                     .map(|c| c.trim())
                     .find(|c| c.starts_with("titen_session="))
                     .map(|c| c.trim_start_matches("titen_session=").to_string())
-            })
-            .map(|token| validate_session(&token).is_some())
-            .unwrap_or(false);
+            });
+
+        let result = match token_opt {
+            Some(token) => validate_session(&token).await.is_some(),
+            None => false,
+        };
 
         if !result {
             debug!(target: "titen::auth", "SESSION_FAIL no valid titen_session cookie or session expired");
@@ -311,8 +346,23 @@ pub async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl 
     }))
 }
 
-/// POST /api/auth/logout — clear session cookie
-pub async fn logout() -> impl IntoResponse {
+/// POST /api/auth/logout — invalidate session server-side and clear cookie
+pub async fn logout(headers: HeaderMap) -> impl IntoResponse {
+    // Extract session token from cookie and delete it server-side
+    if let Some(token) = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(|c| c.trim())
+                .find(|c| c.starts_with("titen_session="))
+                .map(|c| c.trim_start_matches("titen_session=").to_string())
+        })
+    {
+        logout_session(&token).await;
+    }
+
     let cookie = "titen_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
     let mut headers = HeaderMap::new();
     // Safe: cookie is a hardcoded ASCII constant
