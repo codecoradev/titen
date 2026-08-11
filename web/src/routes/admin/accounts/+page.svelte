@@ -129,6 +129,13 @@
 					window.location.href = config.authorize_url;
 					return;
 				}
+				// Fallback: construct authorize URL client-side using known redirect URI.
+				// This handles cases where the backend cannot derive redirect_uri
+				// (e.g. Host header is internal Docker hostname).
+				const redirectUri = `${window.location.origin}/auth/callback`;
+				const authorizeUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(config.app_id)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish,threads_location_tagging&response_type=code`;
+				window.location.href = authorizeUrl;
+				return;
 			}
 			// Fallback: no server config
 			toast('Set Threads App ID and Secret in Settings first', 'error');
