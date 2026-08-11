@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-11
+
+### Fixed
+
+- **OAuth authorize URL broken in Docker deployment** — `APP_URL` was only passed to the web container (as `ORIGIN`), not the API container. `derive_redirect_uri()` in the API couldn't resolve the public URL, producing an empty `redirect_uri` in the authorize URL. Now `APP_URL` is passed to both containers.
+- **Client-side authorize URL fallback** — frontend now constructs the OAuth authorize URL using `window.location.origin` when the backend cannot derive `redirect_uri`, preventing broken Meta OAuth redirects.
+- **Backend no longer emits broken authorize URLs** — returns `null` instead of a URL with empty `redirect_uri=`, signaling the frontend to use the fallback path.
+
 ## [0.7.2] - 2026-08-10
 
 ### Fixed
