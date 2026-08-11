@@ -173,13 +173,20 @@ pub async fn get_oauth_config(
         Ok(settings) => {
             let redirect_uri = derive_redirect_uri(&headers);
 
-            let authorize_url = settings.threads_app_id.as_ref().map(|app_id| {
-                format!(
-                    "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_content_publish,threads_location_tagging&response_type=code",
-                    urlencode(app_id),
-                    urlencode(&redirect_uri),
-                )
-            });
+            // Only generate authorize_url if redirect_uri is non-empty.
+            // If empty, frontend will construct the URL client-side using
+            // window.location.origin (more reliable than internal Host header).
+            let authorize_url = if redirect_uri.is_empty() {
+                None
+            } else {
+                settings.threads_app_id.as_ref().map(|app_id| {
+                    format!(
+                        "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_content_publish,threads_location_tagging&response_type=code",
+                        urlencode(app_id),
+                        urlencode(&redirect_uri),
+                    )
+                })
+            };
 
             (
                 StatusCode::OK,
