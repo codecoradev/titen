@@ -44,7 +44,8 @@ fn heal_media_urls(media: &mut [titen_core::models::MediaAsset]) {
         .filter(|s| !s.is_empty());
 
     // Early exit if no storage configured — can't reconstruct URLs.
-    if endpoint.is_empty() && public_url.is_none() {
+    // Need either public_url OR (endpoint + bucket) to build a valid URL.
+    if public_url.is_none() && (endpoint.is_empty() || bucket.is_empty()) {
         return;
     }
 
