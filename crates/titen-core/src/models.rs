@@ -476,6 +476,9 @@ pub struct UserProfile {
     pub profile_picture_url: Option<String>,
     pub threads_profile_picture_url: Option<String>,
     pub threads_biography: Option<String>,
+    /// Followers count — merged from `threads_insights` (not available on profile node).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub followers_count: Option<i64>,
 }
 
 // ─── Publishing Limit (Threads API) ─────────────────────────

@@ -2,13 +2,13 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig } from '$lib/api';
+	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig, getThreadsProfile } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import { formatDate as formatDateTz } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
-	import type { Account } from '$lib/types';
+	import type { Account, ThreadsProfile } from '$lib/types';
 
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
@@ -17,6 +17,8 @@
 	let deletingId = $state<string | null>(null);
 	let refreshingId = $state<string | null>(null);
 	let submitting = $state(false);
+	let profiles = $state<Record<string, ThreadsProfile | null>>({});
+	let profilesLoading = $state<Set<string>>(new Set());
 
 	let formUserId = $state('');
 	let formUsername = $state('');
@@ -44,6 +46,27 @@
 		loading = true;
 		try {
 			accounts = await listAccounts();
+			// Load profiles concurrently in small batches to avoid overwhelming
+			// the backend or hitting Threads API rate limits (5 at a time).
+			const ids = accounts.map((a) => a.id);
+			profilesLoading = new Set(ids);
+			const BATCH = 5;
+			for (let i = 0; i < ids.length; i += BATCH) {
+				const batch = ids.slice(i, i + BATCH);
+				const results = await Promise.allSettled(
+					batch.map((id) => getThreadsProfile(id)),
+				);
+				batch.forEach((id, j) => {
+					const r = results[j];
+					profiles = {
+						...profiles,
+						[id]: r.status === 'fulfilled' ? r.value : null,
+					};
+					const next = new Set(profilesLoading);
+					next.delete(id);
+					profilesLoading = next;
+				});
+			}
 		} catch (e: any) {
 			toast(e.message || 'Failed to load accounts', 'error');
 		} finally {
@@ -179,7 +202,8 @@
 		<Table.Root>
 			<Table.Header>
 				<Table.Row>
-					<Table.Head>Username</Table.Head>
+					<Table.Head>Account</Table.Head>
+					<Table.Head>Followers</Table.Head>
 					<Table.Head>Status</Table.Head>
 					<Table.Head>Token</Table.Head>
 					<Table.Head>Created</Table.Head>
@@ -190,14 +214,45 @@
 				{#each accounts as account (account.id)}
 					<Table.Row>
 						<Table.Cell>
-							<div class="row-center">
+							<div class="account-cell">
+								{#if profiles[account.id]?.threads_profile_picture_url}
+									<img
+										src={profiles[account.id]!.threads_profile_picture_url!}
+										alt={account.username}
+										class="account-avatar"
+										width="40"
+										height="40"
+									/>
+								{:else if profilesLoading.has(account.id)}
+									<Skeleton class="account-avatar" />
+								{:else}
+									<div class="account-avatar account-avatar-placeholder">
+										{account.username.charAt(0).toUpperCase()}
+									</div>
+								{/if}
 								<div>
-									<div style="font-weight:500;">{account.username}</div>
-									{#if account.user_id}
-										<div style="font-size:var(--text-xs);color:var(--color-muted);">ID: {account.user_id.length > 30 ? account.user_id.slice(0, 12) + '…' : account.user_id}</div>
+									<div style="font-weight:500;">
+										{profiles[account.id]?.name ?? account.username}
+										{#if profiles[account.id]?.username && profiles[account.id]?.username !== account.username}
+											<span style="font-size:var(--text-xs);color:var(--color-muted);">@{profiles[account.id]!.username}</span>
+										{/if}
+									</div>
+									{#if profiles[account.id]?.threads_biography}
+										<div class="account-bio">{profiles[account.id]!.threads_biography}</div>
+									{:else if account.user_id}
+										<div class="text-xs-muted">ID: {account.user_id.length > 30 ? account.user_id.slice(0, 12) + '\u2026' : account.user_id}</div>
 									{/if}
 								</div>
 							</div>
+						</Table.Cell>
+						<Table.Cell>
+							{#if profilesLoading.has(account.id)}
+								<Skeleton class="h-5 w-12" />
+							{:else if profiles[account.id]?.followers_count != null}
+								<span class="tabular-nums font-medium">{profiles[account.id]!.followers_count!.toLocaleString()}</span>
+							{:else}
+								<span class="text-xs-muted">\u2014</span>
+							{/if}
 						</Table.Cell>
 						<Table.Cell><StatusBadge status={statusFromAccount(account)} /></Table.Cell>
 						<Table.Cell>
@@ -299,6 +354,35 @@
 />
 
 <style>
+	.account-cell {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+	.account-avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: var(--radius-full);
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+	.account-avatar-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-accent-subtle, oklch(60% 0.15 260 / 0.15));
+		color: var(--color-accent, oklch(60% 0.15 260));
+		font-weight: 600;
+		font-size: var(--text-sm);
+	}
+	.account-bio {
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+		max-width: 280px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.oauth-connect-btn {
 		display: flex;
 		align-items: center;
