@@ -9,11 +9,28 @@ use crate::server::{AppState, error_response};
 use titen_core::models::*;
 
 /// Return a safe account JSON (no access_token or app_secret).
+///
+/// `user_id` is validated: a legitimate Threads user_id is a short numeric
+/// string (e.g. "27892498033744750"). If the stored value is suspiciously long
+/// (>50 chars, indicating a leaked token was accidentally stored), it is
+/// replaced with null to prevent leakage via the API response.
 fn safe_account_json(account: &titen_core::models::Account) -> serde_json::Value {
+    let safe_user_id = if account.user_id.len() <= 50 {
+        Some(&account.user_id)
+    } else {
+        tracing::warn!(
+            target: "titen::accounts",
+            "user_id for account {} looks like a token (len={}), masking",
+            account.id,
+            account.user_id.len()
+        );
+        None
+    };
+
     serde_json::json!({
         "id": account.id,
         "username": account.username,
-        "user_id": account.user_id,
+        "user_id": safe_user_id,
         "is_active": account.is_active,
         "expires_at": account.expires_at,
         "token_status": account.token_status(),
@@ -198,5 +215,67 @@ pub async fn refresh_token(
             })),
         },
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mock_account(user_id: &str) -> titen_core::models::Account {
+        titen_core::models::Account {
+            id: "test-id".to_string(),
+            username: "testuser".to_string(),
+            user_id: user_id.to_string(),
+            access_token: "secret-token".to_string(),
+            app_id: None,
+            app_secret: None,
+            is_active: true,
+            expires_at: "2026-12-01T00:00:00Z".to_string(),
+            created_at: "2026-01-01 00:00:00".to_string(),
+            updated_at: "2026-01-01 00:00:00".to_string(),
+        }
+    }
+
+    #[test]
+    fn safe_account_json_normal_user_id_preserved() {
+        let acct = mock_account("27892498033744750");
+        let json = safe_account_json(&acct);
+        assert_eq!(json["user_id"], "27892498033744750");
+    }
+
+    #[test]
+    fn safe_account_json_short_alphanumeric_preserved() {
+        // Test data like "usr_001" should pass through — we only mask
+        // values that look like leaked tokens (>50 chars).
+        let acct = mock_account("usr_001");
+        let json = safe_account_json(&acct);
+        assert_eq!(json["user_id"], "usr_001");
+    }
+
+    #[test]
+    fn safe_account_json_token_like_user_id_masked() {
+        // Simulate the bug: a long string stored in user_id.
+        // Use a synthetic filler, not a real credential.
+        let long_value = "X".repeat(233);
+        let acct = mock_account(&long_value);
+        let json = safe_account_json(&acct);
+        assert_eq!(json["user_id"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn safe_account_json_empty_user_id_preserved() {
+        let acct = mock_account("");
+        let json = safe_account_json(&acct);
+        // Empty string is <=50 chars — preserved as-is (not our job to validate here)
+        assert_eq!(json["user_id"], "");
+    }
+
+    #[test]
+    fn safe_account_json_access_token_never_exposed() {
+        let acct = mock_account("12345");
+        let json = safe_account_json(&acct);
+        // access_token must NEVER appear in the safe JSON
+        assert!(json.to_string().find("secret-token").is_none());
     }
 }

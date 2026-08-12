@@ -194,7 +194,7 @@
 								<div>
 									<div style="font-weight:500;">{account.username}</div>
 									{#if account.user_id}
-										<div style="font-size:var(--text-xs);color:var(--color-muted);">ID: {account.user_id}</div>
+										<div style="font-size:var(--text-xs);color:var(--color-muted);">ID: {account.user_id.length > 30 ? account.user_id.slice(0, 12) + '…' : account.user_id}</div>
 									{/if}
 								</div>
 							</div>
