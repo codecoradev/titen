@@ -19,6 +19,47 @@ const ALLOWED_MIME_TYPES: &[&str] = &[
     "video/webm",
 ];
 
+/// Heal legacy `s3_url` values that were stored as relative paths (e.g.
+/// `/2026/08/09/uuid.png`) instead of full URLs. Re-computes the absolute
+/// URL from `s3_key` using the current storage backend configuration.
+///
+/// This is a read-time repair — no DB migration required. Existing rows
+/// with relative URLs are transparently upgraded when read through the API.
+fn heal_media_urls(media: &mut [titen_core::models::MediaAsset]) {
+    // Only compute the base URL if we actually need it.
+    let needs_heal = media
+        .iter()
+        .any(|m| m.s3_url.as_ref().is_none_or(|u| !u.starts_with("http")));
+    if !needs_heal {
+        return;
+    }
+
+    // Compute the base URL once from env (same logic as S3Storage::get_url /
+    // object_url, but synchronous since we only need the string format).
+    let endpoint = std::env::var("TITEN_S3_ENDPOINT").unwrap_or_default();
+    let bucket = std::env::var("TITEN_S3_BUCKET").unwrap_or_default();
+    let public_url = std::env::var("TITEN_S3_PUBLIC_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let base = if let Some(pu) = public_url {
+        pu.trim_end_matches('/').to_string()
+    } else if !endpoint.is_empty() && !bucket.is_empty() {
+        format!("{}/{}", endpoint.trim_end_matches('/'), bucket)
+    } else {
+        // No storage configured — can't heal, leave as-is.
+        return;
+    };
+
+    for m in media.iter_mut() {
+        let needs_fix = m.s3_url.as_ref().is_none_or(|u| !u.starts_with("http"));
+        if needs_fix {
+            m.s3_url = Some(format!("{}/{}", base, m.s3_key));
+        }
+    }
+}
+
 /// Validate file content using magic bytes (first 16 bytes).
 /// Returns the detected MIME type, or an error message if the file type is not allowed.
 fn validate_magic_bytes(data: &[u8]) -> Result<String, &'static str> {
@@ -84,7 +125,9 @@ pub async fn list_media(
     };
 
     match state.store.list_media(&clamped_filter).await {
-        Ok(media) => {
+        Ok(mut media) => {
+            // Read-time repair: heal any legacy relative s3_url values.
+            heal_media_urls(&mut media);
             // P5.2: Include total count + pagination metadata
             let total = state.store.count_media(&clamped_filter).await.unwrap_or(0);
             (
@@ -279,5 +322,148 @@ pub async fn delete_media(
                 })),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use titen_core::models::MediaAsset;
+
+    /// Set env vars in a single `unsafe` block (Rust 2024 requires this).
+    fn set_env(pairs: &[(&str, Option<&str>)]) {
+        unsafe {
+            for (key, val) in pairs {
+                match val {
+                    Some(v) => std::env::set_var(key, v),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    fn make_asset(s3_url: Option<&str>, s3_key: &str) -> MediaAsset {
+        MediaAsset {
+            id: "test-id".to_string(),
+            filename: "test.png".to_string(),
+            content_type: "image/png".to_string(),
+            size_bytes: 1024,
+            s3_key: s3_key.to_string(),
+            s3_url: s3_url.map(String::from),
+            uploaded_at: "2026-08-12T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn heal_relative_url_to_absolute() {
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", None),
+        ]);
+
+        let mut media = vec![make_asset(
+            Some("/2026/08/12/uuid.png"),
+            "2026/08/12/uuid.png",
+        )];
+        heal_media_urls(&mut media);
+
+        assert_eq!(
+            media[0].s3_url.as_deref(),
+            Some("https://s3.ajianaz.dev/titen/2026/08/12/uuid.png")
+        );
+    }
+
+    #[test]
+    fn heal_none_url_to_absolute() {
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", None),
+        ]);
+
+        let mut media = vec![make_asset(None, "2026/08/12/uuid.png")];
+        heal_media_urls(&mut media);
+
+        assert_eq!(
+            media[0].s3_url.as_deref(),
+            Some("https://s3.ajianaz.dev/titen/2026/08/12/uuid.png")
+        );
+    }
+
+    #[test]
+    fn heal_skips_already_absolute_urls() {
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", None),
+        ]);
+
+        let absolute = "https://cdn.example.com/img.png";
+        let mut media = vec![make_asset(Some(absolute), "2026/08/12/uuid.png")];
+        heal_media_urls(&mut media);
+
+        assert_eq!(media[0].s3_url.as_deref(), Some(absolute));
+    }
+
+    #[test]
+    fn heal_respects_public_url_override() {
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", Some("https://cdn.example.com")),
+        ]);
+
+        let mut media = vec![make_asset(
+            Some("/2026/08/12/uuid.png"),
+            "2026/08/12/uuid.png",
+        )];
+        heal_media_urls(&mut media);
+
+        assert_eq!(
+            media[0].s3_url.as_deref(),
+            Some("https://cdn.example.com/2026/08/12/uuid.png")
+        );
+    }
+
+    #[test]
+    fn heal_ignores_empty_public_url() {
+        // #186 root cause: empty string TITEN_S3_PUBLIC_URL must be treated as unset.
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", Some("")),
+        ]);
+
+        let mut media = vec![make_asset(
+            Some("/2026/08/12/uuid.png"),
+            "2026/08/12/uuid.png",
+        )];
+        heal_media_urls(&mut media);
+
+        assert_eq!(
+            media[0].s3_url.as_deref(),
+            Some("https://s3.ajianaz.dev/titen/2026/08/12/uuid.png")
+        );
+    }
+
+    #[test]
+    fn heal_trims_trailing_slash_from_endpoint() {
+        set_env(&[
+            ("TITEN_S3_ENDPOINT", Some("https://s3.ajianaz.dev/")),
+            ("TITEN_S3_BUCKET", Some("titen")),
+            ("TITEN_S3_PUBLIC_URL", None),
+        ]);
+
+        let mut media = vec![make_asset(
+            Some("/2026/08/12/uuid.png"),
+            "2026/08/12/uuid.png",
+        )];
+        heal_media_urls(&mut media);
+
+        assert_eq!(
+            media[0].s3_url.as_deref(),
+            Some("https://s3.ajianaz.dev/titen/2026/08/12/uuid.png")
+        );
     }
 }
