@@ -6,7 +6,11 @@ use axum::{
 };
 use titen_core::models::{Mention, MentionFilter};
 
-/// Fetch the Threads user profile for an account
+/// Fetch the Threads user profile for an account.
+///
+/// Returns profile data from `/me` plus `followers_count` from insights.
+/// Followers count is not available on the profile node — it requires a
+/// separate `threads_insights?metric=followers_count` call.
 pub async fn get_user_profile(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -16,8 +20,26 @@ pub async fn get_user_profile(
         Err(e) => return Json(serde_json::json!({ "error": e.to_string(), "code": "NOT_FOUND" })),
     };
 
-    match state.threads_client.fetch_my_profile(&account).await {
-        Ok(profile) => Json(serde_json::json!({ "data": profile })),
+    // Fetch profile and followers_count concurrently (best-effort).
+    let (profile_result, followers_result) = tokio::join!(
+        state.threads_client.fetch_my_profile(&account),
+        state
+            .threads_client
+            .fetch_user_insights(&account, "followers_count", None, None),
+    );
+
+    match profile_result {
+        Ok(mut profile) => {
+            // Merge followers_count from insights if available.
+            if let Ok(insights) = followers_result {
+                if let Some(metric) = insights.iter().find(|m| m.name == "followers_count") {
+                    if let Some(tv) = &metric.total_value {
+                        profile.followers_count = Some(tv.value);
+                    }
+                }
+            }
+            Json(serde_json::json!({ "data": profile }))
+        }
         Err(e) => {
             Json(serde_json::json!({ "error": e.to_string(), "code": "PROFILE_FETCH_FAILED" }))
         }
