@@ -81,7 +81,14 @@ impl S3Storage {
             )
         })?;
         let region = std::env::var("TITEN_S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
-        let public_url = std::env::var("TITEN_S3_PUBLIC_URL").ok();
+        // Treat empty/whitespace-only string as unset (None).
+        // Without this guard, an empty TITEN_S3_PUBLIC_URL="" becomes Some(""),
+        // which get_url() interprets as a valid base — producing "/{key}"
+        // (a relative path) instead of falling back to endpoint/bucket/key.
+        let public_url = std::env::var("TITEN_S3_PUBLIC_URL")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
@@ -104,9 +111,37 @@ impl S3Storage {
         })
     }
 
-    /// Build the object URL for a key (path-style: endpoint/bucket/key)
+    /// Build the public object URL from raw config values.
+    ///
+    /// Shared by `S3Storage::get_url()` and external callers (e.g. `heal_media_urls`)
+    /// to avoid duplicating URL construction logic.
+    ///
+    /// - If `public_url` is set (non-empty), uses `{public_url}/{key}`.
+    /// - Otherwise falls back to `{endpoint}/{bucket}/{key}`.
+    /// - Trailing slashes on `endpoint`/`public_url` are trimmed.
+    pub fn build_public_url(
+        public_url: Option<&str>,
+        endpoint: &str,
+        bucket: &str,
+        key: &str,
+    ) -> String {
+        if let Some(pu) = public_url.filter(|s| !s.is_empty()) {
+            format!("{}/{key}", pu.trim_end_matches('/'))
+        } else {
+            format!("{}/{}/{key}", endpoint.trim_end_matches('/'), bucket)
+        }
+    }
+
+    /// Build the public object URL for a key.
+    ///
+    /// Uses `build_public_url` with this storage's config.
     fn object_url(&self, key: &str) -> String {
-        format!("{}/{}/{}", self.endpoint, self.bucket, key)
+        Self::build_public_url(
+            self.public_url.as_deref(),
+            &self.endpoint,
+            &self.bucket,
+            key,
+        )
     }
 
     /// Build the date-based key path: YYYY/MM/DD/uuid.ext
@@ -384,11 +419,12 @@ impl Storage for S3Storage {
     }
 
     async fn get_url(&self, key: &str) -> Result<String> {
-        if let Some(base) = &self.public_url {
-            Ok(format!("{base}/{key}"))
-        } else {
-            Ok(self.object_url(key))
-        }
+        Ok(Self::build_public_url(
+            self.public_url.as_deref(),
+            &self.endpoint,
+            &self.bucket,
+            key,
+        ))
     }
 
     /// P5.3: Generate a presigned URL for temporary GET access to a private object.
