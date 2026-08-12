@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-08-12
+
+### Security
+
+- **Mask token-like `user_id` in API responses** — If `user_id` exceeds 50 characters (indicating a contaminated value such as an OAuth access token), the API now returns `null` instead of the raw value. Prevents accidental credential leakage through the dashboard or API responses.
+
+### Added
+
+- **Accounts page now shows profile data** — The `/accounts` table displays each account's Threads avatar, display name, bio, and follower count. Follower counts are fetched from the Threads insights endpoint and merged into the profile response.
+
+### Fixed
+
+- **Follower count always `0` on dashboard** — Threads API does not return `followers_count` on the `/me` profile node. The `get_user_profile` endpoint now fetches profile and `followers_count` concurrently via `tokio::join!`, merging the insight value into the response.
+- **Media S3 URLs returned relative paths** — `s3_url` now returns full absolute URLs instead of relative paths (`/media/...`), fixing broken image display in production.
+
 ## [0.7.3] - 2026-08-11
 
 ### Fixed
