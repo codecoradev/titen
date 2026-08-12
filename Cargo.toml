@@ -57,7 +57,7 @@ subtle = "2.6"
 
 # Encryption (AES-256-GCM for token at-rest encryption)
 aes-gcm = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 rand = "0.8"
 sha2 = "0.10"
 hmac = "0.12"
