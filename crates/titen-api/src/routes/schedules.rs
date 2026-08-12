@@ -116,6 +116,21 @@ pub async fn create_schedule(
     State(state): State<AppState>,
     Json(input): Json<CreateSchedule>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // #186: Validate media_urls are absolute URLs. Relative paths (e.g.
+    // "/2026/08/09/uuid.png") will cause Threads API publish failures.
+    if let Some(ref urls) = input.media_urls {
+        for url in urls {
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("media_urls must be absolute URLs (http/https), got: {url}"),
+                        "code": "INVALID_MEDIA_URL"
+                    })),
+                );
+            }
+        }
+    }
     // #136: Validate caption length against Threads API limit (500 chars).
     // Check both caption and text_attachment since they are merged downstream.
     if let Some(ref c) = input.caption {
@@ -160,6 +175,20 @@ pub async fn patch_schedule(
     Path(id): Path<String>,
     Json(input): Json<UpdateSchedule>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // #186: Validate media_urls are absolute URLs (same as create).
+    if let Some(ref urls) = input.media_urls {
+        for url in urls {
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("media_urls must be absolute URLs (http/https), got: {url}"),
+                        "code": "INVALID_MEDIA_URL"
+                    })),
+                );
+            }
+        }
+    }
     // #136: Validate caption length.
     if let Some(ref c) = input.caption {
         if c.chars().count() > 500 {
@@ -226,6 +255,21 @@ pub async fn update_schedule(
     // Merge text_attachment → caption: CreateSchedule has both fields, but the
     // store layer only knows about caption. Use text_attachment as fallback.
     let effective_caption = input.caption.or(input.text_attachment);
+
+    // #186: Validate media_urls are absolute URLs (same as create).
+    if let Some(ref urls) = input.media_urls {
+        for url in urls {
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("media_urls must be absolute URLs (http/https), got: {url}"),
+                        "code": "INVALID_MEDIA_URL"
+                    })),
+                );
+            }
+        }
+    }
 
     // #136: Validate caption length.
     if let Some(ref c) = effective_caption {
