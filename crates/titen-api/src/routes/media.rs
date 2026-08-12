@@ -34,8 +34,8 @@ fn heal_media_urls(media: &mut [titen_core::models::MediaAsset]) {
         return;
     }
 
-    // Compute the base URL once from env (same logic as S3Storage::get_url /
-    // object_url, but synchronous since we only need the string format).
+    // Read env values to pass through S3Storage::build_public_url (single source
+    // of truth for URL construction — avoids logic duplication, #186 CodeCora review).
     let endpoint = std::env::var("TITEN_S3_ENDPOINT").unwrap_or_default();
     let bucket = std::env::var("TITEN_S3_BUCKET").unwrap_or_default();
     let public_url = std::env::var("TITEN_S3_PUBLIC_URL")
@@ -43,19 +43,22 @@ fn heal_media_urls(media: &mut [titen_core::models::MediaAsset]) {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let base = if let Some(pu) = public_url {
-        pu.trim_end_matches('/').to_string()
-    } else if !endpoint.is_empty() && !bucket.is_empty() {
-        format!("{}/{}", endpoint.trim_end_matches('/'), bucket)
-    } else {
-        // No storage configured — can't heal, leave as-is.
+    // Early exit if no storage configured — can't reconstruct URLs.
+    if endpoint.is_empty() && public_url.is_none() {
         return;
-    };
+    }
 
     for m in media.iter_mut() {
         let needs_fix = m.s3_url.as_ref().is_none_or(|u| !u.starts_with("http"));
         if needs_fix {
-            m.s3_url = Some(format!("{}/{}", base, m.s3_key));
+            // Delegate to the shared builder so URL format stays consistent
+            // with what S3Storage::get_url() would produce.
+            m.s3_url = Some(S3Storage::build_public_url(
+                public_url.as_deref(),
+                &endpoint,
+                &bucket,
+                &m.s3_key,
+            ));
         }
     }
 }

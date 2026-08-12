@@ -111,16 +111,37 @@ impl S3Storage {
         })
     }
 
+    /// Build the public object URL from raw config values.
+    ///
+    /// Shared by `S3Storage::get_url()` and external callers (e.g. `heal_media_urls`)
+    /// to avoid duplicating URL construction logic.
+    ///
+    /// - If `public_url` is set (non-empty), uses `{public_url}/{key}`.
+    /// - Otherwise falls back to `{endpoint}/{bucket}/{key}`.
+    /// - Trailing slashes on `endpoint`/`public_url` are trimmed.
+    pub fn build_public_url(
+        public_url: Option<&str>,
+        endpoint: &str,
+        bucket: &str,
+        key: &str,
+    ) -> String {
+        if let Some(pu) = public_url.filter(|s| !s.is_empty()) {
+            format!("{}/{key}", pu.trim_end_matches('/'))
+        } else {
+            format!("{}/{}/{key}", endpoint.trim_end_matches('/'), bucket)
+        }
+    }
+
     /// Build the public object URL for a key.
     ///
-    /// Uses `public_url` if set (e.g. a CDN or custom domain), otherwise
-    /// falls back to path-style `{endpoint}/{bucket}/{key}`.
-    ///
-    /// Trailing slashes on endpoint/public_url are trimmed to avoid
-    /// double-slash artifacts (e.g. `https://s3.example.com//bucket/key`).
+    /// Uses `build_public_url` with this storage's config.
     fn object_url(&self, key: &str) -> String {
-        let ep = self.endpoint.trim_end_matches('/');
-        format!("{}/{}/{}", ep, self.bucket, key)
+        Self::build_public_url(
+            self.public_url.as_deref(),
+            &self.endpoint,
+            &self.bucket,
+            key,
+        )
     }
 
     /// Build the date-based key path: YYYY/MM/DD/uuid.ext
@@ -398,13 +419,12 @@ impl Storage for S3Storage {
     }
 
     async fn get_url(&self, key: &str) -> Result<String> {
-        let base = if let Some(base) = &self.public_url {
-            base.trim_end_matches('/').to_string()
-        } else {
-            let ep = self.endpoint.trim_end_matches('/');
-            format!("{ep}/{}", self.bucket)
-        };
-        Ok(format!("{base}/{key}"))
+        Ok(Self::build_public_url(
+            self.public_url.as_deref(),
+            &self.endpoint,
+            &self.bucket,
+            key,
+        ))
     }
 
     /// P5.3: Generate a presigned URL for temporary GET access to a private object.
