@@ -34,13 +34,15 @@
 	// Detail modal
 	let detailSchedule = $state<Schedule | null>(null);
 
-	// View mode: table (default) or cards (Rungu moderation style)
+	// View mode: table (default) or cards (Rungu moderation style).
+	// Init client-only (in $effect) to avoid SSR hydration mismatch.
 	type ViewMode = 'table' | 'cards';
-	let viewMode = $state<ViewMode>(
-		(typeof localStorage !== 'undefined' &&
-			(localStorage.getItem('schedules-view') as ViewMode) === 'cards') ?
-			'cards' : 'table'
-	);
+	let viewMode = $state<ViewMode>('table');
+	$effect(() => {
+		if (typeof localStorage !== 'undefined' && localStorage.getItem('schedules-view') === 'cards') {
+			viewMode = 'cards';
+		}
+	});
 	function setViewMode(m: ViewMode) {
 		viewMode = m;
 		try { localStorage.setItem('schedules-view', m); } catch { /* ignore */ }
