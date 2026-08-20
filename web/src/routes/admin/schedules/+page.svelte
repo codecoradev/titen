@@ -837,6 +837,38 @@
 }} />
 
 <style>
+	.filter-bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		gap: var(--space-sm);
+	}
+
+	.filter-bar .form-group {
+		flex: 0 1 auto;
+		min-width: 9rem;
+	}
+
+	.filter-bar .form-group:first-child {
+		flex: 1 1 16rem;
+	}
+
+	.tz-info {
+		display: flex;
+		align-items: flex-end;
+	}
+
+	@media (max-width: 640px) {
+		.filter-bar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.filter-bar .form-group {
+			min-width: 0;
+		}
+	}
+
 	.row-clickable {
 		cursor: pointer;
 		transition: background-color 0.1s ease;
