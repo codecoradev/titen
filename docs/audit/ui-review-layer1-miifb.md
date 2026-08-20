@@ -1,0 +1,52 @@
+# Layer 1 — Micro-Detail Polish Review (miifb)
+
+**Scope:** `web/src` — routes (`+layout`, `+page`, `login`, `auth/callback`, `admin/*`) + `lib/components/{ConfirmDialog,DataTable,EmptyState,Icon,PageHeader,PostDetail,ScheduleDetail,StatSkeleton,StatusBadge}.svelte`, token source `app.css`.
+**Stack:** SvelteKit 5 + shadcn-svelte + Tailwind v4 (`@utility cn-*` classes in app.css are the app convention — not flagged).
+**Excluded:** stock shadcn files under `lib/components/ui/` (Layer 2 scope).
+**Date:** 2026-08-20
+
+## Context notes
+
+- Global `prefers-reduced-motion` guard **exists** in `app.css:351-357` (animation + transition duration zeroed) — all CSS animations below are covered by it. No Svelte `transition:*`/`animate:*` directives exist anywhere in scope, so that check passes globally.
+- Global `:focus-visible` style exists (`app.css:345-348`: 2px outline + 2px offset), so most components inherit a consistent focus ring; only components that *override* it are flagged.
+- `tabular-nums` utility exists (`app.css:971`). Dashboard, PostDetail, Settings health grid, and Accounts use it correctly; Analytics stat cards do not.
+
+## Findings
+
+| Severity | Principle | File:Line | Before | After | Why |
+|---|---|---|---|---|---|
+| HIGH | No `:active` press feedback | `routes/admin/accounts/+page.svelte:402-406` (`.oauth-connect-btn`) | `transition: background-color …; .oauth-connect-btn:hover { … }` only | Add `.oauth-connect-btn:active { transform: scale(0.97); }` (and `transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out)`) | Primary OAuth CTA has hover state but zero press feedback — feels dead under the thumb; every shadcn Button in the app has `active:translate-y-px`, this custom one breaks the pattern. |
+| HIGH | Token bypass — hardcoded color | `routes/admin/accounts/+page.svelte:405` | `.oauth-connect-btn:hover { background: oklch(50% 0.22 260); }` | `background: var(--color-accent-strong, var(--color-accent));` (define once in app.css) | Raw OKLCH value bypasses the token system: won't respond to theme changes, duplicates accent hue, and can't be audited. Only place in scope with a raw color literal in a hover rule. |
+| HIGH | `transition: all` | `routes/admin/media/+page.svelte:398` | `.dropzone { … transition: all 0.2s ease; }` | `transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out);` | `transition: all` animates every animatable property (including layout-affecting ones), causes jank on drag state changes, and bypasses the app's `--dur-*`/`--ease-*` tokens. |
+| HIGH | Missing `tabular-nums` on dynamic numbers | `routes/admin/analytics/+page.svelte:180,184,188,192,196,200` (`.stat-card-value`) | `<p class="stat-card-value">{totals ? fmt(totals.total_views) : '—'}</p>` | `<p class="stat-card-value tabular-nums">…</p>` | These are the 6 headline counters; they swap between `fmt()` outputs (e.g. `999` → `1.0K`) on every filter change. Dashboard stat cards (`dashboard/+page.svelte:162-180`) already apply `tabular-nums` — Analytics is inconsistent and digits shift width while loading/filtering. |
+| MED | Hardcoded hex fallbacks duplicating tokens | `routes/admin/comments/+page.svelte:516-522` and `routes/admin/schedules/+page.svelte:739-740,810` | `background: var(--color-warning-bg, #fef3c7); color: var(--color-warning-text, #92400e);` | `background: var(--color-warning-bg); color: var(--color-warning-text);` (add real tokens to app.css if undefined) | The fallback hex values are the *actual* rendered colors — the tokens are undefined, so theming silently breaks. Same duplicated block in two files = drift risk. Centralize in app.css badge classes. |
+| MED | Hardcoded accent fallback | `lib/components/PostDetail.svelte:256` | `color: var(--color-accent, #3b82f6);` | `color: var(--color-accent);` | Same pattern: if `--color-accent` exists in app.css (it does — used elsewhere), the fallback is dead weight implying token absence; if it doesn't, #3b82f6 renders outside the theme. |
+| MED | Mixed token systems | `routes/admin/media/+page.svelte:395,397,404-405,410-411` | `border: 2px dashed hsl(var(--border)); background: hsl(var(--muted) / 0.3); … box-shadow: 0 0 0 2px hsl(var(--ring) / 0.3);` | `border: 2px dashed var(--color-rule); background: var(--color-paper-2); … outline: 2px solid var(--color-focus); outline-offset: 2px;` | Page mixes shadcn HSL vars with the app's own token set in the same component — visual seam (dropzone border/shade won't match surrounding cards). The `:focus-visible` box-shadow also fights the global outline convention (`app.css:345`). |
+| MED | Focus ring style mismatch | `routes/admin/media/+page.svelte:409-412` | `.dropzone:focus-visible { border-color: hsl(var(--ring)); box-shadow: 0 0 0 2px hsl(var(--ring) / 0.3); }` | `.dropzone:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }` | Every other focusable element in the app uses the global 2px solid outline; this one uses a 30%-alpha glow — keyboard users see two different focus languages on one page. |
+| MED | Icon stroke-width inconsistency | `routes/auth/callback/+page.svelte:70,78` vs `lib/components/Icon.svelte:72`, all inline SVGs elsewhere | `stroke-width="1.5"` (48px success/error icons) | `stroke-width="2"` to match Icon component + all other inline SVGs (`admin/+layout.svelte:79`, `settings:304-334`, `analytics:158`) | The app's icon language is uniformly 2px; the callback page's 1.5px hero icons read thinner/weaker than every other icon the user has seen in the flow. Also consider using the Icon component for these instead of raw `<svg>`. |
+| MED | Inline icon size bypasses scale | `routes/admin/analytics/+page.svelte:158` | `<svg … width="18" height="18">` | Use `class="size-4"` (16px, app standard) or Icon component | Raw pixel attributes ignore the `size-*` scale used everywhere else (`size-4`/`size-5` classes in media, comments); 18px is an off-scale oddity. |
+| MED | Hit area < 44px on icon-only actions | `routes/admin/media/+page.svelte:285-299` (Copy/Trash2 ghost `size="sm"` buttons) | `<Button variant="ghost" size="sm"><Copy class="size-4" /></Button>` | Add `class="size-11 sm:size-9"` (or min 44×44 hit target via padded pseudo-element) | Icon-only sm ghost buttons render ~32×32px — below the 44px minimum touch target; adjacent destructive (Trash) + benign (Copy) actions make mis-taps costly. |
+| MED | Hit area < 44px + no press feedback | `lib/components/PostDetail.svelte:81` (`.detail-close`) | `<button class="detail-close" onclick={onClose} aria-label="Close">&times;</button>` (styled small, no `:active`) | Bump to ≥44px square hit area with `.detail-close:active { transform: scale(0.92); }` | The single most-used control in the modal: tiny glyph button, no press state, sits next to nothing. Mentions `reply-modal` and ScheduleDetail have the same pattern. |
+| LOW | No `:active` feedback on custom tab buttons | `routes/admin/settings/+page.svelte:412-433` (`.settings-tab`) | `transition: color …; :hover { color: ink }` only | Add `.settings-tab:active { color: var(--color-accent); }` or subtle `transform: translateY(1px)` | Tabs respond to hover but not press; a click gives no immediate tactile confirmation before the panel swaps. |
+| LOW | `ease-in-out` on skeleton pulse | `lib/components/PostDetail.svelte:375` and `routes/admin/dashboard/+page.svelte:426` | `animation: pulse 1.5s ease-in-out infinite;` | `animation: pulse 1.5s var(--ease-out) infinite;` (or cubic-bezier(0.4,0,0.6,1) explicitly) | Minor: fine for ambient skeletons (not interactive), but the easing isn't tokenized — define one skeleton pulse easing in app.css so both copies can't drift. |
+| LOW | Border width not tokenized | `routes/admin/settings/+page.svelte:495` | `.settings-card--danger { border-width: 1.5px; }` | `border: var(--rule-strong);` or a `--rule-width-strong` token | Only non-integer border width in the app; ad-hoc. Same for `mentions/+page.svelte:248` `border-left: 3px solid`. |
+| LOW | Non-interruptible infinite animation runs while offscreen | `lib/components/PostDetail.svelte:372-381`, `routes/admin/dashboard/+page.svelte:426` | `animation: pulse … infinite;` always running | `animation-play-state: paused` when tab hidden, or scope the skeleton keyframes to a shared app.css class | Two hand-copied `pulse` keyframe definitions; both keep compositing while the section is offscreen. Covered by reduced-motion guard, so LOW. |
+| LOW | Dropdown chevron 300ms transition | `lib/components/ui/navigation-menu/…:28` (stock shadcn — informational only) | `transition duration-300 … rotate-180` | — | Listed for completeness only; stock shadcn file, excluded from this layer's fixes. |
+| LOW | Duplicated badge variant CSS per page | `routes/admin/comments/+page.svelte:515-523` vs `routes/admin/schedules/+page.svelte:738-741` | Two copies of `.badge--warning` / `.badge--muted` with identical fallback hexes | Move `badge--warning/-muted/-success/-error` to app.css next to `.badge` | Micro-consistency: one source of truth; fixes the HIGH/MED hex issue for all pages at once. |
+
+## Passing checks (no findings)
+
+- **Svelte transition directives:** zero `transition:*` / `animate:*` in scope — reduced-motion guard N/A (and CSS-level guard exists globally).
+- **Durations >300ms on interactive UI:** none (max is 300ms on the stock shadcn chevron; app custom UI uses `--dur-short`).
+- **`ease-in` curves on interactive elements:** none found — interactive transitions use `var(--ease-out)`.
+- **Icon currentColor usage:** all interactive inline SVGs use `stroke="currentColor"`; only the auth-callback status icons pin semantic colors (`--color-success`/`--color-error`), which is correct.
+- **tabular-nums adoption** is good in dashboard, PostDetail metrics/trend, accounts, settings health grid.
+- **DataTable/ConfirmDialog/EmptyState/StatSkeleton/StatusBadge/PageHeader:** clean — tokenized, no animation/hover issues, nothing to flag at this layer.
+
+## Priority fix order
+
+1. Analytics `tabular-nums` on stat values (1-line × 6, user-visible every visit).
+2. Kill `transition: all` + `:active` on dropzone/oauth button (media + accounts).
+3. Centralize badge warning/muted colors into app.css (removes all hex fallbacks at once).
+4. Normalize focus ring on media dropzone to global outline.
+5. Stroke-width + size consistency on auth-callback icons.

@@ -253,7 +253,7 @@
 
 	.permalink-link {
 		font-size: var(--text-sm);
-		color: var(--color-accent, #3b82f6);
+		color: var(--color-accent);
 		text-decoration: none;
 		font-weight: 600;
 	}

@@ -1079,7 +1079,7 @@ textarea.form-input {
 }
 
 .border-warning {
-	border-color: var(--color-warning-border, #fcd34d);
+	border-color: var(--color-warning-border);
 }
 
 .pt-2xs {

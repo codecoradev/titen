@@ -513,12 +513,12 @@
 	}
 
 	.badge--warning {
-		background: var(--color-warning-bg, #fef3c7);
-		color: var(--color-warning-text, #92400e);
+		background: var(--color-warning-bg);
+		color: var(--color-warning-text);
 	}
 
 	.badge--muted {
-		background: var(--color-muted-bg, #f3f4f6);
-		color: var(--color-muted, #6b7280);
+		background: var(--color-muted-bg);
+		color: var(--color-muted);
 	}
 </style>
