@@ -30,6 +30,7 @@
 	let loading = $state(true);
 	let loaded = $state(false);
 	let creating = $state(false);
+	let loadSeq = 0; // guards against stale async responses
 
 	// Detail modal
 	let detailSchedule = $state<Schedule | null>(null);
@@ -122,16 +123,18 @@
 			} = {};
 			if (filterAccountId) params.account_id = filterAccountId;
 			if (filterStatus !== 'all') params.status = filterStatus;
-			// datetime-local value → local ISO; backend treats as start/end of range
-			if (filterFrom) params.from = new Date(filterFrom).toISOString();
+			// Date-only strings parse as UTC midnight — append local time to anchor to user TZ
+			if (filterFrom) params.from = new Date(`${filterFrom}T00:00:00`).toISOString();
 			if (filterTo) params.to = new Date(`${filterTo}T23:59:59`).toISOString();
 			if (filterSearch.trim()) params.search = filterSearch.trim();
 			if (filterMediaType !== 'all') params.media_type = filterMediaType;
 
+			const reqId = ++loadSeq;
 			const [schedulesData, accountsData] = await Promise.all([
 				listSchedules(params),
 				listAccounts()
 			]);
+			if (reqId !== loadSeq) return; // stale response — a newer request superseded it
 
 			schedules = schedulesData;
 			accounts = accountsData;
