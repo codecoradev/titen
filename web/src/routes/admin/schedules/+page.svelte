@@ -46,6 +46,38 @@
 
 	let filterAccountId = $state('');
 	let filterStatus = $state<StatusFilter>('all');
+	let filterFrom = $state('');
+	let filterTo = $state('');
+	let filterSearch = $state('');
+	let filterMediaType = $state<'all' | 'TEXT' | 'IMAGE' | 'CAROUSEL'>('all');
+
+	const hasActiveFilters = $derived(
+		filterAccountId !== '' ||
+			filterStatus !== 'all' ||
+			filterFrom !== '' ||
+			filterTo !== '' ||
+			filterSearch.trim() !== '' ||
+			filterMediaType !== 'all'
+	);
+
+	function resetFilters() {
+		filterAccountId = '';
+		filterStatus = 'all';
+		filterFrom = '';
+		filterTo = '';
+		filterSearch = '';
+		filterMediaType = 'all';
+	}
+
+	// Debounce search input so typing doesn't refetch every keystroke
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		void filterSearch; // track dependency
+		clearTimeout(searchTimer);
+		if (!loaded) return;
+		searchTimer = setTimeout(() => loadData(), 300);
+		return () => clearTimeout(searchTimer);
+	});
 
 	// Timezone display label
 	let tzLabel = $derived(getTimezone() || 'Browser TZ');
@@ -80,9 +112,21 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const params: { account_id?: string; status?: string } = {};
+			const params: {
+				account_id?: string;
+				status?: string;
+				from?: string;
+				to?: string;
+				search?: string;
+				media_type?: string;
+			} = {};
 			if (filterAccountId) params.account_id = filterAccountId;
 			if (filterStatus !== 'all') params.status = filterStatus;
+			// datetime-local value → local ISO; backend treats as start/end of range
+			if (filterFrom) params.from = new Date(filterFrom).toISOString();
+			if (filterTo) params.to = new Date(`${filterTo}T23:59:59`).toISOString();
+			if (filterSearch.trim()) params.search = filterSearch.trim();
+			if (filterMediaType !== 'all') params.media_type = filterMediaType;
 
 			const [schedulesData, accountsData] = await Promise.all([
 				listSchedules(params),
@@ -275,6 +319,17 @@
 	// Count drafts for badge
 	let draftCount = $derived(schedules.filter((s) => s.status === 'draft').length);
 
+	// Refetch when any non-search filter changes (search has its own debounced effect)
+	$effect(() => {
+		void filterAccountId;
+		void filterStatus;
+		void filterFrom;
+		void filterTo;
+		void filterMediaType;
+		if (!loaded) return;
+		loadData();
+	});
+
 	$effect(() => {
 		if (!loaded) {
 			loadData();
@@ -295,6 +350,17 @@
 
 	<!-- Filters -->
 	<div class="filter-bar">
+		<div class="form-group">
+			<label class="form-label" for="filter-search">Search</label>
+			<input
+				id="filter-search"
+				class="form-input"
+				type="search"
+				placeholder="Search caption…"
+				bind:value={filterSearch}
+			/>
+		</div>
+
 		<div class="form-group">
 			<label class="form-label">Account</label>
 			<Select.Root type="single" bind:value={filterAccountId}>
@@ -330,9 +396,51 @@
 			</Select.Root>
 		</div>
 
+		<div class="form-group">
+			<label class="form-label" for="filter-from">From</label>
+			<input
+				id="filter-from"
+				class="form-input"
+				type="date"
+				bind:value={filterFrom}
+			/>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="filter-to">To</label>
+			<input
+				id="filter-to"
+				class="form-input"
+				type="date"
+				bind:value={filterTo}
+			/>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label">Media Type</label>
+			<Select.Root type="single" bind:value={filterMediaType}>
+				<Select.Trigger>
+					{filterMediaType === 'all' ? 'All' : filterMediaType === 'TEXT' ? 'Text Only' : filterMediaType === 'IMAGE' ? 'Single Image' : 'Carousel'}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="all" label="All">All</Select.Item>
+					<Select.Item value="TEXT" label="Text Only">Text Only</Select.Item>
+					<Select.Item value="IMAGE" label="Single Image">Single Image</Select.Item>
+					<Select.Item value="CAROUSEL" label="Carousel">Carousel</Select.Item>
+				</Select.Content>
+			</Select.Root>
+		</div>
+
 		<div class="form-group tz-info">
 			<span class="tz-badge" title="Display timezone from TZ env var">🕒 {tzLabel}</span>
 		</div>
+
+		{#if hasActiveFilters}
+			<div class="form-group">
+				<label class="form-label">&nbsp;</label>
+				<Button variant="outline" size="sm" onclick={resetFilters}>Reset filters</Button>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Table -->
