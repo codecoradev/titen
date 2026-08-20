@@ -122,9 +122,15 @@
 			<Table.Body>
 				{#each sorted as row (getRowKey(row))}
 					<Table.Row
-						class={rowClass?.(row) ?? (onrowclick ? 'row-clickable' : '')}
+						class={[onrowclick ? 'row-clickable' : '', rowClass?.(row) ?? ''].filter(Boolean).join(' ')}
 						onclick={onrowclick ? () => onrowclick(row) : undefined}
-						onkeydown={onrowclick && ((e: KeyboardEvent) => e.key === 'Enter' && onrowclick(row))}
+						onkeydown={onrowclick &&
+							((e: KeyboardEvent) => {
+								if (e.key !== 'Enter') return;
+								const t = e.target as HTMLElement;
+								if (t.closest('button, a, input, select, textarea')) return;
+								onrowclick(row);
+							})}
 						role={onrowclick ? 'button' : undefined}
 						tabindex={onrowclick ? 0 : undefined}
 					>
