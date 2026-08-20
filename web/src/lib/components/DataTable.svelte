@@ -25,6 +25,10 @@
 		onrowclick?: (row: T) => void;
 		/** Per-row extra class, e.g. highlight drafts. */
 		rowClass?: (row: T) => string;
+		/** Expanded-row detail renderer — receives the row. Requires detailRowKey to track expansion. */
+		detail?: Snippet<[T]>;
+		/** Row key for tracking which row is expanded. Defaults to getRowKey. */
+		expandable?: boolean;
 	}
 
 	let {
@@ -37,11 +41,14 @@
 		actions,
 		actionsLabel = 'Actions',
 		onrowclick,
-		rowClass
+		rowClass,
+		detail,
+		expandable = false
 	}: Props = $props();
 
 	let sortKey = $state<string | null>(null);
 	let sortAsc = $state(true);
+	let expandedKey = $state<string | number | null>(null);
 
 	const allColumns = $derived(
 		actions ? [...columns, { key: '__actions', label: actionsLabel, class: 'col-actions' }] : columns
@@ -121,18 +128,32 @@
 			</Table.Header>
 			<Table.Body>
 				{#each sorted as row (getRowKey(row))}
+					{@const rowKey = getRowKey(row)}
+					{@const isExpanded = expandable && detail && expandedKey === rowKey}
 					<Table.Row
-						class={[onrowclick ? 'row-clickable' : '', rowClass?.(row) ?? ''].filter(Boolean).join(' ')}
-						onclick={onrowclick ? () => onrowclick(row) : undefined}
-						onkeydown={onrowclick &&
-							((e: KeyboardEvent) => {
-								if (e.key !== 'Enter') return;
-								const t = e.target as HTMLElement;
-								if (t.closest('button, a, input, select, textarea')) return;
-								onrowclick(row);
-							})}
-						role={onrowclick ? 'button' : undefined}
-						tabindex={onrowclick ? 0 : undefined}
+						class={[onrowclick ? 'row-clickable' : '', rowClass?.(row) ?? '', isExpanded ? 'row-expanded' : '']
+							.filter(Boolean)
+							.join(' ')}
+						onclick={() => {
+							if (expandable && detail) {
+								expandedKey = isExpanded ? null : rowKey;
+							}
+							onrowclick?.(row);
+						}}
+						onkeydown={((e: KeyboardEvent) => {
+							if (e.key !== 'Enter' && e.key !== ' ') return;
+							const t = e.target as HTMLElement;
+							if (t.closest('button, a, input, select, textarea')) return;
+							if (!expandable || !detail) {
+								if (e.key === 'Enter') onrowclick?.(row);
+								return;
+							}
+							e.preventDefault();
+							expandedKey = expandedKey === rowKey ? null : rowKey;
+						})}
+						role={onrowclick || (expandable && detail) ? 'button' : undefined}
+						tabindex={onrowclick || (expandable && detail) ? 0 : undefined}
+						aria-expanded={expandable && detail ? isExpanded : undefined}
 					>
 						{#each columns as col}
 							<Table.Cell class={col.class}>
@@ -145,8 +166,15 @@
 								{@render actions(row)}
 							</Table.Cell>
 						{/if}
-					</Table.Row>
-				{/each}
+						</Table.Row>
+						{#if isExpanded}
+							<Table.Row class="row-detail">
+								<Table.Cell colspan={allColumns.length}>
+									{@render detail(row)}
+								</Table.Cell>
+							</Table.Row>
+						{/if}
+						{/each}
 			</Table.Body>
 		</Table.Root>
 	{/if}
@@ -160,5 +188,14 @@
 
 	.row-clickable:hover {
 		background: var(--color-bg-hover, rgba(0, 0, 0, 0.03));
+	}
+
+	.row-expanded {
+		background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
+	}
+
+	:global(.row-detail td) {
+		background: var(--color-bg-subtle, rgba(0, 0, 0, 0.025));
+		border-top: none;
 	}
 </style>

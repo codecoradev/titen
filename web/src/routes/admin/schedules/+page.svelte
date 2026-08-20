@@ -250,14 +250,27 @@
 		}
 	}
 
-	// HITL: Approve
+	// Optimistic status update helper (Rungu moderation pattern)
+	function optimisticStatus(id: string, status: Schedule['status']) {
+		const prev = schedules.find((s) => s.id === id)?.status;
+		schedules = schedules.map((s) => (s.id === id ? { ...s, status } : s));
+		return prev;
+	}
+
+	function revertStatus(id: string, prev: Schedule['status'] | undefined) {
+		if (prev === undefined) return;
+		schedules = schedules.map((s) => (s.id === id ? { ...s, status: prev } : s));
+	}
+
+	// HITL: Approve (optimistic)
 	async function handleApprove(schedule: Schedule) {
 		approvingId = schedule.id;
+		const prev = optimisticStatus(schedule.id, 'approved');
 		try {
 			await approveSchedule(schedule.id);
 			toast('Schedule approved — will auto-publish when due', 'success');
-			await loadData();
 		} catch (e: any) {
+			revertStatus(schedule.id, prev);
 			toast(e.message || 'Failed to approve schedule', 'error');
 		} finally {
 			approvingId = null;
@@ -277,12 +290,14 @@
 	async function handleReject() {
 		if (!rejectTarget) return;
 		rejecting = true;
+		const target = rejectTarget;
+		const prev = optimisticStatus(target.id, 'rejected');
 		try {
-			await rejectSchedule(rejectTarget.id, rejectReason || undefined);
+			await rejectSchedule(target.id, rejectReason || undefined);
 			toast('Schedule rejected', 'success');
 			rejectTarget = null;
-			await loadData();
 		} catch (e: any) {
+			revertStatus(target.id, prev);
 			toast(e.message || 'Failed to reject schedule', 'error');
 		} finally {
 			rejecting = false;
@@ -448,6 +463,10 @@
 				<Button variant="outline" size="sm" onclick={resetFilters}>Reset filters</Button>
 			</div>
 		{/if}
+
+		<div class="filter-count" aria-live="polite">
+			{schedules.length} schedule{schedules.length === 1 ? '' : 's'}
+		</div>
 	</div>
 
 	<!-- Table -->
@@ -467,9 +486,38 @@
 				rows={schedules}
 				loading={loading}
 				emptyTitle="No schedules match filters"
-				onrowclick={openDetail}
+				expandable
 				rowClass={(s) => (s.status === 'draft' ? 'row-draft' : '')}
 			>
+				{#snippet detail(s)}
+					<div class="detail-panel">
+						{#if s.caption}
+							<p class="detail-caption">{s.caption}</p>
+						{/if}
+						{#if s.media_urls}
+							<div class="detail-media">
+								{#each s.media_urls.split(',').filter(Boolean) as url}
+									<img
+										src={url}
+										alt="Media preview"
+										class="detail-thumb"
+										loading="lazy"
+										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+									/>
+								{/each}
+							</div>
+						{/if}
+						{#if s.error}
+							<p class="detail-error">{s.error}</p>
+						{/if}
+						<dl class="detail-meta">
+							<div><dt>Scheduled</dt><dd>{fmtDate(s.scheduled_at)}</dd></div>
+							<div><dt>Type</dt><dd>{s.media_type}</dd></div>
+							<div><dt>Created</dt><dd>{fmtDate(s.created_at)}</dd></div>
+							{#if s.published_at}<div><dt>Published</dt><dd>{fmtDate(s.published_at)}</dd></div>{/if}
+						</dl>
+					</div>
+				{/snippet}
 				{#snippet cell(s, key)}
 					{#if key === 'content'}
 						<div class="caption-cell" title={s.caption || '—'}>
@@ -500,6 +548,7 @@
 					{/if}
 				{/snippet}
 				{#snippet actions(s)}
+					<Button variant="ghost" size="sm" onclick={() => openDetail(s)} title="Full detail">Detail</Button>
 					{#if s.status === 'draft'}
 						<Button
 							variant="default"
@@ -781,6 +830,61 @@
 	.filter-bar .form-group {
 		flex: 0 1 auto;
 		min-width: 9rem;
+	}
+
+	.filter-count {
+		margin-left: auto;
+		align-self: flex-end;
+		padding-bottom: 0.45rem;
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+		white-space: nowrap;
+	}
+
+	.detail-panel {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm, 0.5rem);
+		padding: var(--space-sm, 0.5rem) var(--space-md, 1rem);
+	}
+	.detail-caption {
+		font-size: 0.875rem;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.detail-media {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs, 0.375rem);
+	}
+	.detail-thumb {
+		height: 72px;
+		width: 72px;
+		border-radius: var(--radius-sm, 6px);
+		object-fit: cover;
+	}
+	.detail-error {
+		font-size: 0.8125rem;
+		color: var(--color-error);
+		overflow-wrap: anywhere;
+	}
+	.detail-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-md, 1rem);
+		margin: 0;
+		font-size: 0.8125rem;
+	}
+	.detail-meta div {
+		display: flex;
+		gap: 0.375rem;
+	}
+	.detail-meta dt {
+		color: var(--color-muted);
+	}
+	.detail-meta dd {
+		margin: 0;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.filter-bar .form-group:first-child {
