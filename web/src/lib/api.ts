@@ -148,10 +148,18 @@ export const getSchedule = (id: string): Promise<Schedule> =>
 export const listSchedules = (params?: {
 	account_id?: string;
 	status?: string;
+	from?: string;
+	to?: string;
+	search?: string;
+	media_type?: string;
 }): Promise<Schedule[]> => {
 	const q = new URLSearchParams();
 	if (params?.account_id) q.set('account_id', params.account_id);
 	if (params?.status) q.set('status', params.status);
+	if (params?.from) q.set('from', params.from);
+	if (params?.to) q.set('to', params.to);
+	if (params?.search) q.set('search', params.search);
+	if (params?.media_type) q.set('media_type', params.media_type);
 	const qs = q.toString();
 	return request<Schedule[]>(`/schedules${qs ? `?${qs}` : ''}`);
 };
