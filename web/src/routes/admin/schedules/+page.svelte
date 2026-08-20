@@ -736,8 +736,8 @@
 	}
 
 	.badge-draft {
-		background: var(--color-warning-bg, #fef3c7);
-		color: var(--color-warning-text, #92400e);
+		background: var(--color-warning-bg);
+		color: var(--color-warning-text);
 		padding: 0.25rem 0.625rem;
 		border-radius: 9999px;
 		font-size: 0.75rem;
@@ -807,7 +807,7 @@
 	.tz-badge {
 		font-size: 0.75rem;
 		color: var(--color-muted);
-		background: var(--color-bg-elevated, #f3f4f6);
+		background: var(--color-bg-elevated);
 		padding: 0.25rem 0.625rem;
 		border-radius: 0.375rem;
 		white-space: nowrap;
