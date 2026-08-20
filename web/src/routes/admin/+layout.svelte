@@ -10,6 +10,7 @@
 
 	// Auth guard: verify session cookie is valid, redirect to login if not
 	let authed = $state(false);
+	let appVersion = $state('');
 
 	$effect(() => {
 		if (authed) return;
@@ -18,6 +19,7 @@
 				const session = await checkSession();
 				if (session.authenticated) {
 					authed = true;
+					appVersion = session.version ?? '';
 				} else {
 					// Not authenticated — redirect to login
 					const currentPath = page.url.pathname + page.url.search;
@@ -115,7 +117,7 @@
 		</nav>
 		<div class="sidebar-footer">
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
-			<span class="sidebar-version">v0.5.5 · admin</span>
+			<span class="sidebar-version">{appVersion ? `v${appVersion} · ` : ''}admin</span>
 		</div>
 	</aside>
 
