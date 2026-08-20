@@ -4,6 +4,7 @@
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
 	import { checkSession, logout } from '$lib/api';
+	import { fetchTimezone, getTimezone } from '$lib/tz';
 	import { goto } from '$app/navigation';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
@@ -11,6 +12,7 @@
 	// Auth guard: verify session cookie is valid, redirect to login if not
 	let authed = $state(false);
 	let appVersion = $state('');
+	let tzLabel = $state('');
 
 	$effect(() => {
 		if (authed) return;
@@ -20,6 +22,7 @@
 				if (session.authenticated) {
 					authed = true;
 					appVersion = session.version ?? '';
+					tzLabel = (await fetchTimezone()) || getTimezone() || '';
 				} else {
 					// Not authenticated — redirect to login
 					const currentPath = page.url.pathname + page.url.search;
@@ -117,7 +120,10 @@
 		</nav>
 		<div class="sidebar-footer">
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
-			<span class="sidebar-version">{appVersion ? `v${appVersion} · ` : ''}admin</span>
+			<span class="sidebar-meta">
+				{#if appVersion}<span class="sidebar-version">v{appVersion}</span>{/if}
+				{#if tzLabel}<span class="sidebar-tz" title="Times shown in this timezone (server TZ env)">🕒 {tzLabel}</span>{/if}
+			</span>
 		</div>
 	</aside>
 
@@ -213,6 +219,19 @@
 	}
 
 	.sidebar-version {
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+		font-family: var(--font-mono);
+	}
+
+	.sidebar-meta {
+		display: flex;
+		gap: var(--space-xs);
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.sidebar-tz {
 		font-size: var(--text-xs);
 		color: var(--color-muted);
 		font-family: var(--font-mono);

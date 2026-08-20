@@ -19,8 +19,7 @@
 	import { truncate } from '$lib/format';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
-	import * as Table from '$lib/components/ui/table';
-	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
@@ -322,6 +321,15 @@
 	// Count drafts for badge
 	let draftCount = $derived(schedules.filter((s) => s.status === 'draft').length);
 
+	// DataTable columns (labels only — cells rendered via snippet)
+	const columns = [
+		{ key: 'content', label: 'Content', class: 'truncate' },
+		{ key: 'account_id', label: 'Account' },
+		{ key: 'scheduled_at', label: 'Scheduled', sortable: true },
+		{ key: 'status', label: 'Status' },
+		{ key: 'error', label: 'Error' }
+	];
+
 	// Refetch when any non-search filter changes (search has its own debounced effect)
 	$effect(() => {
 		void filterAccountId;
@@ -434,11 +442,7 @@
 			</Select.Root>
 		</div>
 
-		<div class="form-group tz-info">
-			<span class="tz-badge" title="Display timezone from TZ env var">🕒 {tzLabel}</span>
-		</div>
-
-		{#if hasActiveFilters}
+			{#if hasActiveFilters}
 			<div class="form-group">
 				<label class="form-label">&nbsp;</label>
 				<Button variant="outline" size="sm" onclick={resetFilters}>Reset filters</Button>
@@ -458,134 +462,64 @@
 			{/snippet}
 		</EmptyState>
 	{:else}
-		<div class="data-table-wrap">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Content</Table.Head>
-						<Table.Head>Account</Table.Head>
-						<Table.Head>Scheduled</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head>Error</Table.Head>
-						<Table.Head>Actions</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#if loading}
-						{#each Array(5) as _}
-							<Table.Row>
-								<Table.Cell><Skeleton class="h-4 w-48" /></Table.Cell>
-								<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
-								<Table.Cell><Skeleton class="h-4 w-32" /></Table.Cell>
-								<Table.Cell><Skeleton class="h-4 w-20" /></Table.Cell>
-								<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
-								<Table.Cell><Skeleton class="h-4 w-16" /></Table.Cell>
-							</Table.Row>
-						{/each}
+		<DataTable
+				columns={columns}
+				rows={schedules}
+				loading={loading}
+				emptyTitle="No schedules match filters"
+				onrowclick={openDetail}
+				rowClass={(s) => (s.status === 'draft' ? 'row-draft' : '')}
+			>
+				{#snippet cell(s, key)}
+					{#if key === 'content'}
+						<div class="caption-cell" title={s.caption || '—'}>
+							{#if s.media_urls}
+								{#each s.media_urls.split(',').filter(Boolean).slice(0, 3) as url, i}
+									<img
+										src={url}
+										alt="Preview"
+										class="row-thumb"
+										loading="lazy"
+										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+									/>
+									{#if i === 2 && s.media_urls.split(',').filter(Boolean).length > 3}
+										<span class="thumb-more">+{s.media_urls.split(',').filter(Boolean).length - 3}</span>
+									{/if}
+								{/each}
+							{/if}
+							<span>{truncate(s.caption || '—', 60)}</span>
+						</div>
+					{:else if key === 'account'}
+						{accounts.find((a) => a.id === s.account_id)?.username ?? s.account_id.slice(0, 8)}
+					{:else if key === 'scheduled_at'}
+						<span class="tabular-nums">{fmtDate(s.scheduled_at)}</span>
+					{:else if key === 'status'}
+						<StatusBadge status={s.status} />
+					{:else if key === 'error'}
+						<span class="col-error" title={s.error ?? ''}>{s.error ?? '—'}</span>
+					{/if}
+				{/snippet}
+				{#snippet actions(s)}
+					{#if s.status === 'draft'}
+						<Button
+							variant="default"
+							size="sm"
+							class="bg-[var(--color-success)]"
+							onclick={() => approveSchedule(s.id)}
+							disabled={approvingId === s.id}
+						>
+							{approvingId === s.id ? '…' : 'Approve'}
+						</Button>
+						<Button variant="ghost" size="sm" onclick={() => openEditModal(s)} title="Edit">Edit</Button>
+						<Button variant="destructive" size="sm" onclick={() => openRejectModal(s)} title="Reject">Reject</Button>
+					{:else if s.status === 'pending'}
+						<Button variant="ghost" size="sm" onclick={() => openEditModal(s)} title="Edit">Edit</Button>
+						<Button variant="ghost" size="sm" onclick={() => confirmDelete(s)} disabled={deleting} title="Cancel schedule">Cancel</Button>
 					{:else}
-						{#each schedules as schedule (schedule.id)}
-							<Table.Row
-								class={schedule.status === 'draft' ? 'row-draft row-clickable' : 'row-clickable'}
-								onclick={() => openDetail(schedule)}
-								onkeydown={(e) => e.key === 'Enter' && openDetail(schedule)}
-								role="button"
-								tabindex={0}
-							>
-								<Table.Cell class="truncate" title={schedule.caption || '—'}>
-									<div class="caption-cell">
-										{#if schedule.media_urls}
-											{#each schedule.media_urls.split(',').filter(Boolean).slice(0, 3) as url, i}
-												<img
-													src={url}
-													alt="Preview"
-													class="row-thumb"
-													loading="lazy"
-													onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
-												/>
-												{#if i === 2 && schedule.media_urls.split(',').filter(Boolean).length > 3}
-													<span class="thumb-more">+{schedule.media_urls.split(',').filter(Boolean).length - 3}</span>
-												{/if}
-											{/each}
-										{/if}
-										<span>{truncate(schedule.caption || '—', 60)}</span>
-									</div>
-								</Table.Cell>
-								<Table.Cell>
-									{accounts.find(a => a.id === schedule.account_id)?.username ?? schedule.account_id.slice(0, 8)}
-								</Table.Cell>
-								<Table.Cell class="tabular-nums">
-									{fmtDate(schedule.scheduled_at)}
-								</Table.Cell>
-								<Table.Cell>
-									<StatusBadge status={schedule.status} />
-								</Table.Cell>
-								<Table.Cell class="col-error" title={schedule.error ?? ''}>
-									{schedule.error ?? '—'}
-								</Table.Cell>
-								<Table.Cell class="col-actions" onclick={(e) => e.stopPropagation()}>
-									{#if schedule.status === 'draft'}
-										<Button
-											variant="default"
-											size="sm"
-											class="bg-[var(--color-success)]"
-											onclick={() => handleApprove(schedule)}
-											disabled={approvingId === schedule.id}
-											title="Approve — will publish when due"
-										>
-											{approvingId === schedule.id ? '…' : 'Approve'}
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={() => openEditModal(schedule)}
-											title="Edit"
-										>
-											Edit
-										</Button>
-										<Button
-											variant="destructive"
-											size="sm"
-											onclick={() => openRejectModal(schedule)}
-											title="Reject"
-										>
-											Reject
-										</Button>
-									{:else if schedule.status === 'pending'}
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={() => openEditModal(schedule)}
-											title="Edit"
-										>
-											Edit
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={() => confirmDelete(schedule)}
-											disabled={deleting}
-											title="Cancel schedule"
-										>
-											Cancel
-										</Button>
-									{:else}
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={() => confirmDelete(schedule)}
-											disabled={deleting}
-											title="Delete"
-										>
-											Delete
-										</Button>
+						<Button variant="ghost" size="sm" onclick={() => confirmDelete(s)} disabled={deleting} title="Delete">Delete</Button>
 					{/if}
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-					{/if}
-				</Table.Body>
-			</Table.Root>
-		</div>
+				{/snippet}
+			</DataTable>
 	{/if}
 </div>
 
