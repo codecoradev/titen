@@ -22,8 +22,9 @@ export async function fetchTimezone(): Promise<string> {
 			return cachedTz;
 		})
 		.catch(() => {
-			cachedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-			return cachedTz;
+			// Do NOT cache the browser fallback — retry on next call
+			// so the server TZ wins once /health is reachable.
+			return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 		})
 		.finally(() => {
 			fetchPromise = null;
