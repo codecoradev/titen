@@ -264,6 +264,7 @@
 
 	// HITL: Approve (optimistic)
 	async function handleApprove(schedule: Schedule) {
+		approvingId = schedule.id;
 		const prev = optimisticStatus(schedule.id, 'approved');
 		try {
 			await approveSchedule(schedule.id);
