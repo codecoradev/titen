@@ -489,7 +489,7 @@
 							{/if}
 							<span>{truncate(s.caption || '—', 60)}</span>
 						</div>
-					{:else if key === 'account'}
+					{:else if key === 'account_id'}
 						{accounts.find((a) => a.id === s.account_id)?.username ?? s.account_id.slice(0, 8)}
 					{:else if key === 'scheduled_at'}
 						<span class="tabular-nums">{fmtDate(s.scheduled_at)}</span>
