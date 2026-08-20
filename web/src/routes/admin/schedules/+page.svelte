@@ -1111,6 +1111,45 @@
 		.filter-bar .form-group {
 			min-width: 0;
 		}
+
+		.filter-count {
+			margin-left: 0;
+			padding-bottom: 0;
+		}
+
+		.view-toggle {
+			align-self: stretch;
+			justify-content: flex-end;
+			padding-bottom: 0;
+		}
+
+		.view-toggle :global(button) {
+			flex: 1;
+		}
+
+		.card-grid {
+			grid-template-columns: 1fr;
+			gap: var(--space-sm, 0.5rem);
+		}
+
+		.sched-card {
+			padding: 0.75rem;
+		}
+
+		.sched-card-media img {
+			height: 56px;
+			width: 56px;
+		}
+
+		.sched-card-actions {
+			flex-wrap: nowrap;
+		}
+
+		.sched-card-actions :global(button) {
+			flex: 1;
+			min-width: 0;
+			white-space: nowrap;
+		}
 	}
 
 	.row-clickable {
