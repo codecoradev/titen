@@ -505,7 +505,7 @@
 							variant="default"
 							size="sm"
 							class="bg-[var(--color-success)]"
-							onclick={() => approveSchedule(s.id)}
+							onclick={() => handleApprove(s)}
 							disabled={approvingId === s.id}
 						>
 							{approvingId === s.id ? '…' : 'Approve'}
