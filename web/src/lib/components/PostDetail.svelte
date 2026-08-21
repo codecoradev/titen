@@ -65,7 +65,7 @@
 	}
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="detail-overlay" onclick={onClose} role="presentation">
 	<div
