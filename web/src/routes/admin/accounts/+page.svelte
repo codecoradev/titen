@@ -182,13 +182,16 @@
 <div class="data-table-wrap">
 	{#if loading}
 		<Table.Root>
-			<Table.Header><Table.Row><Table.Head>Username</Table.Head><Table.Head>Status</Table.Head><Table.Head>Token</Table.Head><Table.Head>Created</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
+			<Table.Header><Table.Row><Table.Head>Username</Table.Head><Table.Head>Status</Table.Head><Table.Head class="hidden md:table-cell">Token</Table.Head><Table.Head class="hidden md:table-cell">Created</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
 			<Table.Body>
 				{#each Array(3) as _}
 					<Table.Row>
-						{#each Array(5) as _}
-							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						{/each}
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>
@@ -205,8 +208,8 @@
 					<Table.Head>Account</Table.Head>
 					<Table.Head>Followers</Table.Head>
 					<Table.Head>Status</Table.Head>
-					<Table.Head>Token</Table.Head>
-					<Table.Head>Created</Table.Head>
+					<Table.Head class="hidden md:table-cell">Token</Table.Head>
+					<Table.Head class="hidden md:table-cell">Created</Table.Head>
 					<Table.Head>Actions</Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -255,16 +258,16 @@
 							{/if}
 						</Table.Cell>
 						<Table.Cell><StatusBadge status={statusFromAccount(account)} /></Table.Cell>
-						<Table.Cell>
-							<span class="tabular-nums text-sm">
-								{#if account.expires_at}
-									Expires {formatDate(account.expires_at)}
-								{:else}
-									—
-								{/if}
-							</span>
-						</Table.Cell>
-						<Table.Cell><span class="tabular-nums">{formatDate(account.created_at)}</span></Table.Cell>
+						<Table.Cell class="hidden md:table-cell">
+						<span class="tabular-nums text-sm">
+							{#if account.expires_at}
+								Expires {formatDate(account.expires_at)}
+							{:else}
+								—
+							{/if}
+						</span>
+					</Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><span class="tabular-nums">{formatDate(account.created_at)}</span></Table.Cell>
 						<Table.Cell>
 							<div class="row-gap-xs">
 								<Button

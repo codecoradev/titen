@@ -199,9 +199,9 @@
 				<Table.Row>
 					<Table.Head>Preview</Table.Head>
 					<Table.Head>Filename</Table.Head>
-					<Table.Head>Type</Table.Head>
-					<Table.Head>Size</Table.Head>
-					<Table.Head>Uploaded</Table.Head>
+					<Table.Head class="hidden md:table-cell">Type</Table.Head>
+					<Table.Head class="hidden md:table-cell">Size</Table.Head>
+					<Table.Head class="hidden md:table-cell">Uploaded</Table.Head>
 					<Table.Head>Actions</Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -211,9 +211,9 @@
 						<Table.Cell><Skeleton class="size-10 rounded" /></Table.Cell>
 						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>
@@ -229,9 +229,9 @@
 				<Table.Row>
 					<Table.Head>Preview</Table.Head>
 					<Table.Head>Filename</Table.Head>
-					<Table.Head>Type</Table.Head>
-					<Table.Head>Size</Table.Head>
-					<Table.Head>Uploaded</Table.Head>
+					<Table.Head class="hidden md:table-cell">Type</Table.Head>
+					<Table.Head class="hidden md:table-cell">Size</Table.Head>
+					<Table.Head class="hidden md:table-cell">Uploaded</Table.Head>
 					<Table.Head>Actions</Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -277,9 +277,9 @@
 							class="max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap"
 							title={item.filename}>{item.filename}</Table.Cell
 						>
-						<Table.Cell>{item.content_type}</Table.Cell>
-						<Table.Cell>{formatSize(item.size_bytes)}</Table.Cell>
-						<Table.Cell>{formatDate(item.uploaded_at)}</Table.Cell>
+						<Table.Cell class="hidden md:table-cell">{item.content_type}</Table.Cell>
+						<Table.Cell class="hidden md:table-cell">{formatSize(item.size_bytes)}</Table.Cell>
+						<Table.Cell class="hidden md:table-cell">{formatDate(item.uploaded_at)}</Table.Cell>
 						<Table.Cell>
 							<div class="flex gap-1">
 								<Button
