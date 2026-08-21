@@ -15,6 +15,28 @@ import type {
 
 const BASE = import.meta.env.TITEN_API_BASE || '/api';
 
+/**
+ * Parse `Schedule.media_urls` into a clean URL array.
+ * The backend stores it as a JSON-encoded string (`'["a","b"]'`), but older
+ * rows may hold comma-separated plain strings — handle both, tolerate
+ * malformed JSON.
+ */
+export function parseMediaUrls(raw: string | null | undefined): string[] {
+	if (!raw) return [];
+	const trimmed = raw.trim();
+	if (trimmed.startsWith('[')) {
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (Array.isArray(parsed)) {
+				return parsed.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).map((u) => u.trim());
+			}
+		} catch {
+			// fall through to comma parsing
+		}
+	}
+	return trimmed.split(',').map((u) => u.trim()).filter(Boolean);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const isForm = init?.body instanceof FormData;
 	const res = await fetch(`${BASE}${path}`, {
@@ -224,7 +246,7 @@ export const createSchedule = (data: {
 	media_type?: string;
 	caption?: string;
 	text_attachment?: string;
-	media_urls?: string;
+	media_urls?: string[];
 }): Promise<Schedule> =>
 	request<Schedule>('/schedules', {
 		method: 'POST',
