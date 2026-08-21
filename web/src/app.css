@@ -769,27 +769,17 @@ textarea.form-input {
 	background: var(--color-paper-3);
 }
 
-/* ── Detail modal (shared by PostDetail & ScheduleDetail) ── */
-.detail-overlay {
-	position: fixed;
-	inset: 0;
-	background: var(--overlay-scrim, oklch(0% 0 0 / 0.5));
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: var(--z-modal);
-	padding: var(--space-md);
-}
-
 .detail-dialog {
-	background: var(--color-paper);
+	background: var(--color-paper) !important;
 	border: 1px solid var(--color-rule);
 	border-radius: var(--radius-lg);
-	max-width: 42rem;
+	max-width: 42rem !important;
 	width: 100%;
 	max-height: 85vh;
 	display: flex;
 	flex-direction: column;
+	gap: 0 !important;
+	padding: 0 !important;
 }
 
 .detail-header {
@@ -839,9 +829,6 @@ textarea.form-input {
 }
 
 @media (max-width: 30rem) {
-	.detail-overlay {
-		padding: 0;
-	}
 
 	.detail-dialog {
 		max-height: 100vh;
@@ -881,17 +868,6 @@ textarea.form-input {
 }
 
 /* ── Confirm dialog ── */
-.confirm-overlay {
-	position: fixed;
-	inset: 0;
-	background: oklch(0% 0 0 / 0.5);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
-	z-index: var(--z-modal);
-	display: grid;
-	place-items: center;
-}
-
 .confirm-dialog {
 	background: var(--surface-overlay);
 	border-radius: var(--radius-xl);

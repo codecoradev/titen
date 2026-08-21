@@ -2,6 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig, getThreadsProfile } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Table from '$lib/components/ui/table';
@@ -294,9 +295,9 @@
 
 						<!-- Add Account Modal -->
 {#if showAddModal}
-	<div class="confirm-overlay" onclick={() => (showAddModal = false)} role="dialog" aria-modal="true" aria-label="Add Account">
-		<div class="confirm-dialog" style="max-width:32rem;" onclick={(e) => e.stopPropagation()}>
-			<h3>Add Account</h3>
+	<Dialog.Root open onOpenChange={(o) => { if (!o) showAddModal = false; }}>
+		<Dialog.Content class="confirm-dialog" style="max-width:32rem;" aria-describedby={undefined}>
+			<Dialog.Title class="text-base font-semibold mb-xs">Add Account</Dialog.Title>
 
 			<!-- OAuth connect -->
 			<button
@@ -342,8 +343,8 @@
 					<Button type="submit" variant="default" size="sm" disabled={submitting}>{submitting ? 'Adding…' : 'Add Account'}</Button>
 				</div>
 		</form>
-		</div>
-	</div>
+		</Dialog.Content>
+	</Dialog.Root>
 {/if}
 
 <!-- Delete Confirmation -->

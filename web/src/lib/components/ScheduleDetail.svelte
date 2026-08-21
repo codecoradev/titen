@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { formatDateTime } from '$lib/tz';
 	import { approveSchedule, rejectSchedule, deleteSchedule } from '$lib/api';
@@ -97,21 +98,11 @@
 		}
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onClose();
-	}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<div class="detail-overlay" onclick={onClose} role="presentation">
-	<div
-		class="detail-dialog"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Schedule detail"
-		onclick={(e) => e.stopPropagation()}
-	>
+<Dialog.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
+	<Dialog.Content class="detail-dialog" aria-describedby={undefined}>
+		<Dialog.Title class="sr-only">Schedule detail</Dialog.Title>
 		<!-- Header -->
 		<div class="detail-header">
 			<h2 class="detail-title">Schedule Detail</h2>
@@ -232,8 +223,8 @@
 			{/if}
 			<button class="btn-secondary" onclick={onClose}>Close</button>
 		</div>
-	</div>
-</div>
+	</Dialog.Content>
+</Dialog.Root>
 
 <ConfirmDialog
 	open={showDeleteConfirm}
