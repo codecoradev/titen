@@ -157,7 +157,7 @@
 				// This handles cases where the backend cannot derive redirect_uri
 				// (e.g. Host header is internal Docker hostname).
 				const redirectUri = `${window.location.origin}/auth/callback`;
-				const authorizeUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(config.app_id)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish,threads_location_tagging&response_type=code`;
+				const authorizeUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(config.app_id)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish,threads_manage_replies,threads_manage_mentions,threads_location_tagging&response_type=code`;
 				window.location.href = authorizeUrl;
 				return;
 			}
