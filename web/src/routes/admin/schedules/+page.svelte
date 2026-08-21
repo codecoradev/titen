@@ -13,7 +13,7 @@
 		approveSchedule,
 		rejectSchedule
 	} from '$lib/api';
-	import { listAccounts } from '$lib/api';
+	import { listAccounts, parseMediaUrls } from '$lib/api';
 	import type { Schedule, Account } from '$lib/types';
 	import { toast } from '$lib/toast.svelte';
 	import { formatDateTime, toDatetimeInput, getTimezone } from '$lib/tz';
@@ -232,7 +232,7 @@
 
 		// Validate media URLs based on type
 		let mediaType = 'TEXT';
-		let mediaUrls: string | undefined;
+		let mediaUrlList: string[] = [];
 
 		if (modalMediaType === 'IMAGE') {
 			if (!modalImageUrl.trim()) {
@@ -240,7 +240,7 @@
 				return;
 			}
 			mediaType = 'IMAGE';
-			mediaUrls = modalImageUrl.trim();
+			mediaUrlList = [modalImageUrl.trim()];
 		} else if (modalMediaType === 'CAROUSEL') {
 			const validUrls = modalCarouselUrls.filter((u) => u.trim());
 			if (validUrls.length < 2) {
@@ -252,7 +252,7 @@
 				return;
 			}
 			mediaType = 'CAROUSEL';
-			mediaUrls = validUrls.join(',');
+			mediaUrlList = validUrls.map((u) => u.trim());
 		}
 
 		creating = true;
@@ -262,7 +262,7 @@
 				media_type: mediaType,
 				scheduled_at: new Date(modalScheduledAt).toISOString(),
 				caption: modalCaption || undefined,
-				media_urls: mediaUrls || undefined
+				media_urls: mediaUrlList.length > 0 ? mediaUrlList : undefined
 			});
 			toast('Schedule created as draft', 'success');
 			closeCreateModal();
@@ -576,11 +576,11 @@
 						{/if}
 						{#if s.media_urls}
 							<div class="detail-media">
-								{#each s.media_urls.split(',').filter(Boolean) as url}
-									<img
-										src={url}
-										alt="Media preview"
-										class="detail-thumb"
+								{#each parseMediaUrls(s.media_urls) as url}
+										<img
+											src={url}
+											alt="Media preview"
+											class="detail-thumb"
 										loading="lazy"
 										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
 									/>
@@ -602,19 +602,19 @@
 					{#if key === 'content'}
 						<div class="caption-cell" title={s.caption || '—'}>
 							{#if s.media_urls}
-								{#each s.media_urls.split(',').filter(Boolean).slice(0, 3) as url, i}
-									<img
-										src={url}
-										alt="Preview"
-										class="row-thumb"
-										loading="lazy"
-										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
-									/>
-									{#if i === 2 && s.media_urls.split(',').filter(Boolean).length > 3}
-										<span class="thumb-more">+{s.media_urls.split(',').filter(Boolean).length - 3}</span>
-									{/if}
-								{/each}
-							{/if}
+									{#each parseMediaUrls(s.media_urls).slice(0, 3) as url, i}
+										<img
+											src={url}
+											alt="Preview"
+											class="row-thumb"
+											loading="lazy"
+											onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+										/>
+										{#if i === 2 && parseMediaUrls(s.media_urls).length > 3}
+											<span class="thumb-more">+{parseMediaUrls(s.media_urls).length - 3}</span>
+										{/if}
+									{/each}
+								{/if}
 							<span>{truncate(s.caption || '—', 60)}</span>
 						</div>
 					{:else if key === 'account_id'}
@@ -667,7 +667,7 @@
 
 						{#if s.media_urls}
 							<div class="sched-card-media">
-								{#each s.media_urls.split(',').filter(Boolean).slice(0, 4) as url}
+								{#each parseMediaUrls(s.media_urls).slice(0, 4) as url}
 									<img
 										src={url}
 										alt="Media preview"

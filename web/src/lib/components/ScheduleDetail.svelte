@@ -3,7 +3,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { formatDateTime } from '$lib/tz';
-	import { approveSchedule, rejectSchedule, deleteSchedule } from '$lib/api';
+	import { approveSchedule, rejectSchedule, deleteSchedule, parseMediaUrls } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
 	import type { Schedule } from '$lib/types';
 
@@ -20,12 +20,8 @@
 	let acting = $state(false);
 	let showDeleteConfirm = $state(false);
 
-	// Parse media URLs
-	let mediaUrls: string[] = $derived(
-		schedule.media_urls
-			? schedule.media_urls.split(',').map((u) => u.trim()).filter(Boolean)
-			: [],
-	);
+	// Parse media URLs (backend stores JSON-encoded array; legacy rows may be comma-separated)
+	let mediaUrls: string[] = $derived(parseMediaUrls(schedule.media_urls));
 
 	let statusTimeline = $derived(buildTimeline(schedule));
 
