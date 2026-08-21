@@ -1,6 +1,13 @@
 <script lang="ts">
+import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+import Users from '@lucide/svelte/icons/users';
+import PenSquare from '@lucide/svelte/icons/pen-square';
+import CalendarClock from '@lucide/svelte/icons/calendar-clock';
+import MessageSquare from '@lucide/svelte/icons/message-square';
+import ChartLine from '@lucide/svelte/icons/chart-line';
+import ImageIcon from '@lucide/svelte/icons/image';
+import SettingsIcon from '@lucide/svelte/icons/settings';
 	import '../../app.css';
-	import Icon from '$lib/components/Icon.svelte';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
 	import { checkSession, logout } from '$lib/api';
@@ -42,15 +49,15 @@
 	}
 
 	const navItems = [
-		{ href: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
-		{ href: '/admin/accounts', label: 'Accounts', icon: 'accounts' },
-		{ href: '/admin/posts', label: 'Posts', icon: 'posts' },
-		{ href: '/admin/schedules', label: 'Schedules', icon: 'schedules' },
-		{ href: '/admin/comments', label: 'Comments', icon: 'comments' },
-		{ href: '/admin/mentions', label: 'Mentions', icon: 'comments' },
-		{ href: '/admin/analytics', label: 'Analytics', icon: 'analytics' },
-		{ href: '/admin/media', label: 'Media', icon: 'media' },
-		{ href: '/admin/settings', label: 'Settings', icon: 'settings' },
+		{ href: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
+		{ href: '/admin/accounts', label: 'Accounts', icon: Users },
+		{ href: '/admin/posts', label: 'Posts', icon: PenSquare },
+		{ href: '/admin/schedules', label: 'Schedules', icon: CalendarClock },
+		{ href: '/admin/comments', label: 'Comments', icon: MessageSquare },
+		{ href: '/admin/mentions', label: 'Mentions', icon: MessageSquare },
+		{ href: '/admin/analytics', label: 'Analytics', icon: ChartLine },
+		{ href: '/admin/media', label: 'Media', icon: ImageIcon },
+		{ href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 	] as const;
 
 	let sidebarOpen = $state(false);
@@ -113,7 +120,7 @@
 					aria-current={isActive(item.href) ? 'page' : undefined}
 					onclick={closeSidebar}
 				>
-						<Icon name={item.icon} />
+						<svelte:component this={item.icon} class="size-5" />
 					{item.label}
 				</a>
 			{/each}

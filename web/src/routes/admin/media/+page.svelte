@@ -293,6 +293,8 @@
 								<Button
 									variant="ghost"
 									size="sm"
+									aria-label={`Delete ${item.filename}`}
+									title={`Delete ${item.filename}`}
 									onclick={() => (deleteTarget = item)}
 								>
 									<Trash2 class="size-4 text-destructive" />
@@ -395,7 +397,7 @@
 		border: 2px dashed hsl(var(--border));
 		border-radius: var(--radius, 0.5rem);
 		background: hsl(var(--muted) / 0.3);
-		transition: all 0.2s ease;
+		transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 		cursor: default;
 		outline: none;
 	}
