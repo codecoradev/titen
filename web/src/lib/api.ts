@@ -350,8 +350,9 @@ export const listMedia = (params?: {
 	if (params?.offset !== undefined) q.set('offset', String(params.offset));
 	if (params?.search) q.set('search', params.search);
 	const qs = q.toString();
-	// Backend returns { data, pagination } — extract .data for backward compat
-	return request<MediaListResponse>(`/media${qs ? `?${qs}` : ''}`);
+	// Backend returns { data, pagination } — request() unwraps .data, so use
+	// requestRaw() here to keep the pagination envelope intact.
+	return requestRaw(`/media${qs ? `?${qs}` : ''}`) as Promise<MediaListResponse>;
 };
 
 export const uploadMedia = (file: File): Promise<MediaItem> => {
