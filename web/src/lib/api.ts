@@ -41,6 +41,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	return (json.data !== undefined ? json.data : json) as T;
 }
 
+/** Like request(), but returns the raw JSON body (data + pagination meta). */
+async function requestRaw(path: string, init?: RequestInit): Promise<unknown> {
+	const res = await fetch(`${BASE}${path}`, {
+		...init,
+		credentials: 'same-origin',
+		headers: { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string>) },
+	});
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		let msg = `API ${res.status}`;
+		try {
+			const parsed = JSON.parse(body);
+			msg = parsed.error || parsed.message || msg;
+		} catch {
+			if (body) msg = body;
+		}
+		throw new ApiError(res.status, res.statusText, msg);
+	}
+	return res.json().catch(() => ({}));
+}
+
 export class ApiError extends Error {
 	constructor(
 		public status: number,
@@ -152,6 +173,8 @@ export const listSchedules = (params?: {
 	to?: string;
 	search?: string;
 	media_type?: string;
+	limit?: number;
+	offset?: number;
 }): Promise<Schedule[]> => {
 	const q = new URLSearchParams();
 	if (params?.account_id) q.set('account_id', params.account_id);
@@ -160,8 +183,39 @@ export const listSchedules = (params?: {
 	if (params?.to) q.set('to', params.to);
 	if (params?.search) q.set('search', params.search);
 	if (params?.media_type) q.set('media_type', params.media_type);
+	if (params?.limit != null) q.set('limit', String(params.limit));
+	if (params?.offset != null) q.set('offset', String(params.offset));
 	const qs = q.toString();
 	return request<Schedule[]>(`/schedules${qs ? `?${qs}` : ''}`);
+};
+
+/** Server-side pagination for schedules (#193): returns page + total. */
+export const listSchedulesPaged = (params?: {
+	account_id?: string;
+	status?: string;
+	from?: string;
+	to?: string;
+	search?: string;
+	media_type?: string;
+	limit?: number;
+	offset?: number;
+}): Promise<{ data: Schedule[]; total: number; limit: number; offset: number }> => {
+	const q = new URLSearchParams();
+	if (params?.account_id) q.set('account_id', params.account_id);
+	if (params?.status) q.set('status', params.status);
+	if (params?.from) q.set('from', params.from);
+	if (params?.to) q.set('to', params.to);
+	if (params?.search) q.set('search', params.search);
+	if (params?.media_type) q.set('media_type', params.media_type);
+	if (params?.limit != null) q.set('limit', String(params.limit));
+	if (params?.offset != null) q.set('offset', String(params.offset));
+	const qs = q.toString();
+	return requestRaw(`/schedules${qs ? `?${qs}` : ''}`) as Promise<{
+		data: Schedule[];
+		total: number;
+		limit: number;
+		offset: number;
+	}>;
 };
 
 export const createSchedule = (data: {

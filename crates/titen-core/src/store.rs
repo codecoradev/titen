@@ -601,55 +601,67 @@ impl Store {
 
     // ─── Schedules ──────────────────────────────────────────
 
+    /// Builds the WHERE clause (with bound values) for schedule filters.
+    /// Shared between list (paged) and count queries so totals always match
+    /// the filtered page (#193).
+    fn schedule_filter_where(filter: &ScheduleFilter) -> (String, Vec<String>) {
+        let mut where_clause = String::from(" WHERE 1=1");
+        let mut params: Vec<String> = Vec::new();
+        if let Some(ref aid) = filter.account_id {
+            where_clause.push_str(" AND account_id = ?");
+            params.push(aid.clone());
+        }
+        if let Some(ref s) = filter.status {
+            where_clause.push_str(" AND status = ?");
+            params.push(s.clone());
+        }
+        if let Some(ref mt) = filter.media_type {
+            where_clause.push_str(" AND media_type = ?");
+            params.push(mt.clone());
+        }
+        if let Some(ref f) = filter.from {
+            where_clause.push_str(" AND scheduled_at >= ?");
+            params.push(f.clone());
+        }
+        if let Some(ref t) = filter.to {
+            where_clause.push_str(" AND scheduled_at <= ?");
+            params.push(t.clone());
+        }
+        if let Some(ref search) = filter.search {
+            where_clause.push_str(" AND caption LIKE ? COLLATE NOCASE");
+            params.push(format!("%{search}%"));
+        }
+        (where_clause, params)
+    }
+
     pub async fn list_schedules(&self, filter: &ScheduleFilter) -> Result<Vec<Schedule>> {
         let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
         let offset = filter.offset.unwrap_or(0).max(0);
+        let (where_clause, params) = Self::schedule_filter_where(filter);
 
-        let mut query = String::from("SELECT * FROM schedules WHERE 1=1");
-        if filter.account_id.is_some() {
-            query.push_str(" AND account_id = ?");
-        }
-        if filter.status.is_some() {
-            query.push_str(" AND status = ?");
-        }
-        if filter.media_type.is_some() {
-            query.push_str(" AND media_type = ?");
-        }
-        if filter.from.is_some() {
-            query.push_str(" AND scheduled_at >= ?");
-        }
-        if filter.to.is_some() {
-            query.push_str(" AND scheduled_at <= ?");
-        }
-        if filter.search.is_some() {
-            query.push_str(" AND caption LIKE ? COLLATE NOCASE");
-        }
-        query.push_str(" ORDER BY scheduled_at ASC LIMIT ? OFFSET ?");
-
+        let query = format!(
+            "SELECT * FROM schedules{where_clause} ORDER BY scheduled_at ASC LIMIT ? OFFSET ?"
+        );
         let mut q = sqlx::query_as::<_, Schedule>(&query);
-        if let Some(ref aid) = filter.account_id {
-            q = q.bind(aid);
-        }
-        if let Some(ref s) = filter.status {
-            q = q.bind(s);
-        }
-        if let Some(ref mt) = filter.media_type {
-            q = q.bind(mt);
-        }
-        if let Some(ref f) = filter.from {
-            q = q.bind(f);
-        }
-        if let Some(ref t) = filter.to {
-            q = q.bind(t);
-        }
-        if let Some(ref search) = filter.search {
-            q = q.bind(format!("%{search}%"));
+        for p in &params {
+            q = q.bind(p);
         }
         q.bind(limit)
             .bind(offset)
             .fetch_all(&self.pool)
             .await
             .map_err(Into::into)
+    }
+
+    /// Total number of schedules matching the same filter (#193).
+    pub async fn count_schedules_filtered(&self, filter: &ScheduleFilter) -> Result<i64> {
+        let (where_clause, params) = Self::schedule_filter_where(filter);
+        let query = format!("SELECT COUNT(*) FROM schedules{where_clause}");
+        let mut q = sqlx::query_scalar::<_, i64>(&query);
+        for p in &params {
+            q = q.bind(p);
+        }
+        q.fetch_one(&self.pool).await.map_err(Into::into)
     }
 
     pub async fn get_due_schedules(&self) -> Result<Vec<Schedule>> {
