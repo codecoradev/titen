@@ -23,8 +23,16 @@ pub async fn list_schedules(
     State(state): State<AppState>,
     Query(filter): Query<ScheduleFilter>,
 ) -> Json<serde_json::Value> {
+    let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+    let offset = filter.offset.unwrap_or(0).max(0);
+    let total = state.store.count_schedules_filtered(&filter).await;
     match state.store.list_schedules(&filter).await {
-        Ok(schedules) => Json(serde_json::json!({ "data": schedules })),
+        Ok(schedules) => Json(serde_json::json!({
+            "data": schedules,
+            "total": total.unwrap_or(schedules.len() as i64),
+            "limit": limit,
+            "offset": offset,
+        })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "LIST_FAILED" })),
     }
 }

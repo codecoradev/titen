@@ -5,7 +5,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ScheduleDetail from '$lib/components/ScheduleDetail.svelte';
 	import {
-		listSchedules,
+		listSchedulesPaged,
 		createSchedule,
 		deleteSchedule,
 		patchSchedule,
@@ -29,7 +29,12 @@
 	let loading = $state(true);
 	let loaded = $state(false);
 	let creating = $state(false);
-	let loadSeq = 0; // guards against stale async responses
+	let loadSeq = 0;
+	// Server-side pagination (#193)
+	const PAGE_SIZE = 50;
+	let totalSchedules = $state(0);
+	let hasMore = $state(false);
+	let loadingMore = $state(false); // guards against stale async responses
 
 	// Detail modal
 	let detailSchedule = $state<Schedule | null>(null);
@@ -133,6 +138,8 @@
 				to?: string;
 				search?: string;
 				media_type?: string;
+				limit?: number;
+				offset?: number;
 			} = {};
 			if (filterAccountId) params.account_id = filterAccountId;
 			if (filterStatus !== 'all') params.status = filterStatus;
@@ -142,19 +149,51 @@
 			if (filterSearch.trim()) params.search = filterSearch.trim();
 			if (filterMediaType !== 'all') params.media_type = filterMediaType;
 
+			params.limit = PAGE_SIZE;
+			params.offset = 0;
+
 			const reqId = ++loadSeq;
-			const [schedulesData, accountsData] = await Promise.all([
-				listSchedules(params),
+			const [schedulesPage, accountsData] = await Promise.all([
+				listSchedulesPaged(params),
 				listAccounts()
 			]);
 			if (reqId !== loadSeq) return; // stale response — a newer request superseded it
 
-			schedules = schedulesData;
+			schedules = schedulesPage.data;
+			totalSchedules = schedulesPage.total;
+			hasMore = schedules.length < totalSchedules;
 			accounts = accountsData;
 		} catch (e: any) {
 			toast(e.message || 'Failed to load schedules', 'error');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadMore() {
+		if (loadingMore || !hasMore) return;
+		loadingMore = true;
+		try {
+			const params: Record<string, string | number> = {};
+			if (filterAccountId) params.account_id = filterAccountId;
+			if (filterStatus !== 'all') params.status = filterStatus;
+			if (filterFrom) params.from = new Date(`${filterFrom}T00:00:00`).toISOString();
+			if (filterTo) params.to = new Date(`${filterTo}T23:59:59`).toISOString();
+			if (filterSearch.trim()) params.search = filterSearch.trim();
+			if (filterMediaType !== 'all') params.media_type = filterMediaType;
+			params.limit = PAGE_SIZE;
+			params.offset = schedules.length;
+
+			const page = await listSchedulesPaged(params);
+			totalSchedules = page.total;
+			// Append, dedupe by id (guards against overlap from in-flight mutations)
+			const seen = new Set(schedules.map((s) => s.id));
+			schedules = [...schedules, ...page.data.filter((s) => !seen.has(s.id))];
+			hasMore = schedules.length < totalSchedules;
+		} catch (e: any) {
+			toast(e.message || 'Failed to load more schedules', 'error');
+		} finally {
+			loadingMore = false;
 		}
 	}
 
@@ -407,7 +446,11 @@
 			{/if}
 
 			<div class="filter-count" aria-live="polite">
-				{schedules.length} schedule{schedules.length === 1 ? '' : 's'}
+				{#if totalSchedules > 0}
+					Showing {schedules.length === 0 ? 0 : 1}–{schedules.length} of {totalSchedules}
+				{:else}
+					0 schedules
+				{/if}
 			</div>
 
 			<div class="view-toggle" role="group" aria-label="View mode">
@@ -677,6 +720,14 @@
 				{/each}
 			</div>
 		{/if}
+	{/if}
+
+	{#if hasMore && !loading}
+		<div class="load-more">
+			<Button variant="outline" size="sm" onclick={loadMore} disabled={loadingMore}>
+				{loadingMore ? 'Loading…' : `Load more (${totalSchedules - schedules.length} remaining)`}
+			</Button>
+		</div>
 	{/if}
 </div>
 
@@ -967,6 +1018,12 @@
 		font-size: var(--text-xs);
 		color: var(--color-muted);
 		white-space: nowrap;
+	}
+
+	.load-more {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-md) 0 var(--space-xs);
 	}
 
 	.view-toggle {

@@ -171,3 +171,79 @@ async fn cancel_delete_schedule() {
     let body3 = body_to_json(resp3).await;
     assert_eq!(body3["data"], json!([]));
 }
+
+#[tokio::test]
+async fn list_schedules_pagination_meta() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let store = titen_core::Store::new(pool.clone());
+    for i in 0..5 {
+        let id = uuid::Uuid::now_v7().to_string();
+        store
+            .create_schedule(
+                &id,
+                &titen_core::models::CreateSchedule {
+                    account_id: account_id.to_string(),
+                    media_type: Some("TEXT".to_string()),
+                    caption: Some(format!("Paged {i}")),
+                    text_attachment: None,
+                    media_urls: None,
+                    scheduled_at: format!("2099-08-{:02}T09:00:00Z", i + 1),
+                    location_id: None,
+                    auto_approve: true,
+                },
+            )
+            .await
+            .expect("Failed to create schedule via store");
+    }
+
+    // Page 1: first 2 rows + total
+    let req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/api/schedules?limit=2&offset=0")
+        .body(Body::empty())
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 200);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["total"], 5);
+    assert_eq!(body["limit"], 2);
+    assert_eq!(body["offset"], 0);
+
+    // Page 2: rows 3-4, no overlap with page 1
+    let req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/api/schedules?limit=2&offset=2")
+        .body(Body::empty())
+        .unwrap();
+    let resp = send(req, &app).await;
+    let body2 = body_to_json(resp).await;
+    assert_eq!(body2["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body2["total"], 5);
+
+    let ids1: Vec<&str> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_str().unwrap())
+        .collect();
+    let ids2: Vec<&str> = body2["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids1.iter().all(|id| !ids2.contains(id)),
+        "pages must not overlap"
+    );
+
+    // Backward-compat: `data` remains a plain array
+    assert!(body["data"].is_array());
+}
