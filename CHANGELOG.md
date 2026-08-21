@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-21
+
+### Fixed
+
+- **Media page crashed with white screen** — `listMedia` double-unwrapped the API response, so `media.length` threw on a healthy `{data, pagination}` payload. The client now unwraps once and preserves the pagination envelope (#217).
+- **Schedule media previews not loading** — the backend stores `media_urls` as a JSON-encoded string, but the frontend parsed it as a comma-separated list, producing broken `src` values full of brackets and quotes. All readers (detail modal, table rows, mobile cards) now parse via a tolerant `parseMediaUrls` helper (JSON array with comma-separated fallback), and the create-schedule form now sends a real array as the API contract expects (#218).
+- **Threads replies/comments silently empty** — the OAuth authorize URL never requested the `threads_manage_replies` scope, so `GET /{post-id}/replies` returned an empty list (or `Unsupported get request`) for real posts with live replies. The scope list now covers all eight permissions the codebase actually uses: `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_manage_mentions`, `threads_keyword_search`, `threads_profile_discovery`, `threads_share_to_instagram`, `threads_location_tagging` — in both the backend and frontend authorize-URL builders (#219, #220).
+
+### Upgrade notes
+
+- Existing account tokens keep their old scopes. After upgrading, **re-authorize each account** (Settings → Accounts → disconnect + reconnect) so new tokens include the reply/mention/search permissions.
+- The Threads app on the developer dashboard must also have *Manage replies* (and the other permissions above) enabled, or the new authorization will be rejected.
+
 ## [0.7.4] - 2026-08-12
 
 ### Security
