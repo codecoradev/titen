@@ -145,9 +145,12 @@
 			<Table.Body>
 				{#each Array(4) as _}
 					<Table.Row>
-						{#each Array(6) as _}
+						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						{/each}
+							<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+							<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>

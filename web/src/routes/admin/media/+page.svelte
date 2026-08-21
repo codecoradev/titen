@@ -211,9 +211,9 @@
 						<Table.Cell><Skeleton class="size-10 rounded" /></Table.Cell>
 						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
 						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>
