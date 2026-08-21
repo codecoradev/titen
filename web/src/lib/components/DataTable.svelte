@@ -8,6 +8,8 @@
 		label: string;
 		sortable?: boolean;
 		class?: string;
+		/** Hide this column below md breakpoint (dense tables on mobile). */
+		hideOnMobile?: boolean;
 	}
 
 	interface Props {
@@ -68,6 +70,11 @@
 		});
 	});
 
+	function colClass(col: Column): string | undefined {
+		if (!col.hideOnMobile) return col.class;
+		return [col.class, 'hidden md:table-cell'].filter(Boolean).join(' ');
+	}
+
 	function toggleSort(key: string) {
 		if (sortKey === key) {
 			sortAsc = !sortAsc;
@@ -88,15 +95,15 @@
 			<Table.Header>
 				<Table.Row>
 					{#each allColumns as col}
-						<Table.Head>{col.label}</Table.Head>
+						<Table.Head class={colClass(col)}>{col.label}</Table.Head>
 					{/each}
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
 				{#each Array(5) as _}
 					<Table.Row>
-						{#each allColumns as _}
-							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
+						{#each allColumns as col}
+							<Table.Cell class={colClass(col)}><Skeleton class="h-4 w-full" /></Table.Cell>
 						{/each}
 					</Table.Row>
 				{/each}
@@ -115,7 +122,7 @@
 				<Table.Row>
 					{#each allColumns as col}
 						<Table.Head
-							class={col.sortable ? 'cursor-pointer select-none' : ''}
+							class={[col.sortable ? 'cursor-pointer select-none' : '', colClass(col)].filter(Boolean).join(' ')}
 							onclick={() => col.sortable && toggleSort(col.key)}
 						>
 							{col.label}
@@ -156,7 +163,7 @@
 						aria-expanded={expandable && detail ? isExpanded : undefined}
 					>
 						{#each columns as col}
-							<Table.Cell class={col.class}>
+							<Table.Cell class={colClass(col)}>
 								{#if cell}{@render cell(row, col.key)}
 								{:else}{row[col.key] ?? '—'}{/if}
 							</Table.Cell>

@@ -141,7 +141,7 @@
 <div class="data-table-wrap">
 	{#if loading}
 		<Table.Root>
-			<Table.Header><Table.Row><Table.Head>Content</Table.Head><Table.Head>Account</Table.Head><Table.Head>Type</Table.Head><Table.Head>Status</Table.Head><Table.Head>Published</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
+			<Table.Header><Table.Row><Table.Head>Content</Table.Head><Table.Head>Account</Table.Head><Table.Head class="hidden md:table-cell">Type</Table.Head><Table.Head>Status</Table.Head><Table.Head class="hidden md:table-cell">Published</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
 			<Table.Body>
 				{#each Array(4) as _}
 					<Table.Row>
@@ -163,9 +163,9 @@
 				<Table.Row>
 					<Table.Head>Content</Table.Head>
 					<Table.Head>Account</Table.Head>
-					<Table.Head>Type</Table.Head>
+					<Table.Head class="hidden md:table-cell">Type</Table.Head>
 					<Table.Head>Status</Table.Head>
-					<Table.Head>Published</Table.Head>
+					<Table.Head class="hidden md:table-cell">Published</Table.Head>
 					<Table.Head>Actions</Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -176,9 +176,9 @@
 							{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
 						</Table.Cell>
 						<Table.Cell><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></Table.Cell>
-						<Table.Cell>{post.media_type}</Table.Cell>
+						<Table.Cell class="hidden md:table-cell">{post.media_type}</Table.Cell>
 						<Table.Cell><StatusBadge status={post.status} /></Table.Cell>
-						<Table.Cell><span class="tabular-nums">{formatDate(post.published_at)}</span></Table.Cell>
+						<Table.Cell class="hidden md:table-cell"><span class="tabular-nums">{formatDate(post.published_at)}</span></Table.Cell>
 						<Table.Cell onclick={(e) => e.stopPropagation()}>
 							<div class="row-gap-xs">
 								<Button variant="outline" size="sm" onclick={() => openDetail(post)}>Detail</Button>

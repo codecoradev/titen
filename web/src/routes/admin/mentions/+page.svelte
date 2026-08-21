@@ -128,7 +128,7 @@
 <div class="data-table-wrap">
 	{#if loading}
 		<Table.Root>
-			<Table.Header><Table.Row><Table.Head>Author</Table.Head><Table.Head>Post</Table.Head><Table.Head>Date</Table.Head><Table.Head>Action</Table.Head></Table.Row></Table.Header>
+			<Table.Header><Table.Row><Table.Head>Author</Table.Head><Table.Head class="hidden md:table-cell">Post</Table.Head><Table.Head>Date</Table.Head><Table.Head>Action</Table.Head></Table.Row></Table.Header>
 			<Table.Body>
 				{#each Array(3) as _}
 					<Table.Row>
@@ -149,7 +149,7 @@
 			<Table.Header>
 				<Table.Row>
 					<Table.Head>Author</Table.Head>
-					<Table.Head>Post</Table.Head>
+					<Table.Head class="hidden md:table-cell">Post</Table.Head>
 					<Table.Head>Date</Table.Head>
 					<Table.Head>Action</Table.Head>
 				</Table.Row>
@@ -158,7 +158,7 @@
 				{#each mentions as mention (mention.id)}
 					<Table.Row>
 						<Table.Cell>@{mention.username ?? 'unknown'}</Table.Cell>
-						<Table.Cell class="mention-text-cell" title={mention.text}>{truncate(mention.text, 80)}</Table.Cell>
+						<Table.Cell class="mention-text-cell hidden md:table-cell" title={mention.text}>{truncate(mention.text, 80)}</Table.Cell>
 						<Table.Cell>{formatDate(mention.timestamp)}</Table.Cell>
 						<Table.Cell>
 							<Button variant="ghost" size="sm" onclick={() => startReply(mention)}>Reply</Button>
