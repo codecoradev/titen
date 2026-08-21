@@ -5,6 +5,7 @@
 	import type { Mention, Account } from '$lib/types';
 	import { formatDateTimeShort } from '$lib/tz';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Select from '$lib/components/ui/select';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
@@ -175,9 +176,9 @@
 </div>
 
 {#if replyingTo}
-<div class="reply-overlay" role="dialog" aria-label="Reply to mention">
-	<div class="reply-modal">
-		<h3>Reply to @{replyingTo.username ?? 'unknown'}</h3>
+<Dialog.Root open onOpenChange={(o) => { if (!o) cancelReply(); }}>
+	<Dialog.Content class="reply-modal" aria-describedby={undefined}>
+		<Dialog.Title class="text-base font-semibold" style="margin-bottom:var(--space-xs)">Reply to @{replyingTo.username ?? 'unknown'}</Dialog.Title>
 		<p class="reply-original">{replyingTo.text}</p>
 		<Textarea
 			bind:value={replyText}
@@ -192,8 +193,8 @@
 				{replyLoading ? 'Posting...' : 'Post Reply'}
 			</Button>
 		</div>
-	</div>
-</div>
+	</Dialog.Content>
+</Dialog.Root>
 {/if}
 
 <style>
@@ -216,15 +217,6 @@
 		color: var(--color-muted);
 	}
 
-	.reply-overlay {
-		position: fixed;
-		inset: 0;
-		background: var(--overlay-scrim);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-modal);
-	}
 
 	.reply-modal {
 		background: var(--color-bg);

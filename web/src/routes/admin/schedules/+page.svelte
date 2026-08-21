@@ -3,6 +3,7 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import ScheduleDetail from '$lib/components/ScheduleDetail.svelte';
 	import {
 		listSchedulesPaged,
@@ -733,9 +734,9 @@
 
 <!-- Create Schedule Modal -->
 {#if modalOpen}
-	<div class="confirm-overlay" onclick={closeCreateModal} role="dialog" aria-modal="true" aria-label="New Schedule">
-		<div class="confirm-dialog modal-narrow" onclick={(e) => e.stopPropagation()}>
-			<h3>New Schedule</h3>
+	<Dialog.Root open onOpenChange={(o) => { if (!o) closeCreateModal(); }}>
+		<Dialog.Content class="confirm-dialog modal-narrow" aria-describedby={undefined}>
+			<Dialog.Title class="text-base font-semibold" style="font-size:var(--text-md)">New Schedule</Dialog.Title>
 			<p class="modal-desc">
 				New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
 			</p>
@@ -860,15 +861,15 @@
 					{creating ? 'Creating…' : 'Create as Draft'}
 				</Button>
 			</div>
-		</div>
-	</div>
+	</Dialog.Content>
+</Dialog.Root>
 {/if}
 
 <!-- Edit Schedule Modal (HITL) -->
 {#if editTarget}
-	<div class="confirm-overlay" onclick={closeEditModal} role="dialog" aria-modal="true" aria-label="Edit Schedule">
-		<div class="confirm-dialog modal-narrow" onclick={(e) => e.stopPropagation()}>
-			<h3>Edit Schedule</h3>
+	<Dialog.Root open onOpenChange={(o) => { if (!o) closeEditModal(); }}>
+		<Dialog.Content class="confirm-dialog modal-narrow" aria-describedby={undefined}>
+			<Dialog.Title class="text-base font-semibold" style="font-size:var(--text-md)">Edit Schedule</Dialog.Title>
 			<p class="modal-desc">
 				Status: <StatusBadge status={editTarget.status} />
 			</p>
@@ -913,15 +914,15 @@
 					{editing ? 'Saving…' : 'Save Changes'}
 				</Button>
 			</div>
-		</div>
-	</div>
+	</Dialog.Content>
+</Dialog.Root>
 {/if}
 
 <!-- Reject Modal -->
 {#if rejectTarget}
-	<div class="confirm-overlay" onclick={closeRejectModal} role="dialog" aria-modal="true" aria-label="Reject Schedule">
-		<div class="confirm-dialog modal-narrow" style="max-width: 28rem;" onclick={(e) => e.stopPropagation()}>
-			<h3>Reject Schedule</h3>
+	<Dialog.Root open onOpenChange={(o) => { if (!o) closeRejectModal(); }}>
+		<Dialog.Content class="confirm-dialog modal-narrow" style="max-width: 28rem;" aria-describedby={undefined}>
+			<Dialog.Title class="text-base font-semibold" style="font-size:var(--text-md)">Reject Schedule</Dialog.Title>
 			<div class="mb-md">
 				<div class="form-group">
 							<label class="form-label">Reason (optional)</label>
@@ -944,8 +945,8 @@
 					{rejecting ? 'Rejecting…' : 'Reject'}
 				</Button>
 			</div>
-		</div>
-	</div>
+	</Dialog.Content>
+</Dialog.Root>
 {/if}
 
 <!-- Delete Confirm -->
