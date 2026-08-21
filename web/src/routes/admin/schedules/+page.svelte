@@ -390,117 +390,118 @@
 
 	<!-- Filters -->
 	<div class="filter-bar">
-		<div class="form-group">
-			<label class="form-label" for="filter-search">Search</label>
-			<input
-				id="filter-search"
-				class="form-input"
-				type="search"
-				placeholder="Search caption…"
-				bind:value={filterSearch}
-			/>
-		</div>
-
-		<div class="form-group">
-			<label class="form-label">Account</label>
-			<Select.Root type="single" bind:value={filterAccountId}>
-				<Select.Trigger>
-					{filterAccountId ? accounts.find((a) => a.id === filterAccountId)?.username ?? 'Unknown' : 'All accounts'}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="" label="All accounts">All accounts</Select.Item>
-					{#each accounts as acct (acct.id)}
-						<Select.Item value={acct.id} label={acct.username}>
-							{acct.username}
-						</Select.Item>
-					{/each}
-				</Select.Content>
-			</Select.Root>
-		</div>
-
-		<div class="form-group">
-			<label class="form-label">Status</label>
-			<Select.Root type="single" bind:value={filterStatus}>
-				<Select.Trigger>
-					{filterStatus === 'all' ? 'All' : filterStatus === 'draft' ? 'Draft (Needs Review)' : filterStatus === 'pending' ? 'Pending (Approved)' : filterStatus === 'processing' ? 'Processing' : filterStatus === 'published' ? 'Published' : filterStatus === 'failed' ? 'Failed' : filterStatus === 'rejected' ? 'Rejected' : 'All'}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="all" label="All">All</Select.Item>
-					<Select.Item value="draft" label="Draft (Needs Review)">Draft (Needs Review)</Select.Item>
-					<Select.Item value="pending" label="Pending (Approved)">Pending (Approved)</Select.Item>
-					<Select.Item value="processing" label="Processing">Processing</Select.Item>
-					<Select.Item value="published" label="Published">Published</Select.Item>
-					<Select.Item value="failed" label="Failed">Failed</Select.Item>
-					<Select.Item value="rejected" label="Rejected">Rejected</Select.Item>
-				</Select.Content>
-			</Select.Root>
-		</div>
-
-		<div class="form-group">
-			<label class="form-label" for="filter-from">From</label>
-			<input
-				id="filter-from"
-				class="form-input"
-				type="date"
-				bind:value={filterFrom}
-			/>
-		</div>
-
-		<div class="form-group">
-			<label class="form-label" for="filter-to">To</label>
-			<input
-				id="filter-to"
-				class="form-input"
-				type="date"
-				bind:value={filterTo}
-			/>
-		</div>
-
-		<div class="form-group">
-			<label class="form-label">Media Type</label>
-			<Select.Root type="single" bind:value={filterMediaType}>
-				<Select.Trigger>
-					{filterMediaType === 'all' ? 'All' : filterMediaType === 'TEXT' ? 'Text Only' : filterMediaType === 'IMAGE' ? 'Single Image' : 'Carousel'}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="all" label="All">All</Select.Item>
-					<Select.Item value="TEXT" label="Text Only">Text Only</Select.Item>
-					<Select.Item value="IMAGE" label="Single Image">Single Image</Select.Item>
-					<Select.Item value="CAROUSEL" label="Carousel">Carousel</Select.Item>
-				</Select.Content>
-			</Select.Root>
-		</div>
+		<div class="filter-top">
+			<div class="form-group filter-search">
+				<label class="form-label" for="filter-search">Search</label>
+				<input
+					id="filter-search"
+					class="form-input"
+					type="search"
+					placeholder="Search caption…"
+					bind:value={filterSearch}
+				/>
+			</div>
 
 			{#if hasActiveFilters}
-			<div class="form-group">
-				<label class="form-label">&nbsp;</label>
-				<Button variant="outline" size="sm" onclick={resetFilters}>Reset filters</Button>
-			</div>
-		{/if}
+				<Button variant="ghost" size="sm" class="filter-reset" onclick={resetFilters}>✕ Reset</Button>
+			{/if}
 
-		<div class="filter-count" aria-live="polite">
-			{schedules.length} schedule{schedules.length === 1 ? '' : 's'}
+			<div class="filter-count" aria-live="polite">
+				{schedules.length} schedule{schedules.length === 1 ? '' : 's'}
+			</div>
+
+			<div class="view-toggle" role="group" aria-label="View mode">
+				<Button
+					variant={viewMode === 'table' ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => setViewMode('table')}
+					aria-pressed={viewMode === 'table'}
+					title="Table view"
+				>
+					☰
+				</Button>
+				<Button
+					variant={viewMode === 'cards' ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => setViewMode('cards')}
+					aria-pressed={viewMode === 'cards'}
+					title="Card view"
+				>
+					▦
+				</Button>
+			</div>
 		</div>
 
-		<div class="view-toggle" role="group" aria-label="View mode">
-			<Button
-				variant={viewMode === 'table' ? 'default' : 'outline'}
-				size="sm"
-				onclick={() => setViewMode('table')}
-				aria-pressed={viewMode === 'table'}
-				title="Table view"
-			>
-				☰
-			</Button>
-			<Button
-				variant={viewMode === 'cards' ? 'default' : 'outline'}
-				size="sm"
-				onclick={() => setViewMode('cards')}
-				aria-pressed={viewMode === 'cards'}
-				title="Card view"
-			>
-				▦
-			</Button>
+		<div class="filter-fields">
+			<div class="form-group">
+				<label class="form-label">Account</label>
+				<Select.Root type="single" bind:value={filterAccountId}>
+					<Select.Trigger>
+						{filterAccountId ? accounts.find((a) => a.id === filterAccountId)?.username ?? 'Unknown' : 'All accounts'}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="" label="All accounts">All accounts</Select.Item>
+						{#each accounts as acct (acct.id)}
+							<Select.Item value={acct.id} label={acct.username}>
+								{acct.username}
+							</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">Status</label>
+				<Select.Root type="single" bind:value={filterStatus}>
+					<Select.Trigger>
+						{filterStatus === 'all' ? 'All' : filterStatus === 'draft' ? 'Draft (Needs Review)' : filterStatus === 'pending' ? 'Pending (Approved)' : filterStatus === 'processing' ? 'Processing' : filterStatus === 'published' ? 'Published' : filterStatus === 'failed' ? 'Failed' : filterStatus === 'rejected' ? 'Rejected' : 'All'}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="all" label="All">All</Select.Item>
+						<Select.Item value="draft" label="Draft (Needs Review)">Draft (Needs Review)</Select.Item>
+						<Select.Item value="pending" label="Pending (Approved)">Pending (Approved)</Select.Item>
+						<Select.Item value="processing" label="Processing">Processing</Select.Item>
+						<Select.Item value="published" label="Published">Published</Select.Item>
+						<Select.Item value="failed" label="Failed">Failed</Select.Item>
+						<Select.Item value="rejected" label="Rejected">Rejected</Select.Item>
+					</Select.Content>
+				</Select.Root>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">Media Type</label>
+				<Select.Root type="single" bind:value={filterMediaType}>
+					<Select.Trigger>
+						{filterMediaType === 'all' ? 'All' : filterMediaType === 'TEXT' ? 'Text Only' : filterMediaType === 'IMAGE' ? 'Single Image' : 'Carousel'}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="all" label="All">All</Select.Item>
+						<Select.Item value="TEXT" label="Text Only">Text Only</Select.Item>
+						<Select.Item value="IMAGE" label="Single Image">Single Image</Select.Item>
+						<Select.Item value="CAROUSEL" label="Carousel">Carousel</Select.Item>
+					</Select.Content>
+				</Select.Root>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label" for="filter-from">From</label>
+				<input
+					id="filter-from"
+					class="form-input"
+					type="date"
+					bind:value={filterFrom}
+				/>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label" for="filter-to">To</label>
+				<input
+					id="filter-to"
+					class="form-input"
+					type="date"
+					bind:value={filterTo}
+				/>
+			</div>
 		</div>
 	</div>
 
@@ -929,14 +930,34 @@
 <style>
 	.filter-bar {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-start;
+		flex-direction: column;
 		gap: var(--space-sm);
 	}
 
-	.filter-bar .form-group {
-		flex: 0 1 auto;
-		min-width: 9rem;
+	.filter-top {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+
+	.filter-search {
+		flex: 1 1 220px;
+		min-width: 0;
+	}
+
+	.filter-reset {
+		margin-bottom: 0.2rem;
+	}
+
+	.filter-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: var(--space-sm);
+	}
+
+	.filter-fields .form-group {
+		min-width: 0;
 	}
 
 	.filter-count {
@@ -1103,28 +1124,33 @@
 	}
 
 	@media (max-width: 640px) {
-		.filter-bar {
-			flex-direction: column;
-			align-items: stretch;
+		.filter-top {
+			flex-wrap: nowrap;
 		}
 
-		.filter-bar .form-group {
-			min-width: 0;
+		.filter-search {
+			flex: 1 1 auto;
 		}
 
 		.filter-count {
 			margin-left: 0;
-			padding-bottom: 0;
+			padding-bottom: 0.45rem;
 		}
 
 		.view-toggle {
-			align-self: stretch;
-			justify-content: flex-end;
-			padding-bottom: 0;
+			padding-bottom: 0.25rem;
+		}
+
+		.filter-fields {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.filter-fields .form-group:has(> input[type='date']) {
+			grid-column: span 1;
 		}
 
 		.view-toggle :global(button) {
-			flex: 1;
+			flex: 0 0 auto;
 		}
 
 		.card-grid {
