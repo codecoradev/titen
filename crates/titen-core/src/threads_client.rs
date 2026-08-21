@@ -490,6 +490,35 @@ impl ThreadsClient {
         Ok(post_id.to_string())
     }
 
+    /// Fetch the canonical web permalink (shortcode URL) for a published post.
+    ///
+    /// Official: `GET /v1.0/{media_id}?fields=permalink`
+    ///
+    /// The publish response only returns the numeric media id, which is NOT
+    /// usable in web URLs — the "View on Threads" link must use this permalink
+    /// (e.g. https://www.threads.com/@user/post/Db6gSYlE15d).
+    pub async fn get_permalink(
+        &self,
+        account: &crate::models::Account,
+        media_id: &str,
+    ) -> Result<Option<String>> {
+        let url = format!(
+            "{THREADS_GRAPH_API}/v1.0/{media_id}?fields=permalink&access_token={}",
+            account.access_token
+        );
+        match self.threads_get(&url).await {
+            Ok(resp) => Ok(resp
+                .get("permalink")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())),
+            // Non-fatal: publish already succeeded; permalink is enrichment.
+            Err(e) => {
+                tracing::warn!("failed to fetch permalink for {media_id}: {e}");
+                Ok(None)
+            }
+        }
+    }
+
     /// Check the status of a media container before publishing.
     ///
     /// Official: `GET /v1.0/{container_id}?fields=status`

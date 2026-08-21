@@ -17,6 +17,7 @@ export interface Account {
 export interface Post {
 	id: string;
 	threads_post_id: string | null;
+	permalink: string | null;
 	account_id: string;
 	media_type: string;
 	caption: string | null;

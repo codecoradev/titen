@@ -391,8 +391,14 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     media_ids: None,
                     alt_text: None,
                 };
+                // Fetch permalink best-effort (non-fatal if it fails).
+                let permalink = client
+                    .get_permalink(&account, &post_id)
+                    .await
+                    .ok()
+                    .flatten();
                 let _ = store
-                    .create_post_with_threads_id(&post_id_uuid, &create_post, &post_id)
+                    .create_post_with_threads_id(&post_id_uuid, &create_post, &post_id, permalink.as_deref())
                     .await;
 
                 // Mark schedule as published
