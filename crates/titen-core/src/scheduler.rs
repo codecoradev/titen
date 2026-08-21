@@ -398,7 +398,12 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     .ok()
                     .flatten();
                 let _ = store
-                    .create_post_with_threads_id(&post_id_uuid, &create_post, &post_id, permalink.as_deref())
+                    .create_post_with_threads_id(
+                        &post_id_uuid,
+                        &create_post,
+                        &post_id,
+                        permalink.as_deref(),
+                    )
                     .await;
 
                 // Mark schedule as published

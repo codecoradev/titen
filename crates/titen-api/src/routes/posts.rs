@@ -383,7 +383,12 @@ pub async fn create_post(
                 .flatten();
             match state
                 .store
-                .create_post_with_threads_id(&db_id, &effective_input, &post_id, permalink.as_deref())
+                .create_post_with_threads_id(
+                    &db_id,
+                    &effective_input,
+                    &post_id,
+                    permalink.as_deref(),
+                )
                 .await
             {
                 Ok(post) => (
