@@ -374,12 +374,21 @@ pub async fn create_post(
 
             // Create post record
             let db_id = Uuid::now_v7().to_string();
-            // #106 fix: Use create_post_with_threads_id to persist threads_post_id.
-            // Previously create_post() was called which doesn't store threads_post_id,
-            // making it impossible to delete or fetch insights for the post later.
+            // Fetch permalink best-effort (non-fatal if it fails).
+            let permalink = state
+                .threads_client
+                .get_permalink(&account, &post_id)
+                .await
+                .ok()
+                .flatten();
             match state
                 .store
-                .create_post_with_threads_id(&db_id, &effective_input, &post_id)
+                .create_post_with_threads_id(
+                    &db_id,
+                    &effective_input,
+                    &post_id,
+                    permalink.as_deref(),
+                )
                 .await
             {
                 Ok(post) => (

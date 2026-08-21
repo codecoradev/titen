@@ -288,6 +288,20 @@ impl Store {
             }
         }
 
+        // 012 — Threads shortcode permalink for published posts
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/012_post_permalink.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                // duplicate column name => already applied
+                if !msg.contains("already exists") && !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(msg));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -570,14 +584,16 @@ impl Store {
         id: &str,
         input: &CreatePost,
         threads_post_id: &str,
+        permalink: Option<&str>,
     ) -> Result<Post> {
         let media_type = input.media_type.as_deref().unwrap_or("TEXT");
         sqlx::query(
-            "INSERT INTO posts (id, threads_post_id, account_id, media_type, caption, text_attachment, status, published_at)
-             VALUES (?, ?, ?, ?, ?, ?, 'published', datetime('now'))",
+            "INSERT INTO posts (id, threads_post_id, permalink, account_id, media_type, caption, text_attachment, status, published_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'published', datetime('now'))",
         )
         .bind(id)
         .bind(threads_post_id)
+        .bind(permalink)
         .bind(&input.account_id)
         .bind(media_type)
         .bind(&input.caption)

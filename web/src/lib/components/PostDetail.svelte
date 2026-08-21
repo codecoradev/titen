@@ -32,12 +32,9 @@
 		}
 	});
 
-	// Threads permalink (constructed from threads_post_id)
-	let permalink = $derived(
-		post.threads_post_id && post.account?.username
-			? `https://www.threads.net/@${post.account.username}/post/${post.threads_post_id}`
-			: null
-	);
+	// Threads permalink — use the canonical shortcode URL stored at publish
+	// time (from the Graph API). Numeric media IDs are NOT valid web URLs.
+	let permalink = $derived(post.permalink ?? null);
 
 	// Load insights + trend on mount with cleanup.
 	// Note: component is always recreated via {#if} guard in parent,

@@ -70,6 +70,7 @@ pub fn sanitize_caption(s: &str) -> String {
 pub struct Post {
     pub id: String,
     pub threads_post_id: Option<String>,
+    pub permalink: Option<String>,
     pub account_id: String,
     pub media_type: String,
     pub caption: Option<String>,
