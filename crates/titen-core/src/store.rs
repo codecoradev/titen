@@ -481,14 +481,14 @@ impl Store {
 
         if result.rows_affected() == 0 {
             // Lost the race to a concurrent insert with the same username:
-            // fall through to the re-auth path.
-            if let Ok(existing) = self.get_account_by_username(&username).await {
-                if existing.user_id != user_id {
-                    return Err(TitenError::AccountAlreadyExists(username.clone()));
-                }
-                let acc = self.update_account_reauth(&existing.id, input).await?;
-                return Ok((acc, false));
+            // the conflicting row must exist — surface any lookup error
+            // instead of falling through to the (nonexistent) fresh id.
+            let existing = self.get_account_by_username(&username).await?;
+            if existing.user_id != user_id {
+                return Err(TitenError::AccountAlreadyExists(username.clone()));
             }
+            let acc = self.update_account_reauth(&existing.id, input).await?;
+            return Ok((acc, false));
         }
 
         Ok((self.get_account(&id).await?, true))
@@ -500,9 +500,9 @@ impl Store {
         let enc_token = self.encrypt_field(&input.access_token)?;
         let acc = self.get_account(id).await?;
         let app_id = input.app_id.clone().or(acc.app_id);
-        // Preserve a previously stored secret when the caller does not send one
-        // (OAuth exchange/MCP pass None) — otherwise re-auth would NULL it out
-        // and break later token refresh flows.
+        // Keep the previously stored value when the caller sends an empty
+        // one (OAuth exchange/MCP omit it) — clearing it would break token
+        // refresh flows that still need the stored credential.
         let enc_secret = match &input.app_secret {
             Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
             _ => acc.app_secret.clone(),
