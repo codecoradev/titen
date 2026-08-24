@@ -502,10 +502,18 @@ impl Store {
         let app_id = input.app_id.clone().or(acc.app_id);
         // Keep the previously stored value when the caller sends an empty
         // one (OAuth exchange/MCP omit it) — clearing it would break token
-        // refresh flows that still need the stored credential.
-        let enc_secret = match &input.app_secret {
+        // refresh flows. NOTE: read the RAW column (ciphertext), not the
+        // decrypted field from get_account, to preserve encryption at rest.
+        let enc_secret: Option<String> = match &input.app_secret {
             Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
-            _ => acc.app_secret.clone(),
+            _ => {
+                sqlx::query_scalar::<_, Option<String>>(
+                    "SELECT app_secret FROM accounts WHERE id = ?",
+                )
+                .bind(id)
+                .fetch_one(&self.pool)
+                .await?
+            }
         };
 
         sqlx::query(
