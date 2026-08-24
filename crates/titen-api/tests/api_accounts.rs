@@ -158,7 +158,7 @@ async fn delete_account() {
 
     let req = axum::http::Request::builder()
         .method("DELETE")
-        .uri(format!("/api/accounts/{id}"))
+        .uri(format!("/api/accounts/{id}?confirm=true"))
         .body(Body::empty())
         .unwrap();
     let resp = send(req, &app).await;
@@ -220,4 +220,83 @@ async fn duplicate_account_error() {
     let body = body_to_json(resp2).await;
     assert!(body["error"].is_string());
     assert!(body["code"] == "CREATE_FAILED");
+}
+
+#[tokio::test]
+async fn reauth_same_username_and_user_id_overwrites_token() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let id = account["id"].as_str().unwrap();
+
+    // Re-auth: same username + user_id, new token -> upsert (200), same id.
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/accounts")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "username": "testuser",
+                "user_id": "user_123",
+                "access_token": "NEW_TOKEN",
+                "expires_at": "2099-12-31T00:00:00Z",
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 200);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["id"], json!(id));
+    assert_eq!(body["data"]["username"], json!("testuser"));
+
+    // Still exactly one account.
+    let resp2 = send(
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/accounts")
+            .body(Body::empty())
+            .unwrap(),
+        &app,
+    )
+    .await;
+    let body2 = body_to_json(resp2).await;
+    assert_eq!(body2["data"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn delete_account_requires_confirm() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let id = account["id"].as_str().unwrap();
+
+    // Without confirm -> 400, account survives.
+    let resp = send(
+        axum::http::Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/accounts/{id}"))
+            .body(Body::empty())
+            .unwrap(),
+        &app,
+    )
+    .await;
+    assert_eq!(resp.status(), 400);
+
+    let resp2 = send(
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/accounts")
+            .body(Body::empty())
+            .unwrap(),
+        &app,
+    )
+    .await;
+    let body2 = body_to_json(resp2).await;
+    assert_eq!(body2["data"].as_array().unwrap().len(), 1);
 }

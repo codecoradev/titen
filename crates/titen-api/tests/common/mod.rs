@@ -87,7 +87,6 @@ pub async fn send(req: axum::http::Request<Body>, app: &Router) -> axum::http::R
 /// Returns the account JSON from the list endpoint.
 pub async fn create_test_account(app: &Router, pool: &SqlitePool) -> Value {
     let store = Store::new(pool.clone());
-    let id = uuid::Uuid::now_v7().to_string();
     let input = titen_core::models::CreateAccount {
         username: Some("testuser".to_string()),
         user_id: Some("user_123".to_string()),
@@ -97,7 +96,7 @@ pub async fn create_test_account(app: &Router, pool: &SqlitePool) -> Value {
         app_secret: None,
     };
     store
-        .create_account(&id, &input)
+        .upsert_account(&input)
         .await
         .expect("Failed to create test account");
 

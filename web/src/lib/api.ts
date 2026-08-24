@@ -125,7 +125,7 @@ export const updateAccount = (id: string, data: Record<string, unknown>): Promis
 	});
 
 export const deleteAccount = (id: string): Promise<void> =>
-	request<void>(`/accounts/${id}`, { method: 'DELETE' });
+	request<void>(`/accounts/${id}?confirm=true`, { method: 'DELETE' });
 
 export const refreshToken = (id: string): Promise<Account> =>
 	request<Account>(`/accounts/${id}/refresh-token`, {

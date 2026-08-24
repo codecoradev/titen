@@ -1431,7 +1431,6 @@ fn handle_tool_call(
                     // Resolve user identity from token
                     match threads_client.resolve_account(&access_token).await {
                         Ok((user_id, username)) => {
-                            let id = uuid::Uuid::now_v7().to_string();
                             // Use actual expiry from API response
                             let expires_at = (chrono::Utc::now()
                                 + chrono::Duration::seconds(expires_in))
@@ -1444,8 +1443,8 @@ fn handle_tool_call(
                                 app_id: Some(client_id.to_string()),
                                 app_secret: None, // Never persist client secret — only needed at exchange time
                             };
-                            match store.create_account(&id, &input).await {
-                                Ok(account) => Ok(json!({
+                            match store.upsert_account(&input).await {
+                                Ok((account, _created)) => Ok(json!({
                                     "id": account.id,
                                     "username": account.username,
                                     "user_id": account.user_id,

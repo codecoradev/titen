@@ -2,6 +2,7 @@ use crate::crypto::Cipher;
 use crate::error::{Result, TitenError};
 use crate::models::*;
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 /// Split SQL text into executable statements.
 ///
@@ -427,7 +428,32 @@ impl Store {
         Ok(account)
     }
 
-    pub async fn create_account(&self, id: &str, input: &CreateAccount) -> Result<Account> {
+    /// Upsert semantics for #223: insert a new account, or — when a row with the
+    /// same username AND user_id already exists — re-auth it by overwriting the
+    /// token material. Returns `(account, created)`.
+    pub async fn upsert_account(&self, input: &CreateAccount) -> Result<(Account, bool)> {
+        let username = input
+            .username
+            .clone()
+            .ok_or_else(|| TitenError::InvalidRequest("username is required".into()))?;
+        let user_id = input
+            .user_id
+            .clone()
+            .ok_or_else(|| TitenError::InvalidRequest("user_id is required".into()))?;
+
+        // Re-auth path: match on the Threads identity, not our internal UUID.
+        if let Ok(existing) = self.get_account_by_username(&username).await {
+            if existing.user_id != user_id {
+                return Err(TitenError::InvalidRequest(format!(
+                    "Identity mismatch: username '{username}' exists with a different Threads user_id ({} != {user_id})",
+                    existing.user_id
+                )));
+            }
+            let acc = self.update_account_reauth(&existing.id, input).await?;
+            return Ok((acc, false));
+        }
+
+        let id = Uuid::now_v7().to_string();
         let enc_token = self.encrypt_field(&input.access_token)?;
         let enc_secret = match &input.app_secret {
             Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
@@ -435,11 +461,12 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO accounts (id, username, user_id, access_token, expires_at, app_id, app_secret)\n             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO accounts (id, username, user_id, access_token, expires_at, app_id, app_secret)\
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(id)
-        .bind(&input.username)
-        .bind(&input.user_id)
+        .bind(&id)
+        .bind(&username)
+        .bind(&user_id)
         .bind(&enc_token)
         .bind(&input.expires_at)
         .bind(&input.app_id)
@@ -448,12 +475,37 @@ impl Store {
         .await
         .map_err(|e| {
             if e.to_string().contains("UNIQUE") {
-                TitenError::AccountAlreadyExists(input.username.clone().unwrap_or_default())
+                TitenError::AccountAlreadyExists(username.clone())
             } else {
                 TitenError::DatabaseError(e.to_string())
             }
         })?;
 
+        Ok((self.get_account(&id).await?, true))
+    }
+
+    /// Overwrite token material on an existing account (re-auth). Keeps the
+    /// account ID and username; refreshes token, expiry, app_id/app_secret.
+    async fn update_account_reauth(&self, id: &str, input: &CreateAccount) -> Result<Account> {
+        let enc_token = self.encrypt_field(&input.access_token)?;
+        let enc_secret = match &input.app_secret {
+            Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
+            _ => None,
+        };
+        let acc = self.get_account(id).await?;
+        let app_id = input.app_id.clone().or(acc.app_id);
+
+        sqlx::query(
+            "UPDATE accounts SET access_token = ?, expires_at = ?, app_id = ?, app_secret = ?, is_active = 1, updated_at = datetime('now')\
+             WHERE id = ?",
+        )
+        .bind(&enc_token)
+        .bind(&input.expires_at)
+        .bind(&app_id)
+        .bind(&enc_secret)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
         self.get_account(id).await
     }
 
@@ -488,14 +540,63 @@ impl Store {
         self.get_account(id).await
     }
 
+    /// Hard delete with cascade (#224): removes all child rows (schedules,
+    /// posts, media assets, mentions, analytics) in one transaction, then the
+    /// account itself. All-or-nothing.
     pub async fn delete_account(&self, id: &str) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Verify the account exists inside the transaction first.
+        let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE id = ?")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+        if exists.0 == 0 {
+            return Err(TitenError::AccountNotFound(id.to_string()));
+        }
+
+        // Child rows first (comments + analytics_snap reference posts; posts,
+        // mentions, media_assets, rate_tracking reference the account).
+        sqlx::query(
+            "DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "DELETE FROM analytics_snap WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("DELETE FROM posts WHERE account_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM mentions WHERE account_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        // NOTE: media_assets has no account_id column (not account-scoped) —
+        // it is NOT deleted here.
+        sqlx::query("DELETE FROM schedules WHERE account_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM rate_tracking WHERE account_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+
         let result = sqlx::query("DELETE FROM accounts WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
         if result.rows_affected() == 0 {
             return Err(TitenError::AccountNotFound(id.to_string()));
         }
+
+        tx.commit().await?;
         Ok(())
     }
 

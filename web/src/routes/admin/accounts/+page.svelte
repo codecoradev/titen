@@ -16,6 +16,9 @@
 	let loaded = $state(false);
 	let showAddModal = $state(false);
 	let deletingId = $state<string | null>(null);
+	let deleteStage = $state<1 | 2>(1);
+	let deleteConfirmText = $state('');
+	let deleteUsername = $state('');
 	let refreshingId = $state<string | null>(null);
 	let submitting = $state(false);
 	let profiles = $state<Record<string, ThreadsProfile | null>>({});
@@ -93,6 +96,14 @@
 
 	async function handleDelete() {
 		if (!deletingId) return;
+		if (deleteStage === 2 && deleteConfirmText.trim() !== deleteUsername) {
+			toast(`Type "${deleteUsername}" exactly to confirm`, 'error');
+			return;
+		}
+		if (deleteStage === 1) {
+			deleteStage = 2;
+			return;
+		}
 		try {
 			await deleteAccount(deletingId);
 			toast('Account deleted', 'success');
@@ -101,6 +112,8 @@
 			toast(e.message || 'Failed to delete account', 'error');
 		} finally {
 			deletingId = null;
+			deleteStage = 1;
+			deleteConfirmText = '';
 		}
 	}
 
@@ -279,7 +292,7 @@
 								>
 									{refreshingId === account.id ? '…' : 'Refresh'}
 								</Button>
-								<Button variant="ghost" size="sm" onclick={() => (deletingId = account.id)}>
+								<Button variant="ghost" size="sm" onclick={() => { deletingId = account.id; deleteStage = 1; deleteConfirmText = ''; deleteUsername = account.username; }}>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm-danger">
 														<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
 									</svg>
@@ -347,14 +360,18 @@
 	</Dialog.Root>
 {/if}
 
-<!-- Delete Confirmation -->
+<!-- Delete Confirmation (stage 2: type-to-confirm) -->
 <ConfirmDialog
 	open={deletingId !== null}
-	title="Delete Account"
-	message="This will permanently remove this account and all its associated data. This action cannot be undone."
-	confirmLabel="Delete"
+	title={deleteStage === 1 ? 'Delete Account' : 'Really delete EVERYTHING?'}
+	message={deleteStage === 1
+		? 'This will permanently remove this account and all its posts, schedules, media, mentions and analytics. This action cannot be undone.'
+		: `Type the username "${deleteUsername}" below to confirm the permanent wipe of this account and ALL its data.`}
+	confirmLabel={deleteStage === 1 ? 'Continue' : 'Delete permanently'}
+	showInput={deleteStage === 2}
+	bind:confirmText={deleteConfirmText}
 	onconfirm={handleDelete}
-	oncancel={() => (deletingId = null)}
+	oncancel={() => { deletingId = null; deleteStage = 1; deleteConfirmText = ''; }}
 />
 
 <style>

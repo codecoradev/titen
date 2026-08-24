@@ -25,8 +25,7 @@ async fn tokens_are_encrypted_at_rest() {
     let store = Store::new(pool.clone());
     store.migrate().await.unwrap();
 
-    // Insert via Store::create_account (skips Threads API resolve).
-    let id = uuid::Uuid::now_v7().to_string();
+    // upsert generates its own UUID v7 id.
     let input = CreateAccount {
         username: Some("encryption_test_user".into()),
         user_id: Some("threads_123".into()),
@@ -35,7 +34,7 @@ async fn tokens_are_encrypted_at_rest() {
         app_id: Some("app_999".into()),
         app_secret: Some("SUPER_SECRET_APP_SECRET".into()),
     };
-    store.create_account(&id, &input).await.unwrap();
+    store.upsert_account(&input).await.unwrap();
 
     // Read through Store API (should get plaintext back).
     let account = store

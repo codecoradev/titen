@@ -21,8 +21,9 @@ async fn setup_store() -> Store {
     store
 }
 
-/// Helper: create a test account.
-async fn create_test_account(store: &Store, id: &str, username: &str) {
+/// Helper: create a test account. Returns the generated account id
+/// (upsert generates a UUID v7, callers must use the returned id).
+async fn create_test_account(store: &Store, id: &str, username: &str) -> String {
     let input = CreateAccount {
         username: Some(username.to_string()),
         user_id: Some("threads_user_123".to_string()),
@@ -31,10 +32,12 @@ async fn create_test_account(store: &Store, id: &str, username: &str) {
         app_id: Some("test_app_id".to_string()),
         app_secret: None,
     };
-    store
-        .create_account(id, &input)
+    let _ = id;
+    let (account, _) = store
+        .upsert_account(&input)
         .await
         .expect("Failed to create test account");
+    account.id
 }
 
 /// Helper: create a test post.
@@ -88,11 +91,11 @@ async fn test_list_accounts_empty_db() {
 #[tokio::test]
 async fn test_create_account_then_list() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "testuser").await;
+    let acc1 = create_test_account(&store, "acc-1", "testuser").await;
 
     let accounts = store.list_accounts().await.expect("list_accounts failed");
     assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0].id, "acc-1");
+    assert_eq!(accounts[0].id, acc1);
     assert_eq!(accounts[0].username, "testuser");
     assert!(accounts[0].is_active);
 }
@@ -100,9 +103,9 @@ async fn test_create_account_then_list() {
 #[tokio::test]
 async fn test_create_multiple_accounts() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_account(&store, "acc-2", "user2").await;
-    create_test_account(&store, "acc-3", "user3").await;
+    let _acc1 = create_test_account(&store, "acc-1", "user1").await;
+    let _acc2 = create_test_account(&store, "acc-2", "user2").await;
+    let _acc3 = create_test_account(&store, "acc-3", "user3").await;
 
     let accounts = store.list_accounts().await.expect("list_accounts failed");
     assert_eq!(accounts.len(), 3);
@@ -122,8 +125,8 @@ async fn test_get_account_not_found() {
 #[tokio::test]
 async fn test_create_post_then_list() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "testuser").await;
-    create_test_post(&store, "post-1", "acc-1", "Hello world!").await;
+    let acc1 = create_test_account(&store, "acc-1", "testuser").await;
+    create_test_post(&store, "post-1", &acc1, "Hello world!").await;
 
     let posts = store
         .list_posts(&PostFilter::default())
@@ -137,12 +140,12 @@ async fn test_create_post_then_list() {
 #[tokio::test]
 async fn test_create_post_then_get() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "testuser").await;
-    create_test_post(&store, "post-1", "acc-1", "My caption").await;
+    let acc1 = create_test_account(&store, "acc-1", "testuser").await;
+    create_test_post(&store, "post-1", &acc1, "My caption").await;
 
     let post = store.get_post("post-1").await.expect("get_post failed");
     assert_eq!(post.id, "post-1");
-    assert_eq!(post.account_id, "acc-1");
+    assert_eq!(post.account_id, acc1);
     assert_eq!(post.caption.as_deref(), Some("My caption"));
     assert_eq!(post.media_type, "TEXT");
 }
@@ -160,25 +163,25 @@ async fn test_list_posts_empty() {
 #[tokio::test]
 async fn test_list_posts_filtered_by_account() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_account(&store, "acc-2", "user2").await;
-    create_test_post(&store, "post-1", "acc-1", "from acc-1").await;
-    create_test_post(&store, "post-2", "acc-2", "from acc-2").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    let acc2 = create_test_account(&store, "acc-2", "user2").await;
+    create_test_post(&store, "post-1", &acc1, "from acc-1").await;
+    create_test_post(&store, "post-2", &acc2, "from acc-2").await;
 
     let filter = PostFilter {
-        account_id: Some("acc-1".to_string()),
+        account_id: Some(acc1.clone()),
         ..Default::default()
     };
     let posts = store.list_posts(&filter).await.expect("list_posts failed");
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].account_id, "acc-1");
+    assert_eq!(posts[0].account_id, acc1);
 }
 
 #[tokio::test]
 async fn test_delete_post_existing() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_post(&store, "post-1", "acc-1", "to delete").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    create_test_post(&store, "post-1", &acc1, "to delete").await;
 
     store
         .delete_post("post-1")
@@ -213,8 +216,8 @@ async fn test_get_post_nonexistent_returns_error() {
 #[tokio::test]
 async fn test_create_schedule_then_list() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_schedule(&store, "sched-1", "acc-1").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    create_test_schedule(&store, "sched-1", &acc1).await;
 
     let schedules = store
         .list_schedules(&ScheduleFilter::default())
@@ -227,15 +230,15 @@ async fn test_create_schedule_then_list() {
 #[tokio::test]
 async fn test_create_schedule_then_get() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_schedule(&store, "sched-1", "acc-1").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    create_test_schedule(&store, "sched-1", &acc1).await;
 
     let schedule = store
         .get_schedule("sched-1")
         .await
         .expect("get_schedule failed");
     assert_eq!(schedule.id, "sched-1");
-    assert_eq!(schedule.account_id, "acc-1");
+    assert_eq!(schedule.account_id, acc1);
     assert_eq!(schedule.scheduled_at, "2026-12-31T10:00:00Z");
 }
 
@@ -252,8 +255,8 @@ async fn test_list_schedules_empty() {
 #[tokio::test]
 async fn test_cancel_schedule_existing() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_schedule(&store, "sched-1", "acc-1").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    create_test_schedule(&store, "sched-1", &acc1).await;
 
     store
         .delete_schedule("sched-1")
@@ -298,8 +301,8 @@ async fn test_list_comments_on_nonexistent_post() {
 #[tokio::test]
 async fn test_insert_and_list_comment() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
-    create_test_post(&store, "post-1", "acc-1", "test post").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
+    create_test_post(&store, "post-1", &acc1, "test post").await;
 
     let comment = store
         .insert_comment(
@@ -330,10 +333,10 @@ async fn test_insert_and_list_comment() {
 #[tokio::test]
 async fn test_approve_draft_schedule() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
 
     let input = CreateSchedule {
-        account_id: "acc-1".to_string(),
+        account_id: acc1.clone(),
         caption: Some("Needs approval".to_string()),
         media_type: Some("TEXT".to_string()),
         text_attachment: None,
@@ -359,10 +362,10 @@ async fn test_approve_draft_schedule() {
 #[tokio::test]
 async fn test_reject_draft_schedule() {
     let store = setup_store().await;
-    create_test_account(&store, "acc-1", "user1").await;
+    let acc1 = create_test_account(&store, "acc-1", "user1").await;
 
     let input = CreateSchedule {
-        account_id: "acc-1".to_string(),
+        account_id: acc1.clone(),
         caption: Some("Will be rejected".to_string()),
         media_type: Some("TEXT".to_string()),
         text_attachment: None,

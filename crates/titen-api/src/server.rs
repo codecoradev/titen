@@ -309,7 +309,11 @@ pub async fn serve(
         .create_if_missing(true)
         .pragma("journal_mode", "WAL")
         .pragma("busy_timeout", "5000")
-        .pragma("synchronous", "normal");
+        .pragma("synchronous", "normal")
+        // Enforce FK constraints (REFERENCES in migrations) at runtime.
+        // Existing DBs may contain orphans; delete_account cleans children
+        // explicitly before the parent row, so this is safe to enable.
+        .pragma("foreign_keys", "true");
     let max_conn = std::env::var("TITEN_DB_MAX_CONNECTIONS")
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
