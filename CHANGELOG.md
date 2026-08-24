@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-24
+
+### Added
+
+- **Re-connecting an existing account now updates it in place** — connecting a Threads account that already exists (same username and user ID) overwrites the stored token, expiry, and app credentials instead of failing with "Account already exists". New accounts return `201 Created`; re-auths return `200 OK` (#223). The upsert is race-safe (`INSERT ... ON CONFLICT DO NOTHING` + re-auth fallback), and a re-auth that omits the app secret preserves the previously stored encrypted value.
+- **Two-stage confirmation for account deletion** — deleting an account is a full wipe (posts, comments, mentions, rate tracking, sessions) in one transaction, so the dashboard now asks twice: a confirmation dialog, then typing the username to confirm (#224).
+
+### Changed
+
+- **`DELETE /api/accounts/:id` requires `?confirm=true`** — plain deletes return `400 Bad Request`. The username is also accepted as the account identifier.
+- **Foreign-key enforcement enabled per connection** (`PRAGMA foreign_keys = ON`), so orphaned child rows can no longer be created going forward.
+
+### Upgrade notes
+
+- API clients calling `DELETE /api/accounts/:id` must append `?confirm=true` or the call will now fail with `400`.
+
 ## [0.7.5] - 2026-08-21
 
 ### Fixed
