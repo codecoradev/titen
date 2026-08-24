@@ -1,9 +1,8 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
-use uuid::Uuid;
 
 use crate::server::{AppState, error_response};
 use titen_core::models::*;
@@ -75,8 +74,6 @@ pub async fn create_account(
     State(state): State<AppState>,
     Json(mut input): Json<CreateAccount>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let id = Uuid::now_v7().to_string();
-
     // Auto-resolve username + user_id from /me if not provided
     if input.username.is_none() || input.user_id.is_none() {
         match state
@@ -131,11 +128,21 @@ pub async fn create_account(
         }
     }
 
-    match state.store.create_account(&id, &input).await {
-        Ok(account) => (
-            StatusCode::CREATED,
-            Json(serde_json::json!({ "data": safe_account_json(&account) })),
-        ),
+    match state.store.upsert_account(&input).await {
+        Ok((account, created)) => {
+            let status = if created {
+                StatusCode::CREATED
+            } else {
+                StatusCode::OK
+            };
+            (
+                status,
+                Json(serde_json::json!({
+                    "data": safe_account_json(&account),
+                    "reauth": !created
+                })),
+            )
+        }
         Err(e) => {
             let (status, body) =
                 error_response(StatusCode::CONFLICT, "CREATE_FAILED", &e.to_string());
@@ -184,10 +191,49 @@ pub async fn update_account(
 pub async fn delete_account(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Json<serde_json::Value> {
-    match state.store.delete_account(&id).await {
-        Ok(()) => Json(serde_json::json!({ "data": null })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),
+    confirm: Query<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let confirmed = confirm
+        .0
+        .get("confirm")
+        .map(|v| v == &serde_json::json!(true) || v.as_str() == Some("true"))
+        .unwrap_or(false);
+    if !confirmed {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Pass ?confirm=true to delete. This permanently removes the account and ALL its posts, schedules, media, mentions and analytics.",
+                "code": "CONFIRM_REQUIRED"
+            })),
+        );
+    }
+
+    // Accept UUID or username (#224): resolve username → account id first.
+    let resolved = if uuid::Uuid::parse_str(&id).is_ok() {
+        state.store.get_account(&id).await.map(|a| a.id)
+    } else {
+        state.store.get_account_by_username(&id).await.map(|a| a.id)
+    };
+
+    match resolved {
+        Ok(account_id) => match state.store.delete_account(&account_id).await {
+            Ok(()) => (
+                StatusCode::OK,
+                Json(serde_json::json!({ "data": null, "deleted": account_id })),
+            ),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string(), "code": "DELETE_FAILED" })),
+            ),
+        },
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": format!("Account not found: {id}"),
+                "code": "NOT_FOUND",
+                "hint": "Pass the account UUID or the exact Threads username."
+            })),
+        ),
     }
 }
 

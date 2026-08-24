@@ -1,7 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use tracing::{error, info, warn};
-use uuid::Uuid;
 
 use crate::server::{AppState, error_response};
 
@@ -175,7 +174,6 @@ pub async fn oauth_exchange(
 
     // Step 4: create account
     info!(target: "titen::oauth", "OAUTH_STEP4 create account in DB...");
-    let id = Uuid::now_v7().to_string();
     let expires_at = (chrono::Utc::now() + chrono::Duration::seconds(expires_in)).to_rfc3339();
 
     let create_input = titen_core::models::CreateAccount {
@@ -187,11 +185,16 @@ pub async fn oauth_exchange(
         app_secret: None,
     };
 
-    match state.store.create_account(&id, &create_input).await {
-        Ok(account) => {
-            info!(target: "titen::oauth", "OAUTH_EXCHANGE_SUCCESS account_id={} username={}", account.id, account.username);
+    match state.store.upsert_account(&create_input).await {
+        Ok((account, created)) => {
+            let status = if created {
+                StatusCode::CREATED
+            } else {
+                StatusCode::OK
+            };
+            info!(target: "titen::oauth", "OAUTH_EXCHANGE_SUCCESS account_id={} username={} reauth={}", account.id, account.username, !created);
             (
-                StatusCode::CREATED,
+                status,
                 Json(serde_json::json!({
                     "data": {
                         "id": account.id,
