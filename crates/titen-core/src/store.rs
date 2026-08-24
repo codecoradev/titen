@@ -460,9 +460,13 @@ impl Store {
             _ => None,
         };
 
-        sqlx::query(
+        // INSERT ... ON CONFLICT makes the check-then-act above atomic against
+        // concurrent re-auths: a racing INSERT that loses the conflict lands
+        // here and is turned into a re-auth update.
+        let result = sqlx::query(
             "INSERT INTO accounts (id, username, user_id, access_token, expires_at, app_id, app_secret)\
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?)\
+             ON CONFLICT(username) DO NOTHING",
         )
         .bind(&id)
         .bind(&username)
@@ -473,13 +477,19 @@ impl Store {
         .bind(&enc_secret)
         .execute(&self.pool)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("UNIQUE") {
-                TitenError::AccountAlreadyExists(username.clone())
-            } else {
-                TitenError::DatabaseError(e.to_string())
+        .map_err(|e| TitenError::DatabaseError(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            // Lost the race to a concurrent insert with the same username:
+            // fall through to the re-auth path.
+            if let Ok(existing) = self.get_account_by_username(&username).await {
+                if existing.user_id != user_id {
+                    return Err(TitenError::AccountAlreadyExists(username.clone()));
+                }
+                let acc = self.update_account_reauth(&existing.id, input).await?;
+                return Ok((acc, false));
             }
-        })?;
+        }
 
         Ok((self.get_account(&id).await?, true))
     }
@@ -488,12 +498,15 @@ impl Store {
     /// account ID and username; refreshes token, expiry, app_id/app_secret.
     async fn update_account_reauth(&self, id: &str, input: &CreateAccount) -> Result<Account> {
         let enc_token = self.encrypt_field(&input.access_token)?;
-        let enc_secret = match &input.app_secret {
-            Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
-            _ => None,
-        };
         let acc = self.get_account(id).await?;
         let app_id = input.app_id.clone().or(acc.app_id);
+        // Preserve a previously stored secret when the caller does not send one
+        // (OAuth exchange/MCP pass None) — otherwise re-auth would NULL it out
+        // and break later token refresh flows.
+        let enc_secret = match &input.app_secret {
+            Some(s) if !s.is_empty() => Some(self.encrypt_field(s)?),
+            _ => acc.app_secret.clone(),
+        };
 
         sqlx::query(
             "UPDATE accounts SET access_token = ?, expires_at = ?, app_id = ?, app_secret = ?, is_active = 1, updated_at = datetime('now')\
