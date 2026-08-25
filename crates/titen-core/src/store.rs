@@ -1248,11 +1248,13 @@ impl Store {
     }
 
     pub async fn list_mentions(&self, filter: &MentionFilter) -> Result<Vec<Mention>> {
-        // unbounded is only safe when the caller constrains the result set
-        // via date_from; otherwise fall back to the clamped limit.
+        // unbounded skips the interactive-use 1000-row clamp, but never
+        // without a hard ceiling: analytic queries constrained by date_from
+        // still cap at 50k rows so a pathological ingest burst cannot OOM
+        // the process.
         let unbounded = filter.unbounded && filter.date_from.is_some();
         let limit = if unbounded {
-            filter.limit.unwrap_or(i64::MAX)
+            filter.limit.unwrap_or(50_000)
         } else {
             filter.limit.unwrap_or(50).clamp(1, 1000)
         };
