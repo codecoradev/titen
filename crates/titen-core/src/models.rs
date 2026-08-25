@@ -396,9 +396,11 @@ pub struct MentionFilter {
     pub date_to: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
-    /// Skip the hard 1000-row clamp — for internal analytic queries that
-    /// already constrain the result set via date_from.
-    #[serde(default)]
+    /// Skip the hard 1000-row clamp — internal analytic queries that
+    /// already constrain the result set via date_from. Never deserialized
+    /// from client input (`#[serde(skip)]`), so external callers cannot
+    /// trigger an unbounded scan.
+    #[serde(skip)]
     pub unbounded: bool,
 }
 
