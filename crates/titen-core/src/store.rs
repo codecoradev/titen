@@ -1248,7 +1248,11 @@ impl Store {
     }
 
     pub async fn list_mentions(&self, filter: &MentionFilter) -> Result<Vec<Mention>> {
-        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        let limit = if filter.unbounded {
+            filter.limit.unwrap_or(i64::MAX)
+        } else {
+            filter.limit.unwrap_or(50).clamp(1, 1000)
+        };
         let offset = filter.offset.unwrap_or(0).max(0);
 
         let mut query = String::from("SELECT * FROM mentions WHERE 1=1");

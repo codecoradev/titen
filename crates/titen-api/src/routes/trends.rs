@@ -3,6 +3,7 @@
 use axum::{
     Json,
     extract::{Query, State},
+    http::StatusCode,
 };
 use serde::Deserialize;
 use titen_core::models::MentionFilter;
@@ -55,7 +56,7 @@ pub struct TrendsParamsOut {
 pub async fn get_trends(
     State(state): State<AppState>,
     Query(q): Query<TrendsQuery>,
-) -> Json<TrendsResponse> {
+) -> Result<Json<TrendsResponse>, (StatusCode, Json<serde_json::Value>)> {
     let window_minutes = q.window_minutes.unwrap_or(60).clamp(5, 1440);
     let windows = q.windows.unwrap_or(6).clamp(2, 24);
     let min_total = q.min_total.unwrap_or(2).max(1);
@@ -66,26 +67,39 @@ pub async fn get_trends(
         ..Default::default()
     };
 
-    // Pull up to window count × window duration of mentions
+    // Horizon filter is pushed into the SQL query (date_from on fetched_at)
+    // so short windows do not fetch irrelevant rows and long windows are not
+    // silently truncated by a fixed limit.
     let horizon_minutes = (windows as i64) * window_minutes;
+    let now = chrono::Utc::now();
+    let date_from = (now - chrono::Duration::minutes(horizon_minutes)).to_rfc3339();
     let mentions = state
         .store
         .list_mentions(&MentionFilter {
             account_id: q.account_id.clone(),
-            limit: Some(1000),
+            date_from: Some(date_from),
+            limit: None, // unbounded: horizon already constrains via date_from
+            unbounded: true,
             ..Default::default()
         })
         .await
-        .unwrap_or_default();
+        .map_err(|e| {
+            tracing::error!(error = %e, "trends: failed to list mentions");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to load mentions",
+                    "code": "INTERNAL"
+                })),
+            )
+        })?;
 
-    let now = chrono::Utc::now();
     let signals: Vec<TrendSignal> = mentions
         .into_iter()
         .filter_map(|m| {
             let text = m.text?;
-            let at = m
-                .mentioned_at
-                .or(Some(m.fetched_at))
+            let ts: Option<String> = m.mentioned_at.or(Some(m.fetched_at));
+            let at = ts
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
                 .map(|d| d.with_timezone(&chrono::Utc))?;
             // exclude signals older than the analysis horizon
@@ -97,12 +111,12 @@ pub async fn get_trends(
         .collect();
 
     let trends = analyze(&signals, &params).unwrap_or_default();
-    Json(TrendsResponse {
+    Ok(Json(TrendsResponse {
         params: TrendsParamsOut {
             window_minutes,
             windows,
             min_total,
         },
         trends,
-    })
+    }))
 }
