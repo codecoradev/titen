@@ -41,6 +41,9 @@ use titen_core::models::{
         CreateReply,
         // Sentiment
         SentimentResult, SentimentSummary,
+        // Trends
+        titen_core::trend::TermTrend, titen_core::trend::LifecycleStage,
+        crate::routes::trends::TrendsResponse, crate::routes::trends::TrendsParamsOut,
         RateLimits,
     )),
     paths(
@@ -79,6 +82,7 @@ use titen_core::models::{
         // Analytics
         crate::routes::analytics::list_analytics,
         crate::routes::analytics::post_trend,
+        crate::routes::trends::get_trends,
         // Media
         crate::routes::media::list_media,
         crate::routes::media::upload_media,

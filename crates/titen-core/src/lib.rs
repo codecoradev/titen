@@ -27,6 +27,7 @@ pub mod sentiment;
 pub mod storage;
 pub mod store;
 pub mod threads_client;
+pub mod trend;
 
 pub use crypto::Cipher;
 pub use error::{Result, TitenError};
