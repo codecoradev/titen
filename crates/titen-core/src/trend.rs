@@ -268,6 +268,10 @@ fn window_index(
     window_minutes: i64,
     windows: usize,
 ) -> Option<usize> {
+    // Guard against divide-by-zero when callers bypass the API-level clamp.
+    if window_minutes <= 0 {
+        return None;
+    }
     let delta = now.signed_duration_since(at).num_minutes();
     if delta < 0 {
         return None; // future timestamps excluded

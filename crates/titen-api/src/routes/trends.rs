@@ -70,7 +70,10 @@ pub async fn get_trends(
     // Horizon filter is pushed into the SQL query (date_from on fetched_at)
     // so short windows do not fetch irrelevant rows and long windows are not
     // silently truncated by a fixed limit.
-    let horizon_minutes = (windows as i64) * window_minutes;
+    // Cap the DB horizon at 24h so unbounded=true cannot load weeks of
+    // mentions into memory; the in-memory filter still uses the exact
+    // horizon for signal bucketing.
+    let horizon_minutes = ((windows as i64) * window_minutes).min(24 * 60);
     let now = chrono::Utc::now();
     let date_from = (now - chrono::Duration::minutes(horizon_minutes)).to_rfc3339();
     let mentions = state
