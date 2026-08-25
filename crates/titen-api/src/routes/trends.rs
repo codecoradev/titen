@@ -60,6 +60,15 @@ pub async fn get_trends(
     let window_minutes = q.window_minutes.unwrap_or(60).clamp(5, 1440);
     let windows = q.windows.unwrap_or(6).clamp(2, 24);
     let min_total = q.min_total.unwrap_or(2).max(1);
+    // Cap the analysis horizon at 24h so unbounded=true cannot load weeks of
+    // mentions into memory. The requested windows are shrunk to fit the cap
+    // so the echoed params, the DB fetch, and the analysis stay consistent.
+    const MAX_HORIZON_MINUTES: i64 = 24 * 60;
+    let mut windows = windows;
+    while windows > 2 && (windows as i64) * window_minutes > MAX_HORIZON_MINUTES {
+        windows -= 1;
+    }
+    let horizon_minutes = (windows as i64) * window_minutes;
     let params = TrendParams {
         window_minutes,
         windows,
@@ -70,10 +79,6 @@ pub async fn get_trends(
     // Horizon filter is pushed into the SQL query (date_from on fetched_at)
     // so short windows do not fetch irrelevant rows and long windows are not
     // silently truncated by a fixed limit.
-    // Cap the DB horizon at 24h so unbounded=true cannot load weeks of
-    // mentions into memory; the in-memory filter still uses the exact
-    // horizon for signal bucketing.
-    let horizon_minutes = ((windows as i64) * window_minutes).min(24 * 60);
     let now = chrono::Utc::now();
     let date_from = (now - chrono::Duration::minutes(horizon_minutes)).to_rfc3339();
     let mentions = state
