@@ -1248,7 +1248,10 @@ impl Store {
     }
 
     pub async fn list_mentions(&self, filter: &MentionFilter) -> Result<Vec<Mention>> {
-        let limit = if filter.unbounded {
+        // unbounded is only safe when the caller constrains the result set
+        // via date_from; otherwise fall back to the clamped limit.
+        let unbounded = filter.unbounded && filter.date_from.is_some();
+        let limit = if unbounded {
             filter.limit.unwrap_or(i64::MAX)
         } else {
             filter.limit.unwrap_or(50).clamp(1, 1000)
