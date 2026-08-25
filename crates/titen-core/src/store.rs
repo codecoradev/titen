@@ -1248,7 +1248,16 @@ impl Store {
     }
 
     pub async fn list_mentions(&self, filter: &MentionFilter) -> Result<Vec<Mention>> {
-        let limit = filter.limit.unwrap_or(50).clamp(1, 1000);
+        // unbounded skips the interactive-use 1000-row clamp, but never
+        // without a hard ceiling: analytic queries constrained by date_from
+        // still cap at 50k rows so a pathological ingest burst cannot OOM
+        // the process.
+        let unbounded = filter.unbounded && filter.date_from.is_some();
+        let limit = if unbounded {
+            filter.limit.unwrap_or(50_000)
+        } else {
+            filter.limit.unwrap_or(50).clamp(1, 1000)
+        };
         let offset = filter.offset.unwrap_or(0).max(0);
 
         let mut query = String::from("SELECT * FROM mentions WHERE 1=1");

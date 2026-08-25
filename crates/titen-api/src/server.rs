@@ -432,6 +432,7 @@ pub async fn serve(
             "/api/analytics/posts/{id}/trend",
             get(routes::analytics::post_trend),
         )
+        .route("/api/insights/trends", get(routes::trends::get_trends))
         .route(
             "/api/media",
             get(routes::media::list_media).post(routes::media::upload_media),
