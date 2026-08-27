@@ -29,15 +29,37 @@
 			negative: true,
 			failed: true,
 		};
+		// Approved: same hue family as published but softer — it still awaits
+		// the scheduler, unlike a published post.
+		const approvedVariants: Record<string, true> = {
+			approved: true,
+		};
+		const infoVariants: Record<string, true> = {
+			processing: true,
+		};
+		const neutralVariants: Record<string, true> = {
+			draft: true,
+			cancelled: true,
+			deleted: true,
+		};
 
 		if (successVariants[s]) {
 			return { variant: "default", class: "bg-[var(--color-success)] text-[var(--color-success-ink)]" };
+		}
+		if (approvedVariants[s]) {
+			return { variant: "secondary", class: "bg-[var(--color-success-dim)] text-[var(--color-success-ink)]" };
 		}
 		if (warningVariants[s]) {
 			return { variant: "default", class: "bg-[var(--color-warning)] text-[var(--color-warning-ink)]" };
 		}
 		if (errorVariants[s]) {
 			return { variant: "destructive", class: "" };
+		}
+		if (infoVariants[s]) {
+			return { variant: "secondary", class: "bg-[var(--color-info-dim)] text-[var(--color-info-ink)]" };
+		}
+		if (neutralVariants[s]) {
+			return { variant: "secondary", class: "" };
 		}
 		return { variant: "secondary", class: "" };
 	}

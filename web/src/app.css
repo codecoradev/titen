@@ -87,6 +87,7 @@
 	--color-popover: var(--color-paper);
 	--color-popover-foreground: var(--color-ink);
 	--color-primary-foreground: var(--color-accent-ink);
+	--color-secondary: var(--color-paper-3);
 	--color-secondary-foreground: var(--color-ink);
 	--color-muted-foreground: var(--color-muted);
 	--color-accent-foreground: var(--color-ink);
