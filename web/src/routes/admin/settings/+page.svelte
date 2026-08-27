@@ -3,6 +3,10 @@
 	import { getHealth, getSettings, updateSettings, ApiError } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Switch } from '$lib/components/ui/switch';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import { Field, FieldContent, FieldDescription, FieldLabel } from '$lib/components/ui/field';
 	import type { HealthResponse } from '$lib/types';
 
 	// ── State ──
@@ -36,12 +40,6 @@
 
 	// Lifecycle guard
 	let loaded = $state(false);
-
-	const tabs = [
-		{ id: 'general' as const, label: 'General' },
-		{ id: 'api-keys' as const, label: 'API Keys' },
-		{ id: 'danger' as const, label: 'Danger Zone' },
-	];
 
 	// ── Lifecycle ──
 	$effect(() => {
@@ -169,269 +167,238 @@
 
 <PageHeader title="Settings" description="Instance configuration and API credentials" />
 
-<!-- Tabs -->
-<div class="settings-tabs">
-	{#each tabs as tab}
-		<button
-			class="settings-tab"
-			class:is-active={activeTab === tab.id}
-			onclick={() => (activeTab = tab.id)}
-			type="button"
-		>
-			{tab.label}
-		</button>
-	{/each}
-</div>
+<Tabs.Root
+	value={activeTab}
+	onValueChange={(v) => (activeTab = v as typeof activeTab)}
+	class="mb-8"
+>
+	<Tabs.List>
+		<Tabs.Trigger value="general">General</Tabs.Trigger>
+		<Tabs.Trigger value="api-keys">API Keys</Tabs.Trigger>
+		<Tabs.Trigger value="danger">Danger Zone</Tabs.Trigger>
+	</Tabs.List>
 
-<!-- ── General ── -->
-{#if activeTab === 'general'}
-	<section class="settings-section">
-		<h2 class="settings-section-title">Instance</h2>
-		<div class="settings-card">
-			<div class="form-group">
-				<label class="form-label" for="instance-name">Instance Name</label>
-				<input
-					id="instance-name"
-					class="form-input"
-					type="text"
-					bind:value={instanceName}
-					placeholder="My Titen Instance"
-				/>
-				<span class="form-helper">Display name shown in the sidebar and page title</span>
-			</div>
-		</div>
-
-		<h2 class="settings-section-title">Automation</h2>
-		<div class="settings-card">
-			<div class="form-row">
-				<div class="form-group">
-					<label class="form-label" for="comment-interval">Comment Fetch Interval</label>
-					<input
-						id="comment-interval"
-						class="form-input"
-						type="number"
-						min="5"
-						max="1440"
-						bind:value={commentFetchInterval}
-					/>
-					<span class="form-helper">Minutes between auto-fetch cycles (5–1440)</span>
-				</div>
-				<div class="form-group">
-					<label class="form-label" for="schedule-lookahead">Schedule Lookahead</label>
-					<input
-						id="schedule-lookahead"
-						class="form-input"
-						type="number"
-						min="1"
-						max="168"
-						bind:value={scheduleLookaheadHours}
-					/>
-					<span class="form-helper">Hours ahead to show upcoming schedules</span>
-				</div>
-			</div>
-
-			<label class="form-toggle">
-				<input type="checkbox" bind:checked={autoFetchComments} />
-				<span class="form-toggle-track"></span>
-				<span>Auto-fetch comments for published posts</span>
-			</label>
-		</div>
-
-		<div class="settings-actions">
-			<Button variant="default" onclick={saveGeneral} disabled={saving}>
-				{saving ? 'Saving…' : 'Save Changes'}
-			</Button>
-		</div>
-	</section>
-
-	<!-- System Health -->
-	<section class="settings-section">
-		<div class="settings-section-row">
-			<h2 class="settings-section-title">System Health</h2>
-			<Button variant="outline" size="sm" onclick={refreshHealth} disabled={healthLoading}>
-				{healthLoading ? 'Checking…' : 'Refresh'}
-			</Button>
-		</div>
-		{#if health}
+	<!-- ── General ── -->
+	<Tabs.Content value="general">
+		<section class="settings-section">
+			<h2 class="settings-section-title">Instance</h2>
 			<div class="settings-card">
-				<div class="health-grid">
-					<div class="health-item">
-						<span class="health-label">Status</span>
-						<span class="badge badge--{health.status === 'ok' ? 'success' : 'error'}">{health.status}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">Version</span>
-						<span class="health-value tabular-nums">{health.version}</span>
-					</div>
-					<div class="health-item">
-						<span class="health-label">Database</span>
-						<span class="health-value tabular-nums">{health.db}</span>
-					</div>
-				</div>
-			</div>
-		{:else if !healthLoading}
-			<div class="settings-card">
-				<p class="form-helper">Click <strong>Refresh</strong> to check system health</p>
-			</div>
-		{/if}
-	</section>
-{/if}
-
-<!-- ── API Keys ── -->
-{#if activeTab === 'api-keys'}
-	<section class="settings-section">
-		<div class="settings-card settings-card--info">
-			<p class="settings-info-text">
-				Credentials are encrypted at rest (AES-256-GCM) and stored server-side.
-				The App Secret is never exposed to the browser after saving.
-			</p>
-		</div>
-
-		<h2 class="settings-section-title">Threads API</h2>
-		<div class="settings-card">
-			<div class="form-group">
-				<label class="form-label" for="threads-app-id">App ID</label>
-				<div class="input-reveal">
-					<input
-						id="threads-app-id"
-						class="form-input"
-						type={showAppId ? 'text' : 'password'}
-						bind:value={threadsAppId}
-						placeholder="Threads App ID"
+				<Field>
+					<FieldLabel for="instance-name">Instance Name</FieldLabel>
+					<Input
+						id="instance-name"
+						type="text"
+						bind:value={instanceName}
+						placeholder="My Titen Instance"
 					/>
-					<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppId = !showAppId)} aria-label={showAppId ? 'Hide' : 'Show'}>
-						{#if showAppId}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-						{:else}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-						{/if}
-			</Button>
-			</div>
+					<FieldDescription>Display name shown in the sidebar and page title</FieldDescription>
+				</Field>
 			</div>
 
-			<div class="form-group">
-			<label class="form-label" for="threads-app-secret">App Secret</label>
-			{#if secretIsSet && !secretDirty}
-			<div class="secret-status">
-				<span class="badge badge--success">✓ Configured</span>
-				<Button variant="ghost" size="sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</Button>
+			<h2 class="settings-section-title">Automation</h2>
+			<div class="settings-card">
+				<div class="form-row">
+					<Field>
+						<FieldLabel for="comment-interval">Comment Fetch Interval</FieldLabel>
+						<Input
+							id="comment-interval"
+							type="number"
+							min="5"
+							max="1440"
+							bind:value={commentFetchInterval}
+						/>
+						<FieldDescription>Minutes between auto-fetch cycles (5–1440)</FieldDescription>
+					</Field>
+					<Field>
+						<FieldLabel for="schedule-lookahead">Schedule Lookahead</FieldLabel>
+						<Input
+							id="schedule-lookahead"
+							type="number"
+							min="1"
+							max="168"
+							bind:value={scheduleLookaheadHours}
+						/>
+						<FieldDescription>Hours ahead to show upcoming schedules</FieldDescription>
+					</Field>
+				</div>
+
+				<Field orientation="horizontal">
+					<Switch id="auto-fetch-comments" bind:checked={autoFetchComments} />
+					<FieldContent>
+						<FieldLabel for="auto-fetch-comments">Auto-fetch comments for published posts</FieldLabel>
+					</FieldContent>
+				</Field>
 			</div>
-			{:else}
-			<div class="input-reveal">
-				<input
-					id="threads-app-secret"
-					class="form-input"
-					type={showAppSecret ? 'text' : 'password'}
-					bind:value={threadsAppSecret}
-					oninput={() => { secretDirty = true; }}
-					placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
-					autocomplete="off"
-				/>
-				<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
-					{#if showAppSecret}
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1 2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-					{:else}
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-					{/if}
+
+			<div class="settings-actions">
+				<Button variant="default" onclick={saveGeneral} disabled={saving}>
+					{saving ? 'Saving…' : 'Save Changes'}
 				</Button>
 			</div>
+		</section>
+
+		<!-- System Health -->
+		<section class="settings-section">
+			<div class="settings-section-row">
+				<h2 class="settings-section-title">System Health</h2>
+				<Button variant="outline" size="sm" onclick={refreshHealth} disabled={healthLoading}>
+					{healthLoading ? 'Checking…' : 'Refresh'}
+				</Button>
+			</div>
+			{#if health}
+				<div class="settings-card">
+					<div class="health-grid">
+						<div class="health-item">
+							<span class="health-label">Status</span>
+							<span class="badge badge--{health.status === 'ok' ? 'success' : 'error'}">{health.status}</span>
+						</div>
+						<div class="health-item">
+							<span class="health-label">Version</span>
+							<span class="health-value tabular-nums">{health.version}</span>
+						</div>
+						<div class="health-item">
+							<span class="health-label">Database</span>
+							<span class="health-value tabular-nums">{health.db}</span>
+						</div>
+					</div>
+				</div>
+			{:else if !healthLoading}
+				<div class="settings-card">
+					<p class="form-helper">Click <strong>Refresh</strong> to check system health</p>
+				</div>
 			{/if}
-			</div>
+		</section>
+	</Tabs.Content>
+
+	<!-- ── API Keys ── -->
+	<Tabs.Content value="api-keys">
+		<section class="settings-section">
+			<div class="settings-card settings-card--info">
+				<p class="settings-info-text">
+					Credentials are encrypted at rest (AES-256-GCM) and stored server-side.
+					The App Secret is never exposed to the browser after saving.
+				</p>
 			</div>
 
-		<div class="settings-actions">
-			<Button variant="default" onclick={saveApiKeys} disabled={saving}>
-				{saving ? 'Saving…' : 'Save API Keys'}
-			</Button>
-		</div>
-	</section>
-{/if}
+			<h2 class="settings-section-title">Threads API</h2>
+			<div class="settings-card">
+				<Field>
+					<FieldLabel for="threads-app-id">App ID</FieldLabel>
+					<div class="input-reveal">
+						<Input
+							id="threads-app-id"
+							class="flex-1"
+							type={showAppId ? 'text' : 'password'}
+							bind:value={threadsAppId}
+							placeholder="Threads App ID"
+						/>
+						<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppId = !showAppId)} aria-label={showAppId ? 'Hide' : 'Show'}>
+							{#if showAppId}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+							{/if}
+					</Button>
+					</div>
+				</Field>
 
-<!-- ── Danger Zone ── -->
-{#if activeTab === 'danger'}
-	<section class="settings-section">
-		<div class="settings-card settings-card--danger">
-			<h3 class="settings-danger-title">Purge Failed Posts</h3>
-			<p class="settings-danger-desc">
-				Permanently delete all posts with a <span class="badge badge--error">failed</span> status.
-				This action cannot be undone.
-			</p>
-			<div class="danger-confirm">
-				<label class="form-label" for="confirm-purge">Type <code>PURGE</code> to confirm</label>
-				<input
-					id="confirm-purge"
-					class="form-input"
-					type="text"
-					bind:value={confirmPurgeText}
-					placeholder="PURGE"
-				/>
+				<Field>
+					<FieldLabel for="threads-app-secret">App Secret</FieldLabel>
+					{#if secretIsSet && !secretDirty}
+					<div class="secret-status">
+						<span class="badge badge--success">✓ Configured</span>
+						<Button variant="ghost" size="sm" type="button" onclick={() => { secretDirty = true; showAppSecret = true; }}>Replace</Button>
+					</div>
+					{:else}
+					<div class="input-reveal">
+						<Input
+							id="threads-app-secret"
+							class="flex-1"
+							type={showAppSecret ? 'text' : 'password'}
+							bind:value={threadsAppSecret}
+							oninput={() => { secretDirty = true; }}
+							placeholder={secretIsSet ? 'Enter new secret to replace' : 'Threads App Secret'}
+							autocomplete="off"
+						/>
+						<Button variant="ghost" class="reveal-btn" type="button" onclick={() => (showAppSecret = !showAppSecret)} aria-label={showAppSecret ? 'Hide' : 'Show'}>
+							{#if showAppSecret}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1 2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+							{/if}
+						</Button>
+					</div>
+					{/if}
+				</Field>
 			</div>
-			<Button variant="destructive"
-			onclick={purgeFailedPosts}
-			disabled={confirmPurgeText !== 'PURGE'}
-		>
-				Purge Failed Posts
-			</Button>
-		</div>
 
-		<div class="settings-card settings-card--danger">
-			<h3 class="settings-danger-title">Delete All Schedules</h3>
-			<p class="settings-danger-desc">
-				Remove all scheduled posts including pending, processing, and failed entries.
-				This action cannot be undone.
-			</p>
-			<div class="danger-confirm">
-				<label class="form-label" for="confirm-delete">Type <code>DELETE ALL</code> to confirm</label>
-				<input
-					id="confirm-delete"
-					class="form-input"
-					type="text"
-					bind:value={confirmDeleteText}
-					placeholder="DELETE ALL"
-				/>
+			<div class="settings-actions">
+				<Button variant="default" onclick={saveApiKeys} disabled={saving}>
+					{saving ? 'Saving…' : 'Save API Keys'}
+				</Button>
 			</div>
-			<Button variant="destructive"
-			onclick={deleteAllSchedules}
-			disabled={confirmDeleteText !== 'DELETE ALL'}
-		>
-				Delete All Schedules
-			</Button>
-		</div>
-	</section>
-{/if}
+		</section>
+	</Tabs.Content>
+
+	<!-- ── Danger Zone ── -->
+	<Tabs.Content value="danger">
+		<section class="settings-section">
+			<div class="settings-card settings-card--danger">
+				<h3 class="settings-danger-title">Purge Failed Posts</h3>
+				<p class="settings-danger-desc">
+					Permanently delete all posts with a <span class="badge badge--error">failed</span> status.
+					This action cannot be undone.
+				</p>
+				<div class="danger-confirm">
+					<Field>
+						<FieldLabel for="confirm-purge">Type <code>PURGE</code> to confirm</FieldLabel>
+						<Input
+							id="confirm-purge"
+							class="max-w-80"
+							type="text"
+							bind:value={confirmPurgeText}
+							placeholder="PURGE"
+						/>
+					</Field>
+				</div>
+				<Button variant="destructive"
+				onclick={purgeFailedPosts}
+				disabled={confirmPurgeText !== 'PURGE'}
+			>
+					Purge Failed Posts
+				</Button>
+			</div>
+
+			<div class="settings-card settings-card--danger">
+				<h3 class="settings-danger-title">Delete All Schedules</h3>
+				<p class="settings-danger-desc">
+					Remove all scheduled posts including pending, processing, and failed entries.
+					This action cannot be undone.
+				</p>
+				<div class="danger-confirm">
+					<Field>
+						<FieldLabel for="confirm-delete">Type <code>DELETE ALL</code> to confirm</FieldLabel>
+						<Input
+							id="confirm-delete"
+							class="max-w-80"
+							type="text"
+							bind:value={confirmDeleteText}
+							placeholder="DELETE ALL"
+						/>
+					</Field>
+				</div>
+				<Button variant="destructive"
+				onclick={deleteAllSchedules}
+				disabled={confirmDeleteText !== 'DELETE ALL'}
+			>
+					Delete All Schedules
+				</Button>
+			</div>
+		</section>
+	</Tabs.Content>
+</Tabs.Root>
 
 <style>
-	/* ── Settings tabs ── */
-	.settings-tabs {
-		display: flex;
-		gap: var(--space-2xs);
-		border-bottom: var(--rule-default);
-		margin-bottom: var(--space-lg);
-	}
-
-	.settings-tab {
-		font-family: var(--font-body);
-		font-size: var(--text-sm);
-		font-weight: 500;
-		color: var(--color-muted);
-		background: none;
-		border: none;
-		padding: var(--space-sm) var(--space-md);
-		cursor: pointer;
-		transition: color var(--dur-short) var(--ease-out);
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-	}
-
-	.settings-tab:hover {
-		color: var(--color-ink);
-	}
-
-	.settings-tab.is-active {
-		color: var(--color-ink);
-		border-bottom-color: var(--color-accent);
-	}
-
 	/* ── Settings sections ── */
 	.settings-section {
 		margin-bottom: var(--space-xl);
@@ -502,68 +469,11 @@
 		gap: var(--space-md);
 	}
 
-	/* ── Toggle switch ── */
-	.form-toggle {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		font-size: var(--text-sm);
-		cursor: pointer;
-		user-select: none;
-	}
-
-	.form-toggle input {
-		position: absolute;
-		opacity: 0;
-		width: 0;
-		height: 0;
-	}
-
-	.form-toggle-track {
-		position: relative;
-		width: 2.5rem;
-		height: 1.375rem;
-		background: var(--color-rule-2);
-		border-radius: var(--radius-pill);
-		transition: background-color var(--dur-short) var(--ease-out);
-		flex-shrink: 0;
-	}
-
-	.form-toggle-track::after {
-		content: '';
-		position: absolute;
-		inset-block-start: 2px;
-		inset-inline-start: 2px;
-		width: calc(1.375rem - 4px);
-		height: calc(1.375rem - 4px);
-		background: white;
-		border-radius: 50%;
-		transition: transform var(--dur-short) var(--ease-out);
-		box-shadow: var(--shadow-whisper);
-	}
-
-	.form-toggle input:checked + .form-toggle-track {
-		background: var(--color-accent);
-	}
-
-	.form-toggle input:checked + .form-toggle-track::after {
-		transform: translateX(calc(1.125rem));
-	}
-
-	.form-toggle input:focus-visible + .form-toggle-track {
-		outline: 2px solid var(--color-focus);
-		outline-offset: 2px;
-	}
-
 	/* ── Input with reveal button ── */
 	.input-reveal {
 		display: flex;
 		gap: var(--space-2xs);
 		align-items: center;
-	}
-
-	.input-reveal .form-input {
-		flex: 1;
 	}
 
 	/* ── Save actions ── */
@@ -619,10 +529,6 @@
 		flex-direction: column;
 		gap: var(--space-2xs);
 		margin-top: var(--space-xs);
-	}
-
-	.danger-confirm .form-input {
-		max-width: 20rem;
 	}
 
 	/* ── Responsive ── */

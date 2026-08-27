@@ -5,6 +5,17 @@
  * nav: N9 Edge-aligned minimal · footer: Ft2 Inline rule single line
  */
 
+/* bits-ui/shadcn data-state variants — the installed ui components style
+ * with `data-checked:`, `data-open:`, … but Tailwind v4 only emits those
+ * utilities when the variants are declared. Without this block the Switch
+ * track rendered transparent and thumbs never slid. */
+@custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-unchecked (&[data-state="unchecked"]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-open (&[data-state="open"], &[data-open]);
+@custom-variant data-closed (&[data-state="closed"], &[data-closed]);
+@custom-variant data-active (&[data-state="active"], &[data-active]);
+
 @theme {
 	/* ── Fonts ── */
 	--font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -62,6 +73,27 @@
 	--color-warning-text: var(--color-warning-ink);
 	--color-muted-bg: var(--color-paper-3);
 	--color-success-bg: var(--color-success-dim);
+
+	/* ── shadcn component palette ── */
+	/* The installed ui/* components style with shadcn utility names
+	 * (bg-input, ring-ring, text-muted-foreground, bg-destructive, …).
+	 * Tailwind only emits those utilities when the color name exists in
+	 * @theme — defining them on :root alone is not enough. Without these,
+	 * the Switch track rendered transparent and focus rings were missing. */
+	--color-background: var(--color-paper);
+	--color-foreground: var(--color-ink);
+	--color-card: var(--color-paper-2);
+	--color-card-foreground: var(--color-ink);
+	--color-popover: var(--color-paper);
+	--color-popover-foreground: var(--color-ink);
+	--color-primary-foreground: var(--color-accent-ink);
+	--color-secondary-foreground: var(--color-ink);
+	--color-muted-foreground: var(--color-muted);
+	--color-accent-foreground: var(--color-ink);
+	--color-destructive: var(--color-error);
+	--color-destructive-foreground: var(--color-error-ink);
+	--color-input: var(--color-rule);
+	--color-ring: var(--color-focus);
 
 	/* ── Additional radii ── */
 	--radius-2xs: 2px;
