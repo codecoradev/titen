@@ -106,10 +106,10 @@ pub async fn get_trends(
         .into_iter()
         .filter_map(|m| {
             let text = m.text?;
+            // Tolerant parse: legacy rows may hold `+0000` or space-format
+            // timestamps that strict RFC3339 parsing silently drops.
             let ts: Option<String> = m.mentioned_at.or(Some(m.fetched_at));
-            let at = ts
-                .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
-                .map(|d| d.with_timezone(&chrono::Utc))?;
+            let at = ts.and_then(|s| titen_core::time::parse_utc(&s))?;
             // exclude signals older than the analysis horizon
             if now.signed_duration_since(at).num_minutes() > horizon_minutes {
                 return None;

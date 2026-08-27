@@ -27,6 +27,7 @@ pub mod sentiment;
 pub mod storage;
 pub mod store;
 pub mod threads_client;
+pub mod time;
 pub mod trend;
 
 pub use crypto::Cipher;
@@ -36,3 +37,4 @@ pub use sentiment::{KeywordEngine, SentimentEngine, StubEngine, build_engine, co
 pub use storage::{S3Storage, Storage};
 pub use store::Store;
 pub use threads_client::{ContainerParams, SearchParams, ThreadsClient};
+pub use time::{parse_utc, to_rfc3339_utc};
