@@ -3,11 +3,10 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PostDetail from '$lib/components/PostDetail.svelte';
-	import { listPosts, deletePost, getPostInsights, listAccounts } from '$lib/api';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import { listPosts, deletePost, listAccounts } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
-	import * as Table from '$lib/components/ui/table';
-	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import { formatDateShort } from '$lib/tz';
 	import { toast } from '$lib/toast.svelte';
 	import type { Post, Account } from '$lib/types';
@@ -18,9 +17,6 @@
 	let accounts = $state<Account[]>([]);
 	let filterAccount = $state('');
 	let filterStatus = $state('');
-	let expandedPostId = $state<string | null>(null);
-	let insights: Record<string, any> = $state({});
-	let insightsLoading = $state<string | null>(null);
 	let confirmDelete = $state<{ open: boolean; post: Post | null }>({ open: false, post: null });
 
 	// Detail modal
@@ -68,26 +64,6 @@
 		return accounts.find((a) => a.id === accountId)?.username ?? accountId.slice(0, 8);
 	}
 
-	async function toggleInsights(postId: string) {
-		if (expandedPostId === postId) {
-			expandedPostId = null;
-			return;
-		}
-		expandedPostId = postId;
-		if (!insights[postId]) {
-			insightsLoading = postId;
-			try {
-				const res = await getPostInsights(postId);
-				insights[postId] = res;
-			} catch {
-				toast('Failed to load insights', 'error');
-				expandedPostId = null;
-			} finally {
-				insightsLoading = null;
-			}
-		}
-	}
-
 	async function handleDelete() {
 		if (!confirmDelete.post) return;
 		try {
@@ -104,6 +80,14 @@
 	$effect(() => {
 		if (!loaded) loadPosts();
 	});
+
+	const columns = [
+		{ key: 'caption', label: 'Content', class: 'truncate truncate-mw-40' },
+		{ key: 'account', label: 'Account' },
+		{ key: 'media_type', label: 'Type', hideOnMobile: true },
+		{ key: 'status', label: 'Status' },
+		{ key: 'published_at', label: 'Published', hideOnMobile: true },
+	];
 </script>
 
 <PageHeader title="Posts" description="Manage and monitor your Threads content.">
@@ -139,64 +123,31 @@
 </PageHeader>
 
 <div class="data-table-wrap">
-	{#if loading}
-		<Table.Root>
-			<Table.Header><Table.Row><Table.Head>Content</Table.Head><Table.Head>Account</Table.Head><Table.Head class="hidden md:table-cell">Type</Table.Head><Table.Head>Status</Table.Head><Table.Head class="hidden md:table-cell">Published</Table.Head><Table.Head>Actions</Table.Head></Table.Row></Table.Header>
-			<Table.Body>
-				{#each Array(4) as _}
-					<Table.Row>
-						<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-							<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-							<Table.Cell class="hidden md:table-cell"><Skeleton class="h-4 w-full" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-4 w-full" /></Table.Cell>
-					</Table.Row>
-				{/each}
-			</Table.Body>
-		</Table.Root>
-	{:else if filtered.length === 0}
-		<div class="empty-state">
-			<p class="empty-state-title">No posts yet</p>
-			<p class="empty-state-desc">Posts will appear here once you publish content.</p>
-		</div>
-	{:else}
-		<Table.Root>
-			<Table.Header>
-				<Table.Row>
-					<Table.Head>Content</Table.Head>
-					<Table.Head>Account</Table.Head>
-					<Table.Head class="hidden md:table-cell">Type</Table.Head>
-					<Table.Head>Status</Table.Head>
-					<Table.Head class="hidden md:table-cell">Published</Table.Head>
-					<Table.Head>Actions</Table.Head>
-				</Table.Row>
-			</Table.Header>
-			<Table.Body>
-				{#each filtered as post (post.id)}
-					<Table.Row class="row-clickable" onclick={() => openDetail(post)} role="button" tabindex={0} onkeydown={(e) => e.key === 'Enter' && openDetail(post)}>
-						<Table.Cell class="truncate truncate-mw-40">
-							{post.caption ? (post.caption.length > 40 ? post.caption.slice(0, 40) + '…' : post.caption) : '(no caption)'}
-						</Table.Cell>
-						<Table.Cell><span style="color:var(--color-muted);">@{getAccountUsername(post.account_id)}</span></Table.Cell>
-						<Table.Cell class="hidden md:table-cell">{post.media_type}</Table.Cell>
-						<Table.Cell><StatusBadge status={post.status} /></Table.Cell>
-						<Table.Cell class="hidden md:table-cell"><span class="tabular-nums">{formatDate(post.published_at)}</span></Table.Cell>
-						<Table.Cell onclick={(e) => e.stopPropagation()}>
-							<div class="row-gap-xs">
-								<Button variant="outline" size="sm" onclick={() => openDetail(post)}>Detail</Button>
-								<Button variant="ghost" size="sm" onclick={() => (confirmDelete = { open: true, post })}>
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm-danger">
-											<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
-									</svg>
-								</Button>
-							</div>
-						</Table.Cell>
-					</Table.Row>
-				{/each}
-			</Table.Body>
-		</Table.Root>
-	{/if}
+	<DataTable {columns} rows={filtered} {loading} emptyTitle="No posts yet" emptyDesc="Posts will appear here once you publish content." onrowclick={openDetail}>
+		{#snippet cell(row: Post, key: string)}
+			{#if key === 'caption'}
+				{row.caption ? (row.caption.length > 40 ? row.caption.slice(0, 40) + '…' : row.caption) : '(no caption)'}
+			{:else if key === 'account'}
+				<span style="color:var(--color-muted);">@{getAccountUsername(row.account_id)}</span>
+			{:else if key === 'status'}
+				<StatusBadge status={row.status} />
+			{:else if key === 'published_at'}
+				<span class="tabular-nums">{formatDate(row.published_at)}</span>
+			{:else}
+				{row[key as keyof Post] ?? '—'}
+			{/if}
+		{/snippet}
+		{#snippet actions(row: Post)}
+			<div class="row-gap-xs">
+				<Button variant="outline" size="sm" onclick={() => openDetail(row)}>Detail</Button>
+				<Button variant="ghost" size="sm" onclick={() => (confirmDelete = { open: true, post: row })}>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm-danger">
+							<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>
+					</svg>
+				</Button>
+			</div>
+		{/snippet}
+	</DataTable>
 </div>
 
 <!-- Post Detail Modal -->
@@ -218,14 +169,3 @@
 <svelte:window onkeydown={(e) => {
 	if (e.key === 'Escape' && detailPost) closeDetail();
 }} />
-
-<style>
-	.row-clickable {
-		cursor: pointer;
-		transition: background-color 0.1s ease;
-	}
-
-	.row-clickable:hover {
-		background: var(--color-bg-hover, rgba(0, 0, 0, 0.03));
-	}
-</style>
