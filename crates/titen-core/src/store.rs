@@ -303,6 +303,17 @@ impl Store {
             }
         }
 
+        // 013 — canonicalize mention/comment timestamps to RFC3339 UTC
+        // (UPDATE statements; naturally idempotent, see file header)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/013_normalize_timestamps.sql"
+        )) {
+            sqlx::query(&stmt)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| TitenError::DatabaseError(format!("migration 013 failed: {e}")))?;
+        }
+
         Ok(())
     }
 
@@ -1126,14 +1137,20 @@ impl Store {
         author_user_id: Option<&str>,
         text: &str,
     ) -> Result<Comment> {
+        // Explicit canonical fetched_at so the row never depends on the
+        // space-format schema default, which breaks RFC3339 comparisons.
+        let fetched_at = chrono::Utc::now()
+            .format(crate::time::CANONICAL_FMT)
+            .to_string();
         sqlx::query(
-            "INSERT INTO comments (id, post_id, author_username, author_user_id, text) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO comments (id, post_id, author_username, author_user_id, text, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(post_id)
         .bind(author_username)
         .bind(author_user_id)
         .bind(text)
+        .bind(fetched_at)
         .execute(&self.pool)
         .await?;
 
@@ -1213,9 +1230,20 @@ impl Store {
                 ));
             }
         };
+        // Threads API timestamps arrive in mixed formats (e.g. `+0000`
+        // offsets); canonicalize so SQL comparisons against RFC3339 bounds
+        // stay correct. Unparseable values are stored as NULL — trend
+        // analysis falls back to fetched_at in that case.
+        let mentioned_at = mention
+            .mentioned_at
+            .as_deref()
+            .and_then(crate::time::to_rfc3339_utc);
+        let fetched_at = chrono::Utc::now()
+            .format(crate::time::CANONICAL_FMT)
+            .to_string();
         sqlx::query(
-            "INSERT INTO mentions (id, account_id, threads_mention_id, author_username, author_user_id, text, media_type, permalink, mentioned_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO mentions (id, account_id, threads_mention_id, author_username, author_user_id, text, media_type, permalink, mentioned_at, fetched_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(account_id, threads_mention_id) DO UPDATE SET
                author_username = excluded.author_username,
                author_user_id = excluded.author_user_id,
@@ -1223,7 +1251,7 @@ impl Store {
                media_type = excluded.media_type,
                permalink = excluded.permalink,
                mentioned_at = excluded.mentioned_at,
-               fetched_at = datetime('now')",
+               fetched_at = excluded.fetched_at",
         )
         .bind(&mention.id)
         .bind(&mention.account_id)
@@ -1233,7 +1261,8 @@ impl Store {
         .bind(&mention.text)
         .bind(&mention.media_type)
         .bind(&mention.permalink)
-        .bind(&mention.mentioned_at)
+        .bind(mentioned_at)
+        .bind(fetched_at)
         .execute(&self.pool)
         .await?;
 
