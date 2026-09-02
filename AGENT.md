@@ -1,10 +1,10 @@
-# titen — CLAUDE.md
+# titen — AGENT.md
 
 ## Project Overview
 Self-hosted Threads management platform. Rust (Axum + SQLx + SQLite), Docker-ready.
 
 ## Conventions
-- **Edition**: Rust 2024, minimum 1.88
+- **Edition**: Rust 2024, minimum 1.85
 - **Binary names**: `titen` (CLI), `titen-api` (HTTP), `titen-mcp` (MCP)
 - **Crates**: `titen-core` (domain), `titen-api` (HTTP), `titen-cli` (CLI), `titen-mcp` (MCP)
 - **DB**: SQLite via SQLx, migrations in `crates/titen-api/migrations/`

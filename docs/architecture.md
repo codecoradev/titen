@@ -25,7 +25,7 @@ Titen is a self-hosted Threads management platform built as a Rust workspace (4 
        ▼                ▼                  ▼
 ┌─────────────┐  ┌──────────────┐  ┌────────────────┐
 │  SQLite DB  │  │   Threads    │  │  S3 Storage    │
-│ (7 tables)  │  │  Graph API   │  │ (media assets) │
+│ (11 tables) │  │  Graph API   │  │ (media assets) │
 │             │  │              │  │                │
 │ accounts    │  │ - Publish    │  │ - Upload       │
 │ posts       │  │ - Replies    │  │ - Retrieve     │
@@ -36,6 +36,11 @@ Titen is a self-hosted Threads management platform built as a Rust workspace (4 
 │ media_assets│  │              │  │                │
 │ rate_       │  │              │  │                │
 │   tracking  │  │              │  │                │
+│ mentions    │  │              │  │                │
+│ app_settings│  │              │  │                │
+│ sessions    │  │              │  │                │
+│ _encryption_│  │              │  │                │
+│   meta      │  │              │  │                │
 └─────────────┘  └──────────────┘  └────────────────┘
 ```
 
