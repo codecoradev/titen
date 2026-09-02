@@ -70,6 +70,7 @@ async fn create_test_schedule(store: &Store, id: &str, account_id: &str) {
         scheduled_at: "2026-12-31T10:00:00Z".to_string(),
         location_id: None,
         auto_approve: true,
+        reply_to_id: None,
     };
     store
         .create_schedule(id, &input)
@@ -344,6 +345,7 @@ async fn test_approve_draft_schedule() {
         scheduled_at: "2026-12-31T10:00:00Z".to_string(),
         location_id: None,
         auto_approve: false,
+        reply_to_id: None,
     };
     let sched = store
         .create_schedule("sched-1", &input)
@@ -373,6 +375,7 @@ async fn test_reject_draft_schedule() {
         scheduled_at: "2026-12-31T10:00:00Z".to_string(),
         location_id: None,
         auto_approve: false,
+        reply_to_id: None,
     };
     store
         .create_schedule("sched-1", &input)

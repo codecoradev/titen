@@ -189,7 +189,8 @@ fn tools_list() -> serde_json::Value {
                         "account_id": { "type": "string", "description": "Account ID" },
                         "caption": { "type": "string", "description": "Post caption" },
                         "scheduled_at": { "type": "string", "description": "ISO 8601 datetime" },
-                        "media_type": { "type": "string", "description": "Media type (TEXT/IMAGE)" }
+                        "media_type": { "type": "string", "description": "Media type (TEXT/IMAGE)" },
+                        "reply_to_id": { "type": "string", "description": "Threads post ID to reply to (TEXT schedules only; publishes as a reply instead of a root post)" }
                     },
                     "required": ["account_id", "caption", "scheduled_at"]
                 }
@@ -616,6 +617,22 @@ fn handle_tool_call(
                 .and_then(|v| v.as_str())
                 .unwrap_or("TEXT");
 
+            // #232: optional reply target — TEXT-only, validated like the REST route.
+            let reply_to_id = args
+                .get("reply_to_id")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            if let Some(ref _r) = reply_to_id {
+                if media_type != "TEXT" {
+                    return Ok(json!({
+                        "error": format!("reply_to_id requires media_type TEXT, got {media_type}"),
+                        "code": "INVALID_REPLY_TO_ID"
+                    }));
+                }
+            }
+
             let input = titen_core::models::CreateSchedule {
                 account_id: account_id.to_string(),
                 caption: Some(caption.to_string()),
@@ -628,6 +645,7 @@ fn handle_tool_call(
                 scheduled_at: scheduled_at.to_string(),
                 location_id: None,
                 auto_approve: false,
+                reply_to_id,
             };
 
             let id = uuid::Uuid::now_v7().to_string();

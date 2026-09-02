@@ -249,39 +249,58 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             continue;
         }
 
-        // Publish based on media type
-        let result = match schedule.media_type.as_str() {
-            "TEXT" => {
-                let caption = schedule.caption.as_deref().unwrap_or("");
-                match client
-                    .publish_text(&account, caption, schedule.location_id.as_deref())
-                    .await
-                {
-                    Ok(post_id) => {
-                        let _ = store.track_rate(&schedule.account_id, "post").await;
-                        Ok(serde_json::json!({ "threads_post_id": post_id }))
-                    }
-                    Err(e) => Err(e.to_string()),
-                }
+        // Reply schedules (#232): publish via the reply path instead of a
+        // root-level post. Threads replies are TEXT-only in our client, so
+        // anything else is a hard error (fail the schedule, never silently
+        // downgrade to a root post). Produces the same result envelope as the
+        // media-type match below so the shared bookkeeping handler applies.
+        let result = if let Some(reply_to) = schedule
+            .reply_to_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if schedule.media_type != "TEXT" {
+                let _ = store
+                    .update_schedule_status(
+                        &schedule.id,
+                        "failed",
+                        None,
+                        Some(&format!(
+                            "reply_to_id requires media_type TEXT, got {}",
+                            schedule.media_type
+                        )),
+                    )
+                    .await;
+                error!(
+                    "Schedule {} failed: reply_to_id with non-TEXT media type",
+                    schedule.id
+                );
+                continue;
             }
-            "IMAGE" => {
-                let urls: Vec<String> = schedule
-                    .media_urls
-                    .as_ref()
-                    .and_then(|u| serde_json::from_str(u).ok())
-                    .unwrap_or_default();
-                let image_url = urls.first().cloned().unwrap_or_default();
-                if image_url.is_empty() {
-                    Err("No image URL provided".to_string())
-                } else {
+            match client
+                .create_reply(
+                    &account,
+                    reply_to,
+                    schedule.caption.as_deref().unwrap_or(""),
+                )
+                .await
+            {
+                Ok(reply_id) => {
+                    let _ = store.track_rate(&schedule.account_id, "post").await;
+                    Ok(serde_json::json!({
+                        "threads_post_id": reply_id,
+                        "reply_to_id": reply_to,
+                    }))
+                }
+                Err(e) => Err(format!("Reply publish failed: {e}")),
+            }
+        } else {
+            match schedule.media_type.as_str() {
+                "TEXT" => {
+                    let caption = schedule.caption.as_deref().unwrap_or("");
                     match client
-                        .publish_image(
-                            &account,
-                            schedule.caption.as_deref(),
-                            &image_url,
-                            None,
-                            schedule.location_id.as_deref(),
-                        )
+                        .publish_text(&account, caption, schedule.location_id.as_deref())
                         .await
                     {
                         Ok(post_id) => {
@@ -291,70 +310,24 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                         Err(e) => Err(e.to_string()),
                     }
                 }
-            }
-            "VIDEO" => {
-                let urls: Vec<String> = schedule
-                    .media_urls
-                    .as_ref()
-                    .and_then(|u| serde_json::from_str(u).ok())
-                    .unwrap_or_default();
-                let video_url = urls.first().cloned().unwrap_or_default();
-                if video_url.is_empty() {
-                    Err("No video URL provided".to_string())
-                } else {
-                    match client
-                        .publish_video(
-                            &account,
-                            schedule.caption.as_deref(),
-                            &video_url,
-                            schedule.location_id.as_deref(),
-                        )
-                        .await
-                    {
-                        Ok(post_id) => {
-                            let _ = store.track_rate(&schedule.account_id, "post").await;
-                            Ok(serde_json::json!({ "threads_post_id": post_id }))
-                        }
-                        Err(e) => Err(e.to_string()),
-                    }
-                }
-            }
-            "CAROUSEL" => {
-                let urls: Vec<String> = schedule
-                    .media_urls
-                    .as_ref()
-                    .and_then(|u| serde_json::from_str(u).ok())
-                    .unwrap_or_default();
-                if urls.len() < 2 || urls.len() > 20 {
-                    Err(format!(
-                        "CAROUSEL requires 2-20 image_urls, got {}",
-                        urls.len()
-                    ))
-                } else {
-                    // Create child containers, then publish carousel
-                    let mut children_ids = Vec::with_capacity(urls.len());
-                    let mut had_error = None;
-                    for url in &urls {
+                "IMAGE" => {
+                    let urls: Vec<String> = schedule
+                        .media_urls
+                        .as_ref()
+                        .and_then(|u| serde_json::from_str(u).ok())
+                        .unwrap_or_default();
+                    let image_url = urls.first().cloned().unwrap_or_default();
+                    if image_url.is_empty() {
+                        Err("No image URL provided".to_string())
+                    } else {
                         match client
-                            .create_carousel_item(&account, "IMAGE", Some(url.as_str()), None, None)
-                            .await
-                        {
-                            Ok(id) => children_ids.push(id),
-                            Err(e) => {
-                                error!(
-                                    "Partial carousel failure after {n} children. \
-                                     Orphaned children IDs (manual cleanup needed): {children_ids:?}",
-                                    n = children_ids.len()
-                                );
-                                had_error = Some(e.to_string());
-                                break;
-                            }
-                        }
-                    }
-                    match had_error {
-                        Some(e) => Err(format!("Failed to create carousel item: {e}")),
-                        None => match client
-                            .publish_carousel(&account, schedule.caption.as_deref(), &children_ids)
+                            .publish_image(
+                                &account,
+                                schedule.caption.as_deref(),
+                                &image_url,
+                                None,
+                                schedule.location_id.as_deref(),
+                            )
                             .await
                         {
                             Ok(post_id) => {
@@ -362,11 +335,95 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                                 Ok(serde_json::json!({ "threads_post_id": post_id }))
                             }
                             Err(e) => Err(e.to_string()),
-                        },
+                        }
                     }
                 }
+                "VIDEO" => {
+                    let urls: Vec<String> = schedule
+                        .media_urls
+                        .as_ref()
+                        .and_then(|u| serde_json::from_str(u).ok())
+                        .unwrap_or_default();
+                    let video_url = urls.first().cloned().unwrap_or_default();
+                    if video_url.is_empty() {
+                        Err("No video URL provided".to_string())
+                    } else {
+                        match client
+                            .publish_video(
+                                &account,
+                                schedule.caption.as_deref(),
+                                &video_url,
+                                schedule.location_id.as_deref(),
+                            )
+                            .await
+                        {
+                            Ok(post_id) => {
+                                let _ = store.track_rate(&schedule.account_id, "post").await;
+                                Ok(serde_json::json!({ "threads_post_id": post_id }))
+                            }
+                            Err(e) => Err(e.to_string()),
+                        }
+                    }
+                }
+                "CAROUSEL" => {
+                    let urls: Vec<String> = schedule
+                        .media_urls
+                        .as_ref()
+                        .and_then(|u| serde_json::from_str(u).ok())
+                        .unwrap_or_default();
+                    if urls.len() < 2 || urls.len() > 20 {
+                        Err(format!(
+                            "CAROUSEL requires 2-20 image_urls, got {}",
+                            urls.len()
+                        ))
+                    } else {
+                        // Create child containers, then publish carousel
+                        let mut children_ids = Vec::with_capacity(urls.len());
+                        let mut had_error = None;
+                        for url in &urls {
+                            match client
+                                .create_carousel_item(
+                                    &account,
+                                    "IMAGE",
+                                    Some(url.as_str()),
+                                    None,
+                                    None,
+                                )
+                                .await
+                            {
+                                Ok(id) => children_ids.push(id),
+                                Err(e) => {
+                                    error!(
+                                        "Partial carousel failure after {n} children. \
+                                     Orphaned children IDs (manual cleanup needed): {children_ids:?}",
+                                        n = children_ids.len()
+                                    );
+                                    had_error = Some(e.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                        match had_error {
+                            Some(e) => Err(format!("Failed to create carousel item: {e}")),
+                            None => match client
+                                .publish_carousel(
+                                    &account,
+                                    schedule.caption.as_deref(),
+                                    &children_ids,
+                                )
+                                .await
+                            {
+                                Ok(post_id) => {
+                                    let _ = store.track_rate(&schedule.account_id, "post").await;
+                                    Ok(serde_json::json!({ "threads_post_id": post_id }))
+                                }
+                                Err(e) => Err(e.to_string()),
+                            },
+                        }
+                    }
+                }
+                _ => Err(format!("Unsupported media type: {}", schedule.media_type)),
             }
-            _ => Err(format!("Unsupported media type: {}", schedule.media_type)),
         };
 
         match result {

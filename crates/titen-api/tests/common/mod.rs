@@ -68,7 +68,9 @@ pub fn test_app(state: AppState) -> Router {
         )
         .route(
             "/api/schedules/{id}",
-            put(routes::schedules::update_schedule).delete(routes::schedules::delete_schedule),
+            put(routes::schedules::update_schedule)
+                .patch(routes::schedules::patch_schedule)
+                .delete(routes::schedules::delete_schedule),
         )
         .route(
             "/api/schedules/upcoming",

@@ -121,6 +121,9 @@ pub struct Schedule {
     pub approved_at: Option<String>,
     /// Optional Threads location ID for location tagging.
     pub location_id: Option<String>,
+    /// When set, the scheduler publishes this schedule as a reply to that
+    /// Threads post ID instead of a root-level post (TEXT only). See #232.
+    pub reply_to_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -139,6 +142,9 @@ pub struct CreateSchedule {
     /// Default: false — all new schedules require human approval.
     #[serde(default)]
     pub auto_approve: bool,
+    /// Publish as a reply to this Threads post ID (TEXT media type only).
+    #[serde(default)]
+    pub reply_to_id: Option<String>,
 }
 
 /// Partial update for a schedule (HITL edit before approval).
@@ -150,6 +156,7 @@ pub struct UpdateSchedule {
     pub media_urls: Option<Vec<String>>,
     pub scheduled_at: Option<String>,
     pub location_id: Option<String>,
+    pub reply_to_id: Option<String>,
 }
 
 // ─── Comment ──────────────────────────────────────────────
