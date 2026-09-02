@@ -14,10 +14,19 @@
 
 		const url = new URL($page.url);
 		const code = url.searchParams.get('code');
+		const stateToken = url.searchParams.get('state');
 
 		if (!code) {
 			status = 'error';
 			errorMessage = 'No authorization code received from Threads.';
+			return;
+		}
+		if (!stateToken) {
+			// #237: callbacks without a state token are rejected — they were
+			// never initiated by this instance (login CSRF vector).
+			status = 'error';
+			errorMessage =
+				'Missing OAuth state parameter. Please restart the connection from the Accounts page.';
 			return;
 		}
 
@@ -42,6 +51,7 @@
 			await oauthExchange({
 				code,
 				redirect_uri: redirectUri,
+				state: stateToken,
 			});
 			status = 'success';
 		} catch (e: unknown) {

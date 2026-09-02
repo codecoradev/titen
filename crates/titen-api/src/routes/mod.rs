@@ -4,6 +4,7 @@ pub mod auth;
 pub mod comments;
 pub mod media;
 pub mod oauth;
+pub mod oauth_state;
 pub mod posts;
 pub mod schedules;
 pub mod settings;

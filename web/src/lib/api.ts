@@ -429,9 +429,13 @@ export const getAccountInsights = (accountId: string, params?: {
 };
 
 // ── OAuth ──
+export const createOAuthState = (): Promise<{ state: string }> =>
+	request<{ state: string }>('/oauth/state', { method: 'POST' });
+
 export const oauthExchange = (data: {
 	code: string;
 	redirect_uri: string;
+	state: string;
 	app_id?: string;
 	app_secret?: string;
 }): Promise<Account> =>

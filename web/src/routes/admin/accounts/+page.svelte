@@ -161,16 +161,19 @@
 					toast('Set App Secret in Settings first', 'error');
 					return;
 				}
-				// Server returns ready-to-use authorize URL
+				// #237 CSRF protection: issue a one-time state token and append it
+				// to the authorize URL. Threads echoes it back on the callback,
+				// where the exchange endpoint validates + consumes it.
+				const { state } = await createOAuthState();
 				if (config.authorize_url) {
-					window.location.href = config.authorize_url;
+					window.location.href = `${config.authorize_url}&state=${encodeURIComponent(state)}`;
 					return;
 				}
 				// Fallback: construct authorize URL client-side using known redirect URI.
 				// This handles cases where the backend cannot derive redirect_uri
 				// (e.g. Host header is internal Docker hostname).
 				const redirectUri = `${window.location.origin}/auth/callback`;
-				const authorizeUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(config.app_id)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish,threads_manage_replies,threads_manage_mentions,threads_keyword_search,threads_profile_discovery,threads_share_to_instagram,threads_location_tagging&response_type=code`;
+				const authorizeUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(config.app_id)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=threads_basic,threads_content_publish,threads_manage_replies,threads_manage_mentions,threads_keyword_search,threads_profile_discovery,threads_share_to_instagram,threads_location_tagging&response_type=code&state=${encodeURIComponent(state)}`;
 				window.location.href = authorizeUrl;
 				return;
 			}
