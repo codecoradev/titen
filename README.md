@@ -41,11 +41,11 @@ No subscription. No vendor lock-in. Your tokens stay on your machine, encrypted 
 | `titen-core` | Domain logic: models, SQLite store, Threads API client, sentiment trait, scheduler, S3 storage, AES-256-GCM encryption |
 | `titen-api` | Axum HTTP server: REST API, API key auth, CORS, rate limiting |
 | `titen-cli` | Clap CLI: all operations via the HTTP API |
-| `titen-mcp` | MCP stdio server: 17 tools for AI agent integration |
+| `titen-mcp` | MCP stdio server: 29 tools for AI agent integration |
 
-8 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`, `_encryption_meta`.
+11 SQLite tables: `accounts`, `posts`, `schedules`, `comments`, `analytics_snap`, `media_assets`, `rate_tracking`, `_encryption_meta`, `mentions`, `app_settings`, `sessions`.
 
-4 migrations: `001_initial` (schema), `002_drop_refresh_token`, `003_add_app_secret`, `004_encrypt_tokens` (encrypts existing plaintext tokens on startup).
+14 migrations: `001_initial` (schema), `002_drop_refresh_token`, `003_add_app_secret`, `004_encrypt_tokens` (encrypts existing plaintext tokens on startup), `005_hitl_scheduling`, `006_mentions_table`, `007_media_urls_doc`, `008_comment_reply_status`, `009_app_settings`, `010_location_tagging`, `011_sessions_table`, `012_post_permalink`, `013_normalize_timestamps`, `014_schedule_reply_to`.
 
 ## Quick Start
 
@@ -103,6 +103,15 @@ All config via environment variables:
 | `TITEN_S3_ACCESS_KEY` | *(none)* | S3 access key |
 | `TITEN_S3_SECRET_KEY` | *(none)* | S3 secret key |
 | `TITEN_S3_PUBLIC_URL` | *(none)* | Public URL for uploaded media |
+| `TITEN_CORS_ORIGINS` | *(none)* | Comma-separated CORS origins for cross-origin API access |
+| `TITEN_OAUTH_REDIRECT_URI` | *(none)* | Explicit OAuth redirect URI override (otherwise derived from `APP_URL`) |
+| `TITEN_ALLOWED_HOSTS` | *(none)* | Comma-separated trusted hostnames for Host-header redirect derivation |
+| `APP_URL` | `http://localhost:3000` | Public URL of the web frontend (used for OAuth redirect URIs) |
+| `WEB_PORT` | `3000` | Port published to the host for the web container (Docker Compose) |
+| `RUST_LOG` | `titen_api=info,tower_http=info` | Rust log level |
+| `TITEN_COOKIE_SECURE` | `false` | Adds `Secure` flag to the auth cookie (auto-detected behind a reverse proxy) |
+| `TITEN_ENV` | *(none)* | Set to `prod`/`production` to enforce strict security guards (API key + encryption required, Swagger disabled) |
+| `TITEN_ENABLE_SWAGGER` | *(none)* | Explicitly enable Swagger UI in production (disabled by default there) |
 
 ## API Reference
 
@@ -123,6 +132,11 @@ X-API-Key: your-key-here
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/health` | None | Server health check |
+| GET | `/api/health` | None | Server health check (API-prefixed alias) |
+| GET | `/ready` | None | Readiness check (verifies DB connectivity) |
+| GET | `/metrics` | API key* | Prometheus metrics |
+
+*`/metrics` requires auth unless `TITEN_PUBLIC_METRICS=true` is set.
 
 ### Accounts
 
@@ -131,7 +145,7 @@ X-API-Key: your-key-here
 | GET | `/api/accounts` | List all accounts | — |
 | POST | `/api/accounts` | Create an account | — |
 | PUT | `/api/accounts/{id}` | Update an account | — |
-| DELETE | `/api/accounts/{id}` | Delete an account | — |
+| DELETE | `/api/accounts/{id}` | Delete an account (requires `?confirm=true`; permanently removes the account and ALL its posts, schedules, media, mentions and analytics) | `?confirm=true` |
 | POST | `/api/accounts/{id}/refresh-token` | Refresh OAuth token | — |
 | GET | `/api/accounts/{id}/profile` | Fetch Threads profile (`/me`) | — |
 | GET | `/api/accounts/{id}/publishing-limit` | Get remaining daily limits | — |
@@ -176,6 +190,12 @@ X-API-Key: your-key-here
 |---|---|---|---|
 | GET | `/api/analytics/posts` | Post analytics summary | `?account_id=&from=&to=` |
 | GET | `/api/analytics/posts/{id}/trend` | Time-series engagement trend | — |
+
+### Insights
+
+| Method | Path | Description | Query Params |
+|---|---|---|---|
+| GET | `/api/insights/trends` | Aggregate engagement trends | `?account_id=&horizon_minutes=` |
 
 ### Media
 

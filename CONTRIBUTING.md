@@ -211,7 +211,7 @@ Every PR to `develop` triggers the CodeCora review CI job:
 Run Cora locally **before pushing** to catch issues early:
 
 ```bash
-# Review your uncommitted changes
+# Review the last commit
 cora review --base HEAD~1 --format text
 
 # Review against develop
