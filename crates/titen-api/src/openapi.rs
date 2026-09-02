@@ -73,6 +73,7 @@ use titen_core::models::{
         crate::routes::schedules::approve_schedule,
         crate::routes::schedules::reject_schedule,
         crate::routes::schedules::list_upcoming,
+        crate::routes::schedules::ingest_schedule,
         // Comments
         crate::routes::comments::list_comments,
         crate::routes::comments::fetch_comments,

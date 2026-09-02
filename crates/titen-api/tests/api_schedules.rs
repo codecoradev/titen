@@ -393,3 +393,97 @@ async fn patch_draft_schedule_updates_reply_to_id() {
     let body = body_to_json(resp).await;
     assert_eq!(body["data"]["reply_to_id"], "98765432109876543");
 }
+
+// ─── #242: agent/CI ingest endpoint ─────────────────────────────────────
+
+#[tokio::test]
+async fn ingest_creates_draft_with_source() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules/ingest")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "Agent draft post",
+                "scheduled_at": "2099-07-01T09:00:00Z",
+                "source": "cmo-agent"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["status"], "draft");
+    assert_eq!(body["data"]["source"], "cmo-agent");
+}
+
+#[tokio::test]
+async fn ingest_rejects_caption_over_limit() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let long_caption = "x".repeat(501);
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules/ingest")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": long_caption,
+                "scheduled_at": "2099-07-01T09:00:00Z"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "CAPTION_TOO_LONG");
+}
+
+#[tokio::test]
+async fn ingest_rejects_invalid_reply_target() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules/ingest")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "IMAGE",
+                "caption": "bad reply",
+                "scheduled_at": "2099-07-01T09:00:00Z",
+                "reply_to_id": "123456789"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "INVALID_REPLY_TO_ID");
+}
