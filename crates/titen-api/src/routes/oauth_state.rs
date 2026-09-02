@@ -158,28 +158,31 @@ pub async fn consume_state(
     }
 }
 
-/// Validates the `state` on an exchange request WITHOUT consuming it.
+/// Validates AND consumes the `state` on an exchange request, atomically.
 /// Used for the legacy `{code, app_id, app_secret, redirect_uri}` clients:
-/// they cannot know the stored binding, so any state that exists and is
-/// unexpired is accepted (still one-time via `consume` by the web flow, still
-/// unguessable at 256-bit). Returns the error response to send on failure.
+/// they cannot know the stored binding, so any state that is unexpired and
+/// not yet consumed is accepted exactly once — the DELETE is the authority,
+/// so concurrent exchanges race on it and exactly one caller wins. Still
+/// unguessable at 256-bit. Returns the error response to send on failure.
 pub async fn validate_state_shallow(
     state: &AppState,
     token: &str,
 ) -> Result<(), (StatusCode, serde_json::Value)> {
-    let ok = state.store.oauth_state_exists(token).await.map_err(|e| {
-        warn!(target: "titen::oauth", "OAUTH_STATE_VALIDATE_FAIL store: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            serde_json::json!({
-                "error": "Failed to validate OAuth state token.",
-                "code": "STATE_STORE_FAILED"
-            }),
-        )
-    })?;
-    if ok {
-        // Consume so the same token can't be reused by another legacy call.
-        let _ = state.store.consume_any_oauth_state(token).await;
+    let consumed = state
+        .store
+        .consume_any_oauth_state(token)
+        .await
+        .map_err(|e| {
+            warn!(target: "titen::oauth", "OAUTH_STATE_VALIDATE_FAIL store: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                serde_json::json!({
+                    "error": "Failed to validate OAuth state token.",
+                    "code": "STATE_STORE_FAILED"
+                }),
+            )
+        })?;
+    if consumed {
         Ok(())
     } else {
         warn!(target: "titen::oauth", "OAUTH_STATE_REJECTED legacy invalid/missing/expired state");

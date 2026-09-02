@@ -40,7 +40,15 @@ pub async fn oauth_exchange(
     // instance. Web flow: state must be bound to the caller (consumed
     // atomically). Legacy flow (direct app credentials): any valid,
     // unexpired, unconsumed state is accepted and consumed.
-    let state_result = if input.app_id.is_none() && input.app_secret.is_none() {
+    // Empty strings are NOT "credentials supplied": a request with
+    // app_id="" would otherwise take the unbound shallow path while still
+    // exchanging with the server's stored credentials (see resolution below).
+    let has_explicit_credentials = input.app_id.as_deref().is_some_and(|id| !id.is_empty())
+        && input
+            .app_secret
+            .as_deref()
+            .is_some_and(|secret| !secret.is_empty());
+    let state_result = if !has_explicit_credentials {
         let required_key = state.api_key.clone().unwrap_or_default();
         let caller = if required_key.is_empty() {
             Some("dev".to_string())
