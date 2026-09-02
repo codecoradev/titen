@@ -108,19 +108,30 @@ OAuth is used to connect Threads accounts so the scheduler can publish posts on 
 User clicks "Connect Account" in dashboard
     │
     ▼
+Dashboard requests a one-time state token
+    │  POST /api/oauth/state
+    │  → { state: <256-bit random, bound to this admin session, TTL 10 min> }
+    │
+    ▼
 Redirect to Threads authorize URL
     │  https://threads.net/oauth/authorize
     │    ?client_id=...
     │    &redirect_uri=.../auth/callback
     │    &scope=threads_basic,threads_content_publish
     │    &response_type=code
+    │    &state=<one-time token>              ← CSRF protection (#237)
     │
     ▼
 User logs into Threads and authorizes Titen
     │
     ▼
 Threads redirects back to:
-    │  /auth/callback?code=<authorization_code>
+    │  /auth/callback?code=<authorization_code>&state=<same token>
+    │
+    ▼
+Backend validates the state token first
+    │  The exchange endpoint requires a valid, unconsumed state token bound
+    │  to the caller. Invalid/expired/replayed state → 400 INVALID_OAUTH_STATE.
     │
     ▼
 Backend exchanges code for access token

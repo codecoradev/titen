@@ -83,6 +83,89 @@ impl Store {
         }
     }
 
+    // ─── OAuth state tokens (#237 — CSRF protection) ───────────────
+
+    /// Persist a one-time OAuth state token bound to the caller's key.
+    pub async fn insert_oauth_state(
+        &self,
+        token: &str,
+        bound_key: &str,
+        expires_at_epoch: i64,
+    ) -> Result<()> {
+        sqlx::query("INSERT INTO oauth_states (token, bound_key, expires_at) VALUES (?, ?, ?)")
+            .bind(token)
+            .bind(bound_key)
+            .bind(expires_at_epoch)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Delete expired state tokens. Best-effort; called opportunistically.
+    pub async fn prune_expired_oauth_states(&self) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        sqlx::query("DELETE FROM oauth_states WHERE expires_at < ?")
+            .bind(now)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Atomically consume a state token: deletes it only when it exists,
+    /// is unexpired, AND is bound to `bound_key`. Returns true on success.
+    /// Single-use by construction (the row is deleted on first validation).
+    pub async fn consume_oauth_state(&self, token: &str, bound_key: &str) -> Result<bool> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let result = sqlx::query(
+            "DELETE FROM oauth_states WHERE token = ? AND bound_key = ? AND expires_at >= ?",
+        )
+        .bind(token)
+        .bind(bound_key)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Consume any unexpired state token regardless of binding (legacy
+    /// exchange clients that cannot know the binding). Still single-use.
+    pub async fn consume_any_oauth_state(&self, token: &str) -> Result<bool> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let result = sqlx::query("DELETE FROM oauth_states WHERE token = ? AND expires_at >= ?")
+            .bind(token)
+            .bind(now)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Check a state token exists and is unexpired, without consuming it.
+    pub async fn oauth_state_exists(&self, token: &str) -> Result<bool> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM oauth_states WHERE token = ? AND expires_at >= ?",
+        )
+        .bind(token)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count > 0)
+    }
+
     /// Count active sessions in the sessions table.
     pub async fn count_sessions(&self) -> Result<i64> {
         let row: (i64,) =
@@ -324,6 +407,21 @@ impl Store {
                 if !msg.contains("duplicate column") {
                     return Err(TitenError::DatabaseError(format!(
                         "migration 014 failed: {msg}"
+                    )));
+                }
+            }
+        }
+
+        // 015 — OAuth state tokens (#237 CSRF protection); "already exists"-tolerant like 011
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/015_oauth_state.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(format!(
+                        "migration 015 failed: {msg}"
                     )));
                 }
             }

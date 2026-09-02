@@ -15,6 +15,8 @@ use crate::server::{AppState, error_response};
 pub struct OAuthExchangeRequest {
     pub code: String,
     pub redirect_uri: String,
+    /// One-time CSRF token from `POST /api/oauth/state` (#237).
+    pub state: String,
     /// Optional — if omitted, read from app_settings DB table.
     pub app_id: Option<String>,
     /// Optional — if omitted, read from app_settings DB table (decrypted).
@@ -31,8 +33,45 @@ pub struct OAuthExchangeRequest {
 /// 5. Create account in DB
 pub async fn oauth_exchange(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(input): Json<OAuthExchangeRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // #237: CSRF protection — the code must have been initiated by this
+    // instance. Web flow: state must be bound to the caller (consumed
+    // atomically). Legacy flow (direct app credentials): any valid,
+    // unexpired, unconsumed state is accepted and consumed.
+    // Empty strings are NOT "credentials supplied": a request with
+    // app_id="" would otherwise take the unbound shallow path while still
+    // exchanging with the server's stored credentials (see resolution below).
+    let has_explicit_credentials = input.app_id.as_deref().is_some_and(|id| !id.is_empty())
+        && input
+            .app_secret
+            .as_deref()
+            .is_some_and(|secret| !secret.is_empty());
+    let state_result = if !has_explicit_credentials {
+        let required_key = state.api_key.clone().unwrap_or_default();
+        let caller = if required_key.is_empty() {
+            Some("dev".to_string())
+        } else {
+            super::oauth_state::caller_key_from_headers(&state, &headers).await
+        };
+        match caller {
+            Some(caller) => super::oauth_state::consume_state(&state, &caller, &input.state).await,
+            None => Err((
+                StatusCode::UNAUTHORIZED,
+                serde_json::json!({
+                    "error": "Invalid or missing API key",
+                    "code": "UNAUTHORIZED"
+                }),
+            )),
+        }
+    } else {
+        super::oauth_state::validate_state_shallow(&state, &input.state).await
+    };
+    if let Err((status, body)) = state_result {
+        return (status, Json(body));
+    }
+
     // Resolve app_id: prefer request field, fall back to DB
     let app_id = match input.app_id.as_deref() {
         Some(id) if !id.is_empty() => id.to_string(),
