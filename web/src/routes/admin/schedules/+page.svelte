@@ -19,6 +19,7 @@
 	import { formatDateTime, toDatetimeInput, getTimezone } from '$lib/tz';
 	import { truncate } from '$lib/format';
 	import { Button } from '$lib/components/ui/button';
+	import { Switch } from '$lib/components/ui/switch';
 	import * as Select from '$lib/components/ui/select';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
@@ -106,6 +107,7 @@
 	let modalOpen = $state(false);
 	let modalAccountId = $state('');
 	let modalScheduledAt = $state('');
+	let modalPublishNow = $state(false);
 	let modalCaption = $state('');
 	let modalMediaType = $state<'text' | 'IMAGE' | 'CAROUSEL'>('text');
 	let modalImageUrl = $state('');
@@ -201,6 +203,7 @@
 	function openCreateModal() {
 		modalAccountId = accounts.length > 0 ? accounts[0].id : '';
 		modalScheduledAt = '';
+		modalPublishNow = false;
 		modalCaption = '';
 		modalMediaType = 'text';
 		modalImageUrl = '';
@@ -225,7 +228,7 @@
 	}
 
 	async function handleCreate() {
-		if (!modalAccountId || !modalScheduledAt) {
+		if (!modalAccountId || (!modalPublishNow && !modalScheduledAt)) {
 			toast('Account and scheduled time are required', 'error');
 			return;
 		}
@@ -260,11 +263,12 @@
 			await createSchedule({
 				account_id: modalAccountId,
 				media_type: mediaType,
-				scheduled_at: new Date(modalScheduledAt).toISOString(),
+				scheduled_at: modalPublishNow ? new Date().toISOString() : new Date(modalScheduledAt).toISOString(),
 				caption: modalCaption || undefined,
-				media_urls: mediaUrlList.length > 0 ? mediaUrlList : undefined
+				media_urls: mediaUrlList.length > 0 ? mediaUrlList : undefined,
+				auto_approve: modalPublishNow || undefined
 			});
-			toast('Schedule created as draft', 'success');
+			toast(modalPublishNow ? 'Schedule created — will publish on the next scheduler tick' : 'Schedule created as draft', 'success');
 			closeCreateModal();
 			await loadData();
 		} catch (e: any) {
@@ -738,7 +742,11 @@
 		<Dialog.Content class="confirm-dialog modal-narrow" aria-describedby={undefined}>
 			<Dialog.Title class="text-base font-semibold" style="font-size:var(--text-md)">New Schedule</Dialog.Title>
 			<p class="modal-desc">
-				New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
+				{#if modalPublishNow}
+					<strong>Publish now</strong> skips the draft step — the post goes straight to pending.
+				{:else}
+					New schedules are created as <strong>draft</strong>. You'll need to approve them before they can be published.
+				{/if}
 			</p>
 			<div class="modal-stack">
 				<div class="form-group">
@@ -765,7 +773,8 @@
 							type="datetime-local"
 							id="modal-scheduled"
 							bind:value={modalScheduledAt}
-						/>
+						disabled={modalPublishNow}
+					/>
 						<span class="form-helper">Times shown in {tzLabel}</span>
 					</div>
 
@@ -782,6 +791,20 @@
 							</Select.Content>
 						</Select.Root>
 					</div>
+				</div>
+
+				<div class="form-group">
+					<div class="flex items-center gap-2">
+						<Switch id="modal-publish-now" bind:checked={modalPublishNow} />
+						<label class="form-label" for="modal-publish-now">Publish now</label>
+					</div>
+					<span class="form-helper">
+						{#if modalPublishNow}
+							Goes straight to pending — scheduler publishes on the next tick.
+						{:else}
+							Off by default — the schedule is created as a draft for your review.
+						{/if}
+					</span>
 				</div>
 
 				{#if modalMediaType === 'IMAGE'}
