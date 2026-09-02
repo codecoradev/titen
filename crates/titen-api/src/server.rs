@@ -401,6 +401,10 @@ pub async fn serve(
             post(routes::schedules::reject_schedule),
         )
         .route(
+            "/api/schedules/ingest",
+            post(routes::schedules::ingest_schedule),
+        )
+        .route(
             "/api/schedules/upcoming",
             get(routes::schedules::list_upcoming),
         )

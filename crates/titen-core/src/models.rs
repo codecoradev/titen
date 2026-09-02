@@ -124,6 +124,9 @@ pub struct Schedule {
     /// When set, the scheduler publishes this schedule as a reply to that
     /// Threads post ID instead of a root-level post (TEXT only). See #232.
     pub reply_to_id: Option<String>,
+    /// Free-form origin identifier ("cmo-agent", "ci-pipeline", ...) set via
+    /// the ingest endpoint (#242). NULL for dashboard-created schedules.
+    pub source: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -145,6 +148,26 @@ pub struct CreateSchedule {
     /// Publish as a reply to this Threads post ID (TEXT media type only).
     #[serde(default)]
     pub reply_to_id: Option<String>,
+}
+
+/// Request body for the agent/CI ingest endpoint (#242).
+///
+/// Deliberately has NO `auto_approve` field: ingested drafts NEVER skip the
+/// human review gate. `source` badges the calendar item with its origin.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct IngestSchedule {
+    pub account_id: String,
+    pub media_type: Option<String>,
+    pub caption: Option<String>,
+    pub media_urls: Option<Vec<String>>,
+    pub scheduled_at: String,
+    pub location_id: Option<String>,
+    /// Publish as a reply to this Threads post ID (TEXT media type only).
+    #[serde(default)]
+    pub reply_to_id: Option<String>,
+    /// Free-form origin identifier, e.g. "cmo-agent" or "ci-pipeline".
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 /// Partial update for a schedule (HITL edit before approval).

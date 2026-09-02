@@ -427,6 +427,21 @@ impl Store {
             }
         }
 
+        // 016 — schedule source identifier (#242 agent ingest); duplicate-column-tolerant
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/016_schedule_source.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(format!(
+                        "migration 016 failed: {msg}"
+                    )));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -946,6 +961,16 @@ impl Store {
     }
 
     pub async fn create_schedule(&self, id: &str, input: &CreateSchedule) -> Result<Schedule> {
+        self.create_schedule_with_source(id, input, None).await
+    }
+
+    /// Create a schedule with an explicit origin identifier (#242 ingest).
+    pub async fn create_schedule_with_source(
+        &self,
+        id: &str,
+        input: &CreateSchedule,
+        source: Option<&str>,
+    ) -> Result<Schedule> {
         let media_type = input.media_type.as_deref().unwrap_or("TEXT");
         let media_urls = input
             .media_urls
@@ -967,8 +992,8 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -980,6 +1005,7 @@ impl Store {
         .bind(status)
         .bind(&input.location_id)
         .bind(&input.reply_to_id)
+        .bind(source)
         .execute(&self.pool)
         .await?;
 

@@ -477,3 +477,125 @@ fn caption_too_long(caption: &str) -> (StatusCode, Json<serde_json::Value>) {
         })),
     )
 }
+
+// ─── #242: agent/CI ingest endpoint ─────────────────────────────────────
+
+#[utoipa::path(
+    post,
+    path = "/api/schedules/ingest",
+    tag = "schedules",
+    request_body = IngestSchedule,
+    responses(
+        (status = 201, description = "Draft schedule ingested", body = serde_json::Value),
+        (status = 400, description = "Validation error", body = serde_json::Value),
+        (status = 500, description = "Internal server error", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
+/// Ingest a draft schedule from an external agent or CI pipeline (#242).
+///
+/// The schedule is ALWAYS created as `draft` — the human-approval gate is
+/// non-negotiable for machine-originated content. `source` badges the item
+/// with its origin so the calendar/UI can show where it came from.
+pub async fn ingest_schedule(
+    State(state): State<AppState>,
+    Json(input): Json<IngestSchedule>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    // Auth: this route is registered inside `protected_routes` in server.rs and
+    // sits behind the shared `api_key_auth` route_layer — same as every other
+    // schedule endpoint. It has no per-handler auth extractor by design; the
+    // integration tests use the middleware-free test router on purpose.
+    use titen_core::models::CreateSchedule;
+
+    // HITL gate: machine-originated drafts never auto-approve.
+    let create = CreateSchedule {
+        account_id: input.account_id,
+        media_type: input.media_type,
+        caption: input.caption,
+        text_attachment: None,
+        media_urls: input.media_urls,
+        scheduled_at: input.scheduled_at,
+        location_id: input.location_id,
+        auto_approve: false,
+        reply_to_id: input.reply_to_id,
+    };
+
+    // Reuse the same validation surface as the manual create route by
+    // validating inline (media URLs, caption length, reply constraints).
+    if let Some(ref urls) = create.media_urls {
+        for url in urls {
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("media_urls must be absolute URLs (http/https), got: {url}"),
+                        "code": "INVALID_MEDIA_URL"
+                    })),
+                );
+            }
+        }
+    }
+    if let Some(ref c) = create.caption {
+        if c.chars().count() > 500 {
+            return caption_too_long(c);
+        }
+    }
+    if let Some(ref r) = create.reply_to_id {
+        if r.trim().is_empty() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "reply_to_id must be a non-empty Threads post ID",
+                    "code": "INVALID_REPLY_TO_ID"
+                })),
+            );
+        }
+        let media_type = create.media_type.as_deref().unwrap_or("TEXT");
+        if media_type != "TEXT" {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("reply_to_id requires media_type TEXT, got {media_type}"),
+                    "code": "INVALID_REPLY_TO_ID"
+                })),
+            );
+        }
+    }
+    // Source identifier: required-ish (agents should tag origin), capped at a
+    // sane length so it can't smuggle unbounded data.
+    let source = input
+        .source
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(src) = source {
+        if src.chars().count() > 64 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "source must be at most 64 characters",
+                    "code": "INVALID_SOURCE"
+                })),
+            );
+        }
+    }
+
+    let id = Uuid::now_v7().to_string();
+    match state
+        .store
+        .create_schedule_with_source(&id, &create, source)
+        .await
+    {
+        Ok(schedule) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "data": schedule,
+                "note": "Created as draft — human approval required before publishing."
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "INGEST_FAILED" })),
+        ),
+    }
+}

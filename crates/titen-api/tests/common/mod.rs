@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Router,
     body::Body,
-    routing::{get, put},
+    routing::{get, post, put},
 };
 use serde_json::Value;
 use sqlx::{
@@ -71,6 +71,10 @@ pub fn test_app(state: AppState) -> Router {
             put(routes::schedules::update_schedule)
                 .patch(routes::schedules::patch_schedule)
                 .delete(routes::schedules::delete_schedule),
+        )
+        .route(
+            "/api/schedules/ingest",
+            post(routes::schedules::ingest_schedule),
         )
         .route(
             "/api/schedules/upcoming",
