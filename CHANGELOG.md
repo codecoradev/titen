@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-02
+
+### Added
+
+- **Trend detection with lifecycle stages (#228)** — new `GET /api/insights/trends` endpoint (query: `window_minutes`, `windows`, `min_total`, optional `account_id`): deterministic term extraction (tokenizer + ID/EN stopwords + bigrams), time-window bucketing, velocity/acceleration scoring, and lifecycle classification (emerging / peaking / fading / stable). Default path is pure Rust with no model calls; LLM topic extraction remains an optional toggle via the `TopicExtractor` trait.
+- **DataTable adoption in Posts + StatusBadge variants (#231)** — added the missing `--color-secondary` theme token (the `secondary` Badge variant previously rendered transparent, which is why draft/approved badges looked like plain text) and complete status-to-variant mapping for post states; the Posts page now uses the shared `DataTable` component like Schedules and Analytics.
+
+### Changed
+
+- **Settings page rebuilt on shadcn ui primitives (#230)** — custom tab strip and hand-rolled inputs replaced with `Tabs`, `Switch`, and the new `ui/Input` + `Field` components; ~230 lines of scoped CSS removed with visual parity preserved. Rebuild also fixed theme glue bugs affecting all shadcn components (missing `@custom-variant` declarations, stale `data-*` selectors).
+
+### Fixed
+
+- **Mention/comment timestamps canonicalized to RFC3339 UTC (#229)** — three timestamp formats coexisted in the DB (raw Threads `+0000` strings, SQLite `datetime('now')` space format, RFC3339). The strict RFC3339 parse in the trends signal mapper silently dropped every real API mention, and horizon SQL filters lexicographically excluded space-format rows. A tolerant parser (`titen-core::time`) now accepts all legacy formats on read; new writes are canonical UTC.
+- **Carousel publishing failed with OAuthException #100 (#235)** — the scheduler built and published the carousel container immediately after creating child containers, but Threads requires containers to reach `FINISHED` before they can be referenced. `publish_carousel` now polls every child container (and the parent) until `FINISHED` (30 attempts x 3s), the same pattern `publish_video` already used.
+
 ## [0.8.0] - 2026-08-24
 
 ### Added
