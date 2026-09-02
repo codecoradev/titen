@@ -108,7 +108,7 @@ The command-line entry point, built with **Clap**.
 
 An **MCP (Model Context Protocol) stdio server** for AI agent integration.
 
-- Exposes **14 tools** covering accounts, posts, schedules, analytics, and media
+- Exposes **29 tools** covering accounts, posts, schedules, analytics, and media
 - Communicates over stdin/stdout using the MCP protocol
 - Delegates all logic to `titen-core`
 

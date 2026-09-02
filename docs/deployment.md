@@ -131,11 +131,14 @@ API_IMAGE=ghcr.io/codecoradev/titen:latest-api
 APP_URL=https://titen.yourdomain.com
 TITEN_HOST=titen.yourdomain.com
 
-# Generate API key
-TITEN_API_KEY=$(openssl rand -hex 24)
+# Generate API key (64 hex chars). Compose does NOT evaluate $(...) in .env
+# files — generate the value in your shell first and paste the literal:
+#   openssl rand -hex 32
+TITEN_API_KEY=PASTE_GENERATED_64_HEX_CHAR_VALUE_HERE
 
-# Generate encryption key for tokens at rest
-TITEN_ENCRYPTION_KEY=$(openssl rand -hex 32)
+# Generate encryption key for tokens at rest (same rule: paste the literal):
+#   openssl rand -hex 32
+TITEN_ENCRYPTION_KEY=PASTE_GENERATED_64_HEX_CHAR_VALUE_HERE
 TITEN_REQUIRE_ENCRYPTION=true
 
 # HTTPS settings
@@ -147,10 +150,16 @@ TITEN_CORS_ORIGINS=https://titen.yourdomain.com
 
 ```bash
 mkdir -p data
-chmod 777 data
+chmod 755 data
 ```
 
-SQLite needs write permission to this folder. The `chmod 777` ensures the container user can create and write the database file.
+SQLite needs write permission to this folder. The API container runs as the non-root `titen` user — if it cannot write, grant that user ownership instead of loosening permissions:
+
+```bash
+# Find the container user's UID (typically 1000):
+docker compose exec api id -u titen
+sudo chown -R 1000:1000 data
+```
 
 ### Step 5: Start the Containers
 
@@ -165,8 +174,8 @@ docker compose up -d
 # Check container status
 docker compose ps
 
-# Check health
-curl http://localhost:3000/health
+# Check health (the web container proxies /health and /api/health to the API)
+curl -f http://localhost:3000/api/health
 
 # View logs
 docker compose logs -f --tail=50
@@ -179,7 +188,8 @@ You should see both containers running. The API container should log `titen-api 
 The `./data/` directory is bind-mounted to `/data` inside the API container and stores:
 
 - **SQLite database** (`/data/titen.db`): all posts, schedules, accounts, analytics
-- **Uploaded media** (if stored locally rather than S3)
+- **Uploaded media** (media works out of the box on local storage under `/data/media`;
+  S3-compatible storage is optional — see [section 7](#7-s3-media-storage-optional))
 
 This directory **survives container restarts and updates**. Without it, all data would be lost when containers are recreated.
 
@@ -254,9 +264,15 @@ Group=titen
 # Binary location
 ExecStart=/usr/local/bin/titen serve
 
-# Environment configuration
+# Secrets live in a root-only environment file, NOT inline in the unit
+# (unit files are world-readable via /etc/systemd/system):
+#   sudo install -m 600 /dev/null /etc/titen/titen.env  then add:
+#   TITEN_API_KEY=<generate: openssl rand -hex 32>
+#   TITEN_ENCRYPTION_KEY=<generate: openssl rand -hex 32>
+EnvironmentFile=/etc/titen/titen.env
+
+# Non-secret environment configuration
 Environment="TITEN_DB_PATH=/var/lib/titen/titen.db"
-Environment="TITEN_API_KEY=your-secure-api-key-here"
 Environment="TITEN_HOST=0.0.0.0"
 Environment="TITEN_PORT=7845"
 Environment="TITEN_URL=https://titen.yourdomain.com"
@@ -309,17 +325,17 @@ Create `/etc/caddy/Caddyfile`:
 
 ```caddyfile
 titen.yourdomain.com {
-    reverse_proxy localhost:7845
-
     # Allow large media uploads (images/video)
     request_body {
         max_size 100MB
     }
 
-    # Pass real client IP
-    header_up X-Real-IP {remote_host}
-    header_up X-Forwarded-For {remote_host}
-    header_up X-Forwarded-Proto {scheme}
+    reverse_proxy localhost:7845 {
+        # Pass real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
 
     # Security headers
     header {
@@ -491,11 +507,11 @@ The built-in scheduler checks token validity every 60 seconds (configurable via 
 **Manual Refresh (CLI):**
 
 ```bash
-# Inside the container
-docker exec -it titen titen account list
+# Inside the API container (name per docker-compose.yml)
+docker exec -it titen-api titen account list
 
 # Refresh token manually
-docker exec -it titen titen account refresh <account_id>
+docker exec -it titen-api titen account refresh <account_id>
 ```
 
 If a token expires, the Threads API will return `401 Unauthorized`. See [Troubleshooting](#11-troubleshooting).
@@ -512,7 +528,7 @@ S3-compatible storage is needed when you:
 - **Upload videos** (VIDEO post type)
 - **Store media locally** is not sufficient for your scale
 
-Without S3 configured, media uploads will fail. TEXT-only posts work without S3.
+Media uploads work without any S3 configuration — files are stored locally under `/data/media` (served at `/media`). Configure S3-compatible storage only if you want object storage (e.g. for multi-host deployments or external CDN access).
 
 ### Supported Providers
 
@@ -631,7 +647,7 @@ This command creates a safe backup without locking the running database:
 
 ```bash
 # Docker
-docker exec titen sqlite3 /data/titen.db ".backup '/data/titen-backup-$(date +%Y%m%d).db'"
+docker exec titen-api sqlite3 /data/titen.db ".backup '/data/titen-backup-$(date +%Y%m%d).db'"
 
 # Native
 sqlite3 /var/lib/titen/titen.db ".backup '/var/lib/titen/titen-backup-$(date +%Y%m%d).db'"
@@ -647,17 +663,16 @@ Create a daily cron job:
 BACKUP_DIR="/opt/backups/titen"
 mkdir -p "$BACKUP_DIR"
 
-# Backup SQLite
-docker exec titen sqlite3 /data/titen.db ".backup '/data/backup.db'"
-docker cp titen:/data/backup.db "$BACKUP_DIR/titen-$(date +%Y%m%d-%H%M%S).db"
+# Backup SQLite (transactionally consistent copy)
+docker exec titen-api sqlite3 /data/titen.db ".backup '/data/backup.db'"
+docker cp titen-api:/data/backup.db "$BACKUP_DIR/titen-$(date +%Y%m%d-%H%M%S).db"
 
-# Backup full volume
-docker run --rm -v titen_titen-data:/data -v "$BACKUP_DIR":/backup \
-  alpine tar czf "/backup/titen-volume-$(date +%Y%m%d-%H%M%S).tar.gz" /data
+# Backup the full data directory (bind-mounted ./data per docker-compose.yml)
+tar czf "$BACKUP_DIR/titen-data-$(date +%Y%m%d-%H%M%S).tar.gz" -C . data
 
 # Retain last 30 days
 find "$BACKUP_DIR" -name "titen-*.db" -mtime +30 -delete
-find "$BACKUP_DIR" -name "titen-volume-*.tar.gz" -mtime +30 -delete
+find "$BACKUP_DIR" -name "titen-data-*.tar.gz" -mtime +30 -delete
 
 echo "Backup complete: $(date)"
 ```
@@ -676,8 +691,7 @@ Back up the entire data volume (SQLite + media + config):
 
 ```bash
 # Create backup
-docker run --rm -v titen_titen-data:/data -v $(pwd):/backup \
-  alpine tar czf /backup/titen-volume-$(date +%Y%m%d).tar.gz /data
+tar czf "/backup/titen-data-$(date +%Y%m%d).tar.gz" -C . data
 
 # List backups
 ls -lh titen-volume-*.tar.gz
@@ -691,15 +705,14 @@ ls -lh titen-volume-*.tar.gz
 # 1. Stop Titen
 docker compose down
 
-# 2. Copy backup into the volume
-docker run --rm -v titen_titen-data:/data -v $(pwd):/backup \
-  alpine cp /backup/titen-backup-20260101.db /data/titen.db
+# 2. Copy the backup into ./data (bind-mounted to /data per docker-compose.yml)
+cp /backup/titen-backup-20260101.db data/titen.db
 
 # 3. Start Titen
 docker compose up -d
 
-# 4. Verify
-curl http://localhost:7845/api/health
+# 4. Verify (web proxies /api/health to the API)
+curl -f http://localhost:3000/api/health
 ```
 
 #### Restore Full Volume
@@ -708,16 +721,15 @@ curl http://localhost:7845/api/health
 # 1. Stop Titen
 docker compose down
 
-# 2. Extract volume backup
-docker run --rm -v titen_titen-data:/data -v $(pwd):/backup \
-  alpine tar xzf /backup/titen-volume-20260101.tar.gz -C /
+# 2. Extract the data-directory backup
+tar xzf /backup/titen-data-20260101.tar.gz -C .
 
 # 3. Start Titen
 docker compose up -d
 
 # 4. Verify
-docker logs titen
-curl http://localhost:7845/api/health
+docker compose logs -f --tail=50
+curl -f http://localhost:3000/api/health
 ```
 
 ---
@@ -736,8 +748,8 @@ docker compose pull
 docker compose up -d
 
 # Verify the new version is running
-docker logs titen
-curl http://localhost:7845/api/health
+docker compose logs --tail=50
+curl -f http://localhost:3000/api/health
 ```
 
 This preserves your data volume. No data loss.
@@ -845,7 +857,7 @@ sudo kill -9 <PID>
 4. **WAL file corruption**: if persistent, run a checkpoint:
 
    ```bash
-   docker exec titen sqlite3 /data/titen.db "PRAGMA wal_checkpoint(TRUNCATE);"
+   docker exec titen-api sqlite3 /data/titen.db "PRAGMA wal_checkpoint(TRUNCATE);"
    ```
 
 ---
@@ -858,10 +870,10 @@ sudo kill -9 <PID>
 
 ```bash
 # Check account status
-docker exec titen titen account list
+docker exec titen-api titen account list
 
 # View recent errors in logs
-docker logs titen 2>&1 | grep -i "401\|unauthorized\|token"
+docker logs titen-api 2>&1 | grep -i "401\|unauthorized\|token"
 ```
 
 **Fix:**
@@ -869,7 +881,7 @@ docker logs titen 2>&1 | grep -i "401\|unauthorized\|token"
 1. **Manual refresh:**
 
    ```bash
-   docker exec -it titen titen account refresh <account_id>
+   docker exec -it titen-api titen account refresh <account_id>
    ```
 
 2. **Re-authenticate if refresh fails** (token fully expired):
@@ -885,7 +897,7 @@ docker logs titen 2>&1 | grep -i "401\|unauthorized\|token"
 3. **Verify the scheduler is running** (handles automatic refresh):
 
    ```bash
-   docker logs titen 2>&1 | grep -i "scheduler\|refresh\|token"
+   docker logs titen-api 2>&1 | grep -i "scheduler\|refresh\|token"
    ```
 
 ---
@@ -898,7 +910,7 @@ docker logs titen 2>&1 | grep -i "401\|unauthorized\|token"
 
 ```bash
 # Check logs for S3 errors
-docker logs titen 2>&1 | grep -i "s3\|media\|upload"
+docker logs titen-api 2>&1 | grep -i "s3\|media\|upload"
 ```
 
 **Fix:**
@@ -967,7 +979,7 @@ docker compose up -d
 
 ```bash
 # View container logs
-docker logs titen
+docker logs titen-api
 
 # Check container status
 docker compose ps -a
@@ -988,7 +1000,7 @@ docker inspect titen --format='{{.State.ExitCode}}'
 
 ```bash
 # 1. Read the full logs
-docker logs titen --tail 100
+docker logs titen-api --tail 100
 
 # 2. Check if port is in use
 docker compose down
@@ -1012,4 +1024,4 @@ If you're still stuck:
 
 - **GitHub Issues:** [github.com/codecoradev/titen/issues](https://github.com/codecoradev/titen/issues)
 - **Documentation:** [github.com/codecoradev/titen/docs](https://github.com/codecoradev/titen/tree/main/docs)
-- **Logs:** Always include `docker logs titen` output when reporting issues
+- **Logs:** Always include `docker logs titen-api` output when reporting issues
