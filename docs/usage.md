@@ -61,7 +61,7 @@ Titen uses the Threads Graph API. You need a Threads account and a Meta for Deve
 ```bash
 # Set your API key (if auth is enabled)
 export TITEN_API_KEY=your-key
-export TITEN_URL=http://localhost:7845
+export TITEN_URL=http://localhost:7845  # API base URL used by the CLI (APP_URL is the separate public site URL)
 
 # Add the account
 titen account add mybrand \
@@ -133,16 +133,9 @@ titen post create mybrand \
   --image-url "https://example.com/photo.jpg" \
   --text "Check this out"
 
-# Video post
-curl -X POST http://localhost:7845/api/posts \
-  -H "X-API-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "account_id": 1,
-    "media_type": "VIDEO",
-    "video_url": "https://example.com/video.mp4"
-  }'
 ```
+
+(The API supports VIDEO posts via `POST /api/posts` — see the next section.)
 
 ### Via API
 
@@ -449,23 +442,39 @@ Add to your MCP settings (`Settings → MCP`):
 }
 ```
 
-### Available MCP Tools (14)
+### Available MCP Tools (29)
 
 | Tool | Description |
 |------|-------------|
-| `list_accounts` | List all Threads accounts |
-| `get_account` | Get account by ID |
-| `create_post` | Create and publish a post |
-| `schedule_post` | Schedule a post |
+| `list_accounts` | List all Threads accounts managed by titen |
+| `get_user_profile` | Fetch a Threads user's profile from the Threads API |
+| `get_publishing_limit` | Fetch an account's Threads publishing quota (daily post limit, etc.) |
+| `create_post` | Create and publish a Threads post |
+| `schedule_post` | Schedule a post for future publishing |
 | `list_schedules` | List scheduled posts |
-| `cancel_schedule` | Cancel a schedule |
-| `fetch_comments` | Fetch comments from Threads |
-| `get_post_sentiment` | Analyze comment sentiment |
-| `get_post_analytics` | Analytics for a post |
-| `get_account_analytics` | Analytics summary per account |
-| `upload_media` | Upload media to S3 |
-| `refresh_token` | Refresh an account token |
-| `check_tokens` | Batch token expiry check |
+| `cancel_schedule` | Cancel a scheduled post |
+| `refresh_token` | Refresh an account's Threads access token |
+| `check_tokens` | Check all accounts' token expiry status and auto-refresh expiring tokens |
+| `fetch_comments` | Fetch and store comments from a Threads post via the Threads API |
+| `get_post_sentiment` | Get sentiment analysis for a post's comments |
+| `get_post_insights` | Fetch post insights (likes, replies, reposts, views, quotes) from the Threads API |
+| `get_account_analytics` | Get analytics summary for an account's posts |
+| `delete_post` | Delete a post from Threads and the local database |
+| `create_container` | Create a Threads container (first step for media posts, carousel, etc.) |
+| `publish_container` | Publish a previously created Threads container by container ID |
+| `list_posts` | List published/draft posts with optional filtering |
+| `get_post` | Get a single post by ID |
+| `get_schedule` | Get a single scheduled post by ID |
+| `approve_schedule` | Approve a pending scheduled post for publishing (HITL approval) |
+| `reject_schedule` | Reject a pending scheduled post with optional reason (HITL rejection) |
+| `upload_media` | Upload a media asset (image) to titen storage for use in posts/carousels |
+| `list_media` | List media assets stored in titen |
+| `fetch_mentions` | Fetch mentions of a managed account from the Threads API and store them |
+| `list_mentions` | List stored mentions for an account |
+| `search_keyword` | Search Threads for a keyword or trending topic |
+| `get_post_trend` | Get time-series engagement trend data for a post (stored analytics snapshots) |
+| `reply_to_comment` | Reply to a comment on a Threads post directly from the AI agent |
+| `exchange_oauth_code` | Exchange an OAuth authorization code for a long-lived token and add account to titen |
 
 ### Example: Ask Claude to Post
 

@@ -117,7 +117,10 @@ Redirect to Threads authorize URL
     │  https://threads.net/oauth/authorize
     │    ?client_id=...
     │    &redirect_uri=.../auth/callback
-    │    &scope=threads_basic,threads_content_publish
+    │    &scope=threads_basic,threads_content_publish,
+    │              threads_manage_replies,threads_manage_mentions,
+    │              threads_keyword_search,threads_profile_discovery,
+    │              threads_share_to_instagram,threads_location_tagging
     │    &response_type=code
     │    &state=<one-time token>              ← CSRF protection (#237)
     │
