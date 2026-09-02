@@ -3,6 +3,7 @@ import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 import Users from '@lucide/svelte/icons/users';
 import PenSquare from '@lucide/svelte/icons/pen-square';
 import CalendarClock from '@lucide/svelte/icons/calendar-clock';
+import CalendarDays from '@lucide/svelte/icons/calendar-days';
 import MessageSquare from '@lucide/svelte/icons/message-square';
 import ChartLine from '@lucide/svelte/icons/chart-line';
 import ImageIcon from '@lucide/svelte/icons/image';
@@ -53,6 +54,7 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 		{ href: '/admin/accounts', label: 'Accounts', icon: Users },
 		{ href: '/admin/posts', label: 'Posts', icon: PenSquare },
 		{ href: '/admin/schedules', label: 'Schedules', icon: CalendarClock },
+	{ href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
 		{ href: '/admin/comments', label: 'Comments', icon: MessageSquare },
 		{ href: '/admin/mentions', label: 'Mentions', icon: MessageSquare },
 		{ href: '/admin/analytics', label: 'Analytics', icon: ChartLine },
