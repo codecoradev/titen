@@ -247,6 +247,7 @@ export const createSchedule = (data: {
 	caption?: string;
 	text_attachment?: string;
 	media_urls?: string[];
+	auto_approve?: boolean;
 }): Promise<Schedule> =>
 	request<Schedule>('/schedules', {
 		method: 'POST',
