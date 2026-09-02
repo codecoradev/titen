@@ -3,7 +3,7 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig, getThreadsProfile } from '$lib/api';
+	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig, getThreadsProfile, createOAuthState } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
