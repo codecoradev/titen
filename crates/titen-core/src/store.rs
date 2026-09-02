@@ -314,6 +314,21 @@ impl Store {
                 .map_err(|e| TitenError::DatabaseError(format!("migration 013 failed: {e}")))?;
         }
 
+        // 014 — schedulable thread replies (#232); duplicate-column-tolerant like 005
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/014_schedule_reply_to.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(format!(
+                        "migration 014 failed: {msg}"
+                    )));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -854,8 +869,8 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -866,6 +881,7 @@ impl Store {
         .bind(&input.scheduled_at)
         .bind(status)
         .bind(&input.location_id)
+        .bind(&input.reply_to_id)
         .execute(&self.pool)
         .await?;
 
@@ -1025,6 +1041,9 @@ impl Store {
 
     /// Update editable fields of a schedule (caption, media_urls, scheduled_at, media_type).
     /// Only schedules in 'draft' or 'pending' state can be edited.
+    // COALESCE-style patch method: one Option per column is the natural shape;
+    // clippy::too_many_arguments is accepted for SQL patch functions like this.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_schedule_fields(
         &self,
         id: &str,
@@ -1033,6 +1052,7 @@ impl Store {
         media_urls: Option<Vec<String>>,
         scheduled_at: Option<&str>,
         location_id: Option<&str>,
+        reply_to_id: Option<&str>,
     ) -> Result<Schedule> {
         // Serialize media_urls if provided
         let media_urls_str = media_urls
@@ -1051,6 +1071,7 @@ impl Store {
                  media_urls = COALESCE(?, media_urls),
                  scheduled_at = COALESCE(?, scheduled_at),
                  location_id = COALESCE(?, location_id),
+                 reply_to_id = COALESCE(?, reply_to_id),
                  updated_at = datetime('now')
              WHERE id = ? AND status = 'draft'",
         )
@@ -1059,6 +1080,7 @@ impl Store {
         .bind(media_urls_str)
         .bind(scheduled_at)
         .bind(location_id)
+        .bind(reply_to_id)
         .bind(id)
         .execute(&self.pool)
         .await?;

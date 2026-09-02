@@ -61,6 +61,7 @@ async fn list_schedules() {
                     scheduled_at: format!("2099-07-{:02}T12:00:00Z", i + 10),
                     location_id: None,
                     auto_approve: true,
+                    reply_to_id: None,
                 },
             )
             .await
@@ -103,6 +104,7 @@ async fn list_schedules_filters_by_account() {
                 scheduled_at: "2099-08-01T12:00:00Z".to_string(),
                 location_id: None,
                 auto_approve: true,
+                reply_to_id: None,
             },
         )
         .await
@@ -196,6 +198,7 @@ async fn list_schedules_pagination_meta() {
                     scheduled_at: format!("2099-08-{:02}T09:00:00Z", i + 1),
                     location_id: None,
                     auto_approve: true,
+                    reply_to_id: None,
                 },
             )
             .await
@@ -246,4 +249,147 @@ async fn list_schedules_pagination_meta() {
 
     // Backward-compat: `data` remains a plain array
     assert!(body["data"].is_array());
+}
+
+// ─── #232: schedulable thread replies (reply_to_id) ─────────────────────
+
+#[tokio::test]
+async fn create_reply_schedule_persists_reply_to_id() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "Scheduled reply",
+                "scheduled_at": "2099-06-15T13:00:00Z",
+                "reply_to_id": "12345678901234567"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["reply_to_id"], "12345678901234567");
+    assert_eq!(body["data"]["status"], "draft");
+}
+
+#[tokio::test]
+async fn create_reply_schedule_rejects_non_text() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "IMAGE",
+                "caption": "img reply",
+                "scheduled_at": "2099-06-15T13:00:00Z",
+                "reply_to_id": "12345678901234567"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "INVALID_REPLY_TO_ID");
+}
+
+#[tokio::test]
+async fn create_reply_schedule_rejects_empty_target() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "blank target",
+                "scheduled_at": "2099-06-15T13:00:00Z",
+                "reply_to_id": "   "
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "INVALID_REPLY_TO_ID");
+}
+
+#[tokio::test]
+async fn patch_draft_schedule_updates_reply_to_id() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    // Create a draft
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "draft to patch",
+                "scheduled_at": "2099-06-15T14:00:00Z"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+    let body = body_to_json(resp).await;
+    let schedule_id = body["data"]["id"].as_str().unwrap().to_string();
+
+    // PATCH reply_to_id onto the draft
+    let req = axum::http::Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/schedules/{schedule_id}"))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "reply_to_id": "98765432109876543"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 200);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["reply_to_id"], "98765432109876543");
 }
