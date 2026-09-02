@@ -94,12 +94,12 @@ pub async fn create_state(
             })),
         );
     }
-    let token = hex::encode(buf);
+    let state_value = hex::encode(buf);
 
     let expires_at = now_epoch() + STATE_TTL_SECS;
     if let Err(e) = state
         .store
-        .insert_oauth_state(&token, &caller, expires_at)
+        .insert_oauth_state(&state_value, &caller, expires_at)
         .await
     {
         warn!(target: "titen::oauth", "OAUTH_STATE_FAIL store: {e}");
@@ -117,7 +117,10 @@ pub async fn create_state(
 
     info!(target: "titen::oauth", "OAUTH_STATE_ISSUED");
 
-    (StatusCode::OK, Json(serde_json::json!({ "state": token })))
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "state": state_value })),
+    )
 }
 
 /// Consume a state token: validates owner + expiry and deletes it

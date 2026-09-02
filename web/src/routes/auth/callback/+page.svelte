@@ -14,14 +14,14 @@
 
 		const url = new URL($page.url);
 		const code = url.searchParams.get('code');
-		const stateToken = url.searchParams.get('state');
+		const stateValue = url.searchParams.get('state');
 
 		if (!code) {
 			status = 'error';
 			errorMessage = 'No authorization code received from Threads.';
 			return;
 		}
-		if (!stateToken) {
+		if (!stateValue) {
 			// #237: callbacks without a state token are rejected — they were
 			// never initiated by this instance (login CSRF vector).
 			status = 'error';
@@ -51,7 +51,7 @@
 			await oauthExchange({
 				code,
 				redirect_uri: redirectUri,
-				state: stateToken,
+				state: stateValue,
 			});
 			status = 'success';
 		} catch (e: unknown) {
