@@ -572,6 +572,7 @@ impl ThreadsClient {
             location_id: location_id.map(|s| s.to_string()),
         };
         let container_id = self.create_container_full(account, &params).await?;
+        self.wait_for_container(account, &container_id, 30).await?;
         let post_id = self.publish_container(account, &container_id).await?;
         Ok(post_id)
     }
@@ -606,6 +607,7 @@ impl ThreadsClient {
             self.create_container(account, "IMAGE", caption, Some(image_url), None)
                 .await?
         };
+        self.wait_for_container(account, &container_id, 30).await?;
         let post_id = self.publish_container(account, &container_id).await?;
         Ok(post_id)
     }
@@ -645,29 +647,48 @@ impl ThreadsClient {
         };
 
         // Poll until container is ready (video processing)
-        // Max ~90 attempts × 3s = ~4.5 min before giving up
-        for attempt in 0..90 {
-            let status = self.check_container_status(account, &container_id).await?;
+        // 90 attempts x 3s = ~4.5 min budget for video transcoding
+        self.wait_for_container(account, &container_id, 90).await?;
+
+        let post_id = self.publish_container(account, &container_id).await?;
+        Ok(post_id)
+    }
+
+    /// Poll a container until it reaches `FINISHED`.
+    ///
+    /// Threads processes containers asynchronously; publishing a container
+    /// that is still `IN_PROGRESS` fails with OAuthException #100/#24
+    /// (prod incident 2026-09-07: TEXT schedules failed with #24 because
+    /// `publish_text` published immediately after container creation).
+    ///
+    /// `max_attempts` x 3s = total wait budget: use 30 (~90s) for text/image
+    /// (mirrors the carousel child timeout) and 90 (~4.5 min) for video.
+    async fn wait_for_container(
+        &self,
+        account: &crate::models::Account,
+        container_id: &str,
+        max_attempts: u32,
+    ) -> Result<()> {
+        for attempt in 0..max_attempts {
+            let status = self.check_container_status(account, container_id).await?;
             match status.status.as_deref() {
-                Some("FINISHED") => break,
+                Some("FINISHED") => return Ok(()),
                 Some("IN_PROGRESS") | None => {
-                    if attempt == 89 {
-                        return Err(crate::error::TitenError::ThreadsApiError(
-                            "Video container processing timed out after ~4.5 minutes".to_string(),
-                        ));
+                    if attempt == max_attempts - 1 {
+                        return Err(crate::error::TitenError::ThreadsApiError(format!(
+                            "Container {container_id} timed out waiting for FINISHED"
+                        )));
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 }
                 Some(other) => {
                     return Err(crate::error::TitenError::ThreadsApiError(format!(
-                        "Container processing failed: status={other}"
+                        "Container {container_id} failed: status={other}"
                     )));
                 }
             }
         }
-
-        let post_id = self.publish_container(account, &container_id).await?;
-        Ok(post_id)
+        Ok(())
     }
 
     /// Create and publish a carousel post (3-step flow).
@@ -680,7 +701,6 @@ impl ThreadsClient {
     /// Each child container AND the carousel container are polled until
     /// `FINISHED` before proceeding. Publishing a parent whose children are
     /// still `IN_PROGRESS` fails with OAuthException #100 (Invalid parameter).
-    /// Threads returns `FINISHED` for carousel children within a few seconds.
     ///
     /// Limitations: 2–20 items per carousel.
     pub async fn publish_carousel(
@@ -703,25 +723,7 @@ impl ThreadsClient {
         // Wait for every child container to finish processing before
         // attaching them to the carousel container.
         for child_id in children_ids {
-            for attempt in 0..30 {
-                let status = self.check_container_status(account, child_id).await?;
-                match status.status.as_deref() {
-                    Some("FINISHED") => break,
-                    Some("IN_PROGRESS") | None => {
-                        if attempt == 29 {
-                            return Err(crate::error::TitenError::ThreadsApiError(format!(
-                                "Carousel child container {child_id} timed out after ~90s"
-                            )));
-                        }
-                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    }
-                    Some(other) => {
-                        return Err(crate::error::TitenError::ThreadsApiError(format!(
-                            "Carousel child container {child_id} failed: status={other}"
-                        )));
-                    }
-                }
-            }
+            self.wait_for_container(account, child_id, 30).await?;
         }
 
         // Step 3: create carousel container with children
@@ -745,27 +747,8 @@ impl ThreadsClient {
 
         // The carousel container itself also processes asynchronously;
         // publishing it before FINISHED fails with OAuthException #100.
-        for attempt in 0..30 {
-            let status = self
-                .check_container_status(account, &carousel_container_id)
-                .await?;
-            match status.status.as_deref() {
-                Some("FINISHED") => break,
-                Some("IN_PROGRESS") | None => {
-                    if attempt == 29 {
-                        return Err(crate::error::TitenError::ThreadsApiError(format!(
-                            "Carousel container {carousel_container_id} timed out after ~90s"
-                        )));
-                    }
-                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                }
-                Some(other) => {
-                    return Err(crate::error::TitenError::ThreadsApiError(format!(
-                        "Carousel container {carousel_container_id} failed: status={other}"
-                    )));
-                }
-            }
-        }
+        self.wait_for_container(account, &carousel_container_id, 30)
+            .await?;
 
         let post_id = self
             .publish_container(account, &carousel_container_id)
