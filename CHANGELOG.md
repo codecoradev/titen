@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-07
+
+### Fixed
+
+- **TEXT/IMAGE publishing raced container processing (OAuthException #24/#100, #248)** — `publish_text` and `publish_image` published immediately after container creation without waiting for Threads to finish async processing, so scheduled TEXT posts intermittently failed with "The requested resource does not exist" (#24) and IMAGE posts with "Invalid parameter" (#100). A shared `wait_for_container()` helper now polls every container to `FINISHED` before publishing across all media types (text/image/carousel: 30 attempts x 3s; video: 90 x 3s), replacing four duplicated polling loops.
+
 ## [0.9.0] - 2026-09-02
 
 ### Added
