@@ -286,22 +286,34 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
         if let Some(marker) = reply_to.clone() {
             if marker.starts_with("bundle:") {
                 match resolve_bundle_marker(store, &marker).await {
-                    Some(Some(target_id)) => {
+                    Ok(Some(Some(target_id))) => {
                         reply_to = Some(target_id);
                     }
-                    // Target failed or not yet published: fail this item
-                    // cleanly instead of sending a literal marker to Threads.
-                    Some(None) | None => {
-                        // Some(None): target failed or not yet published.
-                        // None: marker present but lookup failed (bad seq,
-                        // store error, missing member) — either way the
-                        // marker can never resolve to a real post id, so
+                    // Target failed or not yet published / malformed marker:
+                    // fail this item cleanly instead of sending a literal
+                    // marker to Threads.
+                    Ok(Some(None)) | Ok(None) => {
+                        // Ok(None): malformed marker — permanent problem,
                         // fail the item instead of publishing garbage.
                         let msg = format!("bundle reply target unavailable: {marker}");
                         let _ = store
                             .update_schedule_status(&schedule.id, "failed", None, Some(&msg))
                             .await;
                         cascade_fail_bundle(store, &schedule, &msg).await;
+                        continue;
+                    }
+                    Err(e) => {
+                        // Transient store error (lock timeout, pool
+                        // exhaustion): NOT fatal — reset to pending so the
+                        // next tick retries the lookup instead of destroying
+                        // publishable content.
+                        warn!(
+                            "Bundle marker lookup errored for schedule {} — retrying next tick: {e}",
+                            schedule.id
+                        );
+                        let _ = store
+                            .update_schedule_status(&schedule.id, "pending", None, None)
+                            .await;
                         continue;
                     }
                 }
@@ -438,19 +450,35 @@ async fn cascade_fail_bundle(store: &Store, schedule: &crate::models::Schedule, 
 /// Resolve a `bundle:<bundle_id>:<seq>` reply marker to the referenced
 /// member's published Threads post id.
 /// Returns:
-/// - `Some(Some(post_id))` — referenced member published; proceed.
-/// - `Some(None)` — referenced member failed; the caller should fail this
-///   item (its reply target can never exist).
-/// - `None` — not a bundle marker.
-async fn resolve_bundle_marker(store: &Store, marker: &str) -> Option<Option<String>> {
-    let rest = marker.strip_prefix("bundle:")?;
-    let (bundle_id, seq_str) = rest.rsplit_once(':')?;
-    let seq: i64 = seq_str.parse().ok()?;
-    let members = store.get_bundle_schedules(bundle_id).await.ok()?;
-    let target = members.iter().find(|s| s.bundle_seq == Some(seq))?;
+/// - `Ok(Some(Some(post_id)))` — referenced member published; proceed.
+/// - `Ok(Some(None))` — referenced member failed/cancelled; its reply can
+///   never exist, so the caller should fail this item permanently.
+/// - `Ok(None)` — malformed marker; permanent, fail the item.
+/// - `Err(e)` — transient store error; the caller should retry next tick
+///   instead of destroying scheduled content.
+async fn resolve_bundle_marker(
+    store: &Store,
+    marker: &str,
+) -> crate::Result<Option<Option<String>>> {
+    let rest = marker
+        .strip_prefix("bundle:")
+        .ok_or_else(|| crate::TitenError::InvalidRequest("not a bundle marker".to_string()))?;
+    let (bundle_id, seq_str) = rest
+        .rsplit_once(':')
+        .ok_or_else(|| crate::TitenError::InvalidRequest("malformed bundle marker".to_string()))?;
+    let seq: i64 = seq_str.parse().map_err(|_| {
+        crate::TitenError::InvalidRequest("malformed bundle marker seq".to_string())
+    })?;
+    let members = store.get_bundle_schedules(bundle_id).await?;
+    let target = members
+        .iter()
+        .find(|s| s.bundle_seq == Some(seq))
+        .ok_or_else(|| {
+            crate::TitenError::InvalidRequest(format!("bundle member {bundle_id}:{seq} not found"))
+        })?;
     match target.status.as_str() {
-        "published" => Some(target.result_post_id.clone()),
-        "failed" | "cancelled" | "rejected" => Some(None),
-        _ => Some(None),
+        "published" => Ok(Some(target.result_post_id.clone())),
+        "failed" | "cancelled" | "rejected" => Ok(Some(None)),
+        _ => Ok(Some(None)),
     }
 }
