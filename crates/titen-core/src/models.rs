@@ -155,14 +155,23 @@ pub struct CreateSchedule {
     /// Publish as a reply to this Threads post ID (TEXT media type only).
     #[serde(default)]
     pub reply_to_id: Option<String>,
-    /// Thread-bundle membership (set by /api/threads expansion, not by
-    /// clients directly).
-    #[serde(default)]
-    pub bundle_id: Option<String>,
-    #[serde(default)]
-    pub bundle_seq: Option<i64>,
-    #[serde(default)]
-    pub bundle_total: Option<i64>,
+}
+
+/// Internal bundle row creator (Phase 2). Not serde-deserializable from any
+/// request body: only /api/threads constructs it, so clients can never
+/// inject bundle membership into普通 schedules.
+#[derive(Debug)]
+pub struct CreateBundleItem {
+    pub account_id: String,
+    pub media_type: String,
+    pub caption: Option<String>,
+    pub media_urls: Option<Vec<String>>,
+    pub scheduled_at: String,
+    pub reply_to_id: Option<String>,
+    pub bundle_id: String,
+    pub bundle_seq: i64,
+    pub bundle_total: i64,
+    pub status: String,
 }
 
 /// One entry inside a thread bundle (`POST /api/threads`).

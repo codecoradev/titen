@@ -647,9 +647,6 @@ fn handle_tool_call(
                 location_id: None,
                 auto_approve: false,
                 reply_to_id,
-                bundle_id: None,
-                bundle_seq: None,
-                bundle_total: None,
             };
 
             let id = uuid::Uuid::now_v7().to_string();

@@ -562,9 +562,6 @@ pub async fn ingest_schedule(
         location_id: input.location_id,
         auto_approve: false,
         reply_to_id: input.reply_to_id,
-        bundle_id: None,
-        bundle_seq: None,
-        bundle_total: None,
     };
 
     // Reuse the same validation surface as the manual create route by

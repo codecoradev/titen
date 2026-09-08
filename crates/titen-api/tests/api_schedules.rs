@@ -177,9 +177,6 @@ async fn list_schedules() {
                     location_id: None,
                     auto_approve: true,
                     reply_to_id: None,
-                    bundle_id: None,
-                    bundle_seq: None,
-                    bundle_total: None,
                 },
             )
             .await
@@ -223,9 +220,6 @@ async fn list_schedules_filters_by_account() {
                 location_id: None,
                 auto_approve: true,
                 reply_to_id: None,
-                bundle_id: None,
-                bundle_seq: None,
-                bundle_total: None,
             },
         )
         .await
@@ -320,9 +314,6 @@ async fn list_schedules_pagination_meta() {
                     location_id: None,
                     auto_approve: true,
                     reply_to_id: None,
-                    bundle_id: None,
-                    bundle_seq: None,
-                    bundle_total: None,
                 },
             )
             .await

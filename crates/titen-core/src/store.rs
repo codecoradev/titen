@@ -1007,8 +1007,8 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, source, bundle_id, bundle_seq, bundle_total)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -1021,13 +1021,60 @@ impl Store {
         .bind(&input.location_id)
         .bind(&input.reply_to_id)
         .bind(source)
-        .bind(&input.bundle_id)
-        .bind(input.bundle_seq)
-        .bind(input.bundle_total)
         .execute(&self.pool)
         .await?;
 
         self.get_schedule(id).await
+    }
+
+    /// Begin a transaction (thread-bundle atomic creation).
+    pub async fn begin(&self) -> Result<sqlx::Transaction<'_, sqlx::Sqlite>> {
+        self.pool.begin().await.map_err(Into::into)
+    }
+
+    /// Create one thread-bundle member inside `tx` (Phase 2). Bundle
+    /// membership is internal-only: CreateBundleItem is not serde-compatible
+    /// with any request body, so clients cannot inject it.
+    pub async fn create_bundle_item_tx(
+        &self,
+        tx: &mut sqlx::SqliteConnection,
+        id: &str,
+        input: &crate::models::CreateBundleItem,
+    ) -> Result<Schedule> {
+        let media_urls = input
+            .media_urls
+            .as_ref()
+            .map(|urls| serde_json::to_string(urls).unwrap_or_default());
+        let caption = input
+            .caption
+            .as_deref()
+            .map(crate::models::sanitize_caption);
+
+        sqlx::query(
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, bundle_id, bundle_seq, bundle_total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(&input.account_id)
+        .bind(&input.media_type)
+        .bind(&caption)
+        .bind(None::<String>) // text_attachment
+        .bind(&media_urls)
+        .bind(&input.scheduled_at)
+        .bind(&input.status)
+        .bind(None::<String>) // location_id
+        .bind(&input.reply_to_id)
+        .bind(&input.bundle_id)
+        .bind(input.bundle_seq)
+        .bind(input.bundle_total)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query_as::<_, Schedule>("SELECT * FROM schedules WHERE id = ?")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|_| TitenError::ScheduleNotFound(id.to_string()))
     }
 
     /// All bundle members of one bundle, ordered by seq (thread-bundle Phase 2).

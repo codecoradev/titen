@@ -4,8 +4,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use uuid::Uuid;
 
-use titen_core::models::CreateSchedule;
-
 /// Validate a single bundle item's media configuration (cheap, pre-insert).
 fn validate_item(
     item: &titen_core::models::BundleItem,
@@ -142,122 +140,85 @@ pub async fn create_thread_bundle(
     };
 
     let bundle_id = format!("bundle_{}", Uuid::now_v7());
+
+    // Single transaction: either the whole bundle exists or nothing does.
+    // This kills every partial-state class (orphaned drafts, gaps in seq,
+    // waiting rows stranded by a mid-loop failure).
+    let mut tx = match state.store.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return bad(
+                &format!("failed to begin transaction: {e}"),
+                "CREATE_FAILED",
+            );
+        }
+    };
+
     let mut created = Vec::with_capacity(n_items);
-    let mut failures = Vec::new();
 
     for (i, item) in input.posts.iter().enumerate() {
-        // Reply target: index -> defer via reply_to_seq marker. The scheduler
-        // resolves indexes at publish time (the previous item's real post id
-        // only exists after it publishes). External string ids pass through.
-        let (reply_to_id, reply_to_seq) = match &item.reply_to {
-            Some(serde_json::Value::Number(num)) => (None, num.as_i64()),
-            Some(serde_json::Value::String(s)) if !s.trim().is_empty() => {
-                (Some(s.trim().to_string()), None)
+        // Reply target: index -> defer via bundle marker (the referenced
+        // item's real post id only exists after it publishes). External
+        // string ids pass through as-is.
+        let reply_to_id = match &item.reply_to {
+            Some(serde_json::Value::Number(num)) => {
+                let seq = num.as_i64().unwrap_or(i64::MIN);
+                Some(format!("bundle:{bundle_id}:{seq}"))
             }
-            _ => (None, None),
+            Some(serde_json::Value::String(s)) if !s.trim().is_empty() => {
+                Some(s.trim().to_string())
+            }
+            _ => None,
         };
 
         let status = if i == 0 {
             root_status.to_string()
         } else {
-            // Non-root items wait until their predecessor publishes.
-            // In instant mode the root is already pending, so the first tick
-            // publishes it and chain-promotes item 1 immediately.
+            // Non-root items wait until their predecessor publishes. In
+            // instant mode the root is pending, so the next tick publishes
+            // it and chain-promotes item 1.
             "bundle_waiting".to_string()
         };
 
-        let cs = CreateSchedule {
+        let row = titen_core::models::CreateBundleItem {
             account_id: input.account_id.clone(),
-            media_type: Some(
-                item.media_type
-                    .clone()
-                    .unwrap_or_else(|| "TEXT".to_string()),
-            ),
+            media_type: item
+                .media_type
+                .clone()
+                .unwrap_or_else(|| "TEXT".to_string()),
             caption: item.caption.clone(),
-            text_attachment: None,
             media_urls: item.media_urls.clone(),
-            // Waiting items get the bundle slot time; promotion overrides order.
             scheduled_at: scheduled_at.clone(),
-            location_id: None,
-            auto_approve: matches!(status.as_str(), "pending"),
             reply_to_id,
-            bundle_id: Some(bundle_id.clone()),
-            bundle_seq: Some(i as i64),
-            bundle_total: Some(n_items as i64),
+            bundle_id: bundle_id.clone(),
+            bundle_seq: i as i64,
+            bundle_total: n_items as i64,
+            status: status.clone(),
         };
-        // reply_to_seq marker: encode into result_json-free dedicated place —
-        // reuse reply_to_id with a marker prefix the scheduler understands.
-        let mut cs = cs;
-        if let Some(seq) = reply_to_seq {
-            cs.reply_to_id = Some(format!("bundle:{bundle_id}:{seq}"));
-        }
-        // Force non-root items to bundle_waiting regardless of auto_approve.
-        if i > 0 {
-            cs.auto_approve = false;
-        }
 
         let id = Uuid::now_v7().to_string();
-        match state.store.create_schedule(&id, &cs).await {
-            Ok(schedule) => {
-                // create_schedule only writes 'draft'/'pending'. Non-root
-                // items must be 'bundle_waiting': fix THIS row up immediately,
-                // scoped to its id (a brand-new row created moments ago with
-                // scheduled_at in the future cannot be claimed by a concurrent
-                // tick, and the update touches nothing else — no bulk flip,
-                // no root restore, no race).
-                if i > 0 {
-                    if let Err(e) = state
-                        .store
-                        .update_schedule_status(&id, "bundle_waiting", None, None)
-                        .await
-                    {
-                        let msg = format!("failed to set bundle_waiting: {e}");
-                        // This row is stuck as draft/pending and would
-                        // duplicate the chain — mark it failed explicitly.
-                        let _ = state
-                            .store
-                            .update_schedule_status(&id, "failed", None, Some(&msg))
-                            .await;
-                        failures.push(serde_json::json!({ "seq": i, "error": msg }));
-                        // A gap at i strands everything after it (promotion is
-                        // seq-1 -> seq): stop and fail the waiting members.
-                        let _ = state
-                            .store
-                            .fail_remaining_bundle(
-                                &bundle_id,
-                                &format!("bundle creation aborted at seq {i}"),
-                            )
-                            .await;
-                        break;
-                    }
-                }
-                created.push(serde_json::json!({
-                    "id": schedule.id,
-                    "seq": i,
-                    "status": if i == 0 { root_status } else { "bundle_waiting" },
-                }))
-            }
+        let create_result = state.store.create_bundle_item_tx(&mut tx, &id, &row).await;
+        match create_result {
+            Ok(schedule) => created.push(serde_json::json!({
+                "id": schedule.id,
+                "seq": i,
+                "status": schedule.status,
+            })),
             Err(e) => {
-                failures.push(serde_json::json!({ "seq": i, "error": e.to_string() }));
-                // A gap at i would strand every later item: stop creating and
-                // fail the waiting members created so far.
-                let _ = state
-                    .store
-                    .fail_remaining_bundle(
-                        &bundle_id,
-                        &format!("bundle creation aborted at seq {i}: {e}"),
-                    )
-                    .await;
-                break;
+                // tx drops here → rollback: nothing partial survives.
+                return bad(
+                    &format!("failed to create item {i}: {e} — bundle rolled back"),
+                    "CREATE_FAILED",
+                );
             }
         }
     }
 
-    let status = if failures.is_empty() {
-        StatusCode::CREATED
-    } else {
-        StatusCode::MULTI_STATUS
-    };
+    if let Err(e) = tx.commit().await {
+        return bad(&format!("failed to commit bundle: {e}"), "CREATE_FAILED");
+    }
+
+    let status = StatusCode::CREATED;
 
     (
         status,
@@ -265,8 +226,7 @@ pub async fn create_thread_bundle(
             "data": {
                 "bundle_id": bundle_id,
                 "items": created,
-                "failures": failures,
-                "mode": if input.scheduled_at.is_some() { "scheduled" } else { "instant" },
+                                "mode": if input.scheduled_at.is_some() { "scheduled" } else { "instant" },
             }
         })),
     )
