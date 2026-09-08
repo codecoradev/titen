@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`scheduled_at` validation on every schedule write path** — create, update, patch, and ingest now reject values that don't parse as ISO 8601 / RFC 3339 with `400 INVALID_SCHEDULED_AT`. Previously an unparseable timestamp was stored as-is and the schedule sat in the queue forever, invisible (the scheduler's string comparison never matched).
+
+### Changed
+
+- **Caption guard tightened from 500 to 499 characters** across all write paths (schedule create/update/patch/ingest, post publish, MCP tools, and the web UI counter/maxlength). Exactly 500 chars is now rejected. The incident on 2026-09-08 showed a 469-char caption whose link was stripped at authoring time — with a 499 guard, a caption that "fits at 500" can no longer silently absorb a merged attachment or URL and slip past the real Threads limit.
+
+### Fixed
+
+- **Scheduled replies raced container processing (#248 class)** — `create_reply` published its container immediately after creation without waiting for Threads to finish async processing, the same race that produced OAuthException #24/#100 on TEXT/IMAGE/CAROUSEL posts. Replies now poll to `FINISHED` (30 attempts x 3s) before publishing, via the shared `wait_for_container()` helper.
+
 ## [0.9.1] - 2026-09-07
 
 ### Fixed

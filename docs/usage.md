@@ -117,7 +117,7 @@ titen account status <account_id>
 
 | Type | Fields Required | Notes |
 |------|-----------------|-------|
-| `TEXT` | `text` | Up to 500 characters (Threads limit) |
+| `TEXT` | `text` | Up to 499 characters (Titen guard; Threads accepts at most 500) |
 | `IMAGE` | `image_url` or uploaded media | One image per post |
 | `VIDEO` | `video_url` | Processed by Threads (may take up to 2 min) |
 

@@ -139,17 +139,21 @@ pub async fn create_schedule(
             }
         }
     }
-    // #136: Validate caption length against Threads API limit (500 chars).
+    // #136: Validate caption length (499-char guard, see caption_too_long).
     // Check both caption and text_attachment since they are merged downstream.
     if let Some(ref c) = input.caption {
-        if c.chars().count() > 500 {
+        if c.chars().count() > 499 {
             return caption_too_long(c);
         }
     }
     if let Some(ref t) = input.text_attachment {
-        if t.chars().count() > 500 {
+        if t.chars().count() > 499 {
             return caption_too_long(t);
         }
+    }
+    // scheduled_at must parse; otherwise the schedule would never become due.
+    if let Err(resp) = ensure_valid_scheduled_at(&input.scheduled_at) {
+        return resp;
     }
     // #232: reply schedules are TEXT-only and need a non-empty target.
     if let Some(ref r) = input.reply_to_id {
@@ -221,7 +225,7 @@ pub async fn patch_schedule(
     }
     // #136: Validate caption length.
     if let Some(ref c) = input.caption {
-        if c.chars().count() > 500 {
+        if c.chars().count() > 499 {
             return caption_too_long(c);
         }
     }
@@ -318,9 +322,13 @@ pub async fn update_schedule(
 
     // #136: Validate caption length.
     if let Some(ref c) = effective_caption {
-        if c.chars().count() > 500 {
+        if c.chars().count() > 499 {
             return caption_too_long(c);
         }
+    }
+    // scheduled_at must parse; otherwise the schedule would never become due.
+    if let Err(resp) = ensure_valid_scheduled_at(&input.scheduled_at) {
+        return resp;
     }
 
     match state
@@ -463,6 +471,25 @@ pub async fn reject_schedule(
     }
 }
 
+/// Validate scheduled_at parses as an ISO 8601 / RFC 3339 timestamp. The
+/// scheduler compares the stored string against datetime('now'); an
+/// unparseable value never becomes due and sits invisible in the queue.
+fn ensure_valid_scheduled_at(value: &str) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    if titen_core::time::parse_utc(value).is_some() {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!(
+                    "scheduled_at must be an ISO 8601 / RFC 3339 timestamp with offset, got: {value}"
+                ),
+                "code": "INVALID_SCHEDULED_AT"
+            })),
+        ))
+    }
+}
+
 /// #136: Return 400 for captions exceeding Threads API 500-character limit.
 /// Uses char count (not byte count) to match Threads API semantics.
 fn caption_too_long(caption: &str) -> (StatusCode, Json<serde_json::Value>) {
@@ -470,7 +497,7 @@ fn caption_too_long(caption: &str) -> (StatusCode, Json<serde_json::Value>) {
         StatusCode::BAD_REQUEST,
         Json(serde_json::json!({
             "error": format!(
-                "Caption exceeds Threads API limit of 500 characters (got {})",
+                "Caption exceeds the 499-character limit (got {}; Threads accepts at most 500)",
                 caption.chars().count()
             ),
             "code": "CAPTION_TOO_LONG"
@@ -536,9 +563,13 @@ pub async fn ingest_schedule(
         }
     }
     if let Some(ref c) = create.caption {
-        if c.chars().count() > 500 {
+        if c.chars().count() > 499 {
             return caption_too_long(c);
         }
+    }
+    // scheduled_at must parse; otherwise the draft would never become due.
+    if let Err(resp) = ensure_valid_scheduled_at(&create.scheduled_at) {
+        return resp;
     }
     if let Some(ref r) = create.reply_to_id {
         if r.trim().is_empty() {

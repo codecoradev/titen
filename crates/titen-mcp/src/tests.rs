@@ -177,22 +177,23 @@ fn test_extract_int_arg_as_u64() {
 
 #[test]
 fn test_caption_at_limit_passes() {
-    let caption: String = "a".repeat(500);
-    assert_eq!(caption.chars().count(), 500);
-    assert!(caption.chars().count() <= 500);
+    // Titen enforces a 499-char guard (one below the Threads 500 limit).
+    let caption: String = "a".repeat(499);
+    assert_eq!(caption.chars().count(), 499);
+    assert!(caption.chars().count() <= 499);
 }
 
 #[test]
 fn test_caption_over_limit_triggers_validation() {
-    let caption: String = "a".repeat(501);
-    assert!(caption.chars().count() > 500);
+    let caption: String = "a".repeat(500);
+    assert!(caption.chars().count() > 499);
 
-    let should_reject = caption.chars().count() > 500;
+    let should_reject = caption.chars().count() > 499;
     assert!(should_reject);
 
     let error_response = json!({
         "error": format!(
-            "Caption exceeds Threads API limit of 500 characters (got {})",
+            "Caption exceeds the 499-character limit (got {}; Threads accepts at most 500)",
             caption.chars().count()
         ),
         "code": "CAPTION_TOO_LONG"
@@ -202,10 +203,12 @@ fn test_caption_over_limit_triggers_validation() {
 
 #[test]
 fn test_caption_with_unicode_counts_chars_not_bytes() {
-    let caption = "😀".repeat(501);
-    assert_eq!(caption.chars().count(), 501);
-    assert!(caption.len() > 501);
-    assert!(caption.chars().count() > 500);
+    // 500 emoji chars: within the Threads limit (500) but rejected by Titen's
+    // 499-char guard — chars() counting must hold for astral-plane chars.
+    let caption = "😀".repeat(500);
+    assert_eq!(caption.chars().count(), 500);
+    assert!(caption.len() > 500);
+    assert!(caption.chars().count() > 499);
 }
 
 // ─── Tool name routing ──────────────────────────────────
