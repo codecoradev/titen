@@ -579,6 +579,7 @@ fn handle_tool_call(
                     .get("alt_text")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
+                reply_to_id: None,
             };
 
             let id = uuid::Uuid::now_v7().to_string();

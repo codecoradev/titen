@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unified Publisher core (thread-bundle Phase 1)** — all publish paths (instant posts, scheduled posts, and the upcoming bundle executor) share one `titen_core::publisher` module: a single media-type dispatch, a single validation surface, a single carousel flow.
+- **Replies with attachments, instant and scheduled** — `reply_to_id` now composes with IMAGE/VIDEO/CAROUSEL on every path (Threads API accepts `reply_to_id` on any container; the previous TEXT-only rule was self-imposed). `POST /api/posts` accepts `reply_to_id`, and reply schedules accept non-TEXT media types with `media_urls`.
+- The old `reply_to_id requires media_type TEXT` scheduler guard and the create-route validation are removed accordingly.
+
+### Added
+
 - **`scheduled_at` validation on every schedule write path** — create, update, patch, and ingest now reject values that don't parse as ISO 8601 / RFC 3339 with `400 INVALID_SCHEDULED_AT`. Previously an unparseable timestamp was stored as-is and the schedule sat in the queue forever, invisible (the scheduler's string comparison never matched).
 
 ### Changed

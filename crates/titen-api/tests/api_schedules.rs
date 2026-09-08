@@ -401,7 +401,9 @@ async fn create_reply_schedule_persists_reply_to_id() {
 }
 
 #[tokio::test]
-async fn create_reply_schedule_rejects_non_text() {
+async fn create_reply_schedule_accepts_non_text() {
+    // Thread-bundle Phase 1: Threads API accepts reply_to_id on any container,
+    // so IMAGE replies are now valid (the old TEXT-only rule was self-imposed).
     let pool = test_pool().await;
     let state = test_state(pool.clone());
     let app = test_app(state);
@@ -418,6 +420,7 @@ async fn create_reply_schedule_rejects_non_text() {
                 "account_id": account_id,
                 "media_type": "IMAGE",
                 "caption": "img reply",
+                "media_urls": ["https://s3.ajianaz.dev/example/image.jpg"],
                 "scheduled_at": "2099-06-15T13:00:00Z",
                 "reply_to_id": "12345678901234567"
             }))
@@ -425,10 +428,11 @@ async fn create_reply_schedule_rejects_non_text() {
         ))
         .unwrap();
     let resp = send(req, &app).await;
-    assert_eq!(resp.status(), 400);
+    assert_eq!(resp.status(), 201);
 
     let body = body_to_json(resp).await;
-    assert_eq!(body["code"], "INVALID_REPLY_TO_ID");
+    assert_eq!(body["data"]["reply_to_id"], "12345678901234567");
+    assert_eq!(body["data"]["media_type"], "IMAGE");
 }
 
 #[tokio::test]
@@ -575,6 +579,8 @@ async fn ingest_rejects_caption_over_limit() {
 
 #[tokio::test]
 async fn ingest_rejects_invalid_reply_target() {
+    // Phase 1: IMAGE + reply is valid now; an EMPTY reply target is still
+    // rejected (a blank reply_to_id would publish a root post by accident).
     let pool = test_pool().await;
     let state = test_state(pool.clone());
     let app = test_app(state);
@@ -592,7 +598,7 @@ async fn ingest_rejects_invalid_reply_target() {
                 "media_type": "IMAGE",
                 "caption": "bad reply",
                 "scheduled_at": "2099-07-01T09:00:00Z",
-                "reply_to_id": "123456789"
+                "reply_to_id": "   "
             }))
             .unwrap(),
         ))
