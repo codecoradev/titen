@@ -281,15 +281,18 @@ pub async fn create_post(
     }
 
     // Publish via the shared Publisher (same core the scheduler uses)
-    let image_urls = effective_input.image_urls.clone().unwrap_or_default();
-    let mut media_urls: Vec<String> = Vec::new();
-    if let Some(ref u) = effective_input.image_url {
-        media_urls.push(u.clone());
-    }
-    if let Some(ref u) = effective_input.video_url {
-        media_urls.push(u.clone());
-    }
-    media_urls.extend(image_urls);
+    // Media URL selection is media-type-specific so a stray field can never
+    // feed the wrong URL to a container (CodeCora finding on PR #251).
+    let media_type_str = effective_input
+        .media_type
+        .clone()
+        .unwrap_or_else(|| "TEXT".to_string());
+    let media_urls: Vec<String> = match media_type_str.as_str() {
+        "IMAGE" => effective_input.image_url.clone().into_iter().collect(),
+        "VIDEO" => effective_input.video_url.clone().into_iter().collect(),
+        "CAROUSEL" => effective_input.image_urls.clone().unwrap_or_default(),
+        _ => Vec::new(),
+    };
 
     let reply_to_id = effective_input
         .reply_to_id
@@ -299,10 +302,7 @@ pub async fn create_post(
         .map(|s| s.to_string());
 
     let req = titen_core::publisher::PublishRequest {
-        media_type: effective_input
-            .media_type
-            .clone()
-            .unwrap_or_else(|| "TEXT".to_string()),
+        media_type: media_type_str,
         caption: effective_input.caption.clone(),
         media_urls,
         alt_text: effective_input.alt_text.clone(),
