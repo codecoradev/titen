@@ -369,6 +369,125 @@ async fn list_schedules_pagination_meta() {
 // ─── #232: schedulable thread replies (reply_to_id) ─────────────────────
 
 #[tokio::test]
+async fn create_thread_bundle_creates_pending_root_and_waiting_replies() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/threads")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "scheduled_at": "2099-06-15T12:00:00Z",
+                "auto_approve": true,
+                "posts": [
+                    { "media_type": "TEXT", "caption": "root post" },
+                    { "media_type": "TEXT", "caption": "reply 1", "reply_to": 0 },
+                    { "media_type": "IMAGE", "caption": "reply 2 with media",
+                      "media_urls": ["https://s3.ajianaz.dev/example/image.jpg"],
+                      "reply_to": 0 }
+                ]
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+
+    let body = body_to_json(resp).await;
+    let bundle_id = body["data"]["bundle_id"].as_str().unwrap().to_string();
+    let items = body["data"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0]["status"], "pending");
+    assert_eq!(items[1]["status"], "bundle_waiting");
+    assert_eq!(items[2]["status"], "bundle_waiting");
+
+    // GET the bundle back
+    let req = axum::http::Request::builder()
+        .method("GET")
+        .uri(format!("/api/threads/{bundle_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 200);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["total"], 3);
+    assert_eq!(body["data"]["status"], "queued");
+    assert_eq!(body["data"]["items"].as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn create_thread_bundle_rejects_reply_to_forward_index() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/threads")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "posts": [
+                    { "media_type": "TEXT", "caption": "root",
+                      "reply_to": 1 }
+                ]
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "INVALID_REPLY_TO");
+}
+
+#[tokio::test]
+async fn create_thread_bundle_instant_mode_all_items_waiting_but_root() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    // No scheduled_at => instant mode: root publishes on the next tick.
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/threads")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "posts": [
+                    { "media_type": "TEXT", "caption": "instant root" },
+                    { "media_type": "TEXT", "caption": "instant reply", "reply_to": 0 }
+                ]
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+
+    let body = body_to_json(resp).await;
+    assert_eq!(body["data"]["mode"], "instant");
+    let items = body["data"]["items"].as_array().unwrap();
+    assert_eq!(items[0]["status"], "pending");
+    assert_eq!(items[1]["status"], "bundle_waiting");
+}
+
+#[tokio::test]
 async fn create_reply_schedule_persists_reply_to_id() {
     let pool = test_pool().await;
     let state = test_state(pool.clone());

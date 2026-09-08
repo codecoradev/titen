@@ -51,6 +51,14 @@ pub fn test_app(state: AppState) -> Router {
             get(routes::accounts::list_accounts).post(routes::accounts::create_account),
         )
         .route(
+            "/api/threads",
+            post(routes::threads_bundle::create_thread_bundle),
+        )
+        .route(
+            "/api/threads/{bundle_id}",
+            get(routes::threads_bundle::get_thread_bundle),
+        )
+        .route(
             "/api/accounts/{id}",
             put(routes::accounts::update_account).delete(routes::accounts::delete_account),
         )

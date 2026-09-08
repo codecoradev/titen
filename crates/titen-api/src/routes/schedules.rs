@@ -394,10 +394,31 @@ pub async fn approve_schedule(
 ) -> (StatusCode, Json<serde_json::Value>) {
     // TODO: extract approver identity from auth context when per-user auth is added
     match state.store.approve_schedule(&id, Some("api")).await {
-        Ok(schedule) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "data": schedule })),
-        ),
+        Ok(schedule) => {
+            // Thread-bundle HITL: approving the ROOT approves the whole
+            // bundle — members 1..n (draft) become pending-waiting so the
+            // chain runs after the root publishes. Approving a non-root
+            // item only affects that item.
+            if let Some(ref bundle_id) = schedule.bundle_id {
+                if schedule.bundle_seq == Some(0) {
+                    match state
+                        .store
+                        .set_bundle_status(bundle_id, "draft", "bundle_waiting")
+                        .await
+                    {
+                        Ok(n) if n > 0 => tracing::info!(
+                            "Bundle {bundle_id} approved: {n} waiting item(s) queued"
+                        ),
+                        Ok(_) => {}
+                        Err(e) => tracing::error!("Bundle {bundle_id} approve cascade failed: {e}"),
+                    }
+                }
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "data": schedule })),
+            )
+        }
         Err(e) => {
             let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
                 StatusCode::NOT_FOUND
@@ -440,10 +461,38 @@ pub async fn reject_schedule(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let reason = body.and_then(|b| b.reason.clone());
     match state.store.reject_schedule(&id, reason.as_deref()).await {
-        Ok(schedule) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "data": schedule })),
-        ),
+        Ok(schedule) => {
+            // Thread-bundle: rejecting one member strands the rest of the
+            // chain. The cascade runs only after reject succeeds (reject
+            // itself fails for non-rejectable states like published), so an
+            // invalid request cannot destroy scheduled content.
+            if let Some(ref bundle_id) = schedule.bundle_id {
+                match state
+                    .store
+                    .fail_remaining_bundle(
+                        bundle_id,
+                        &format!(
+                            "bundle chain rejected at seq {}: {}",
+                            schedule.bundle_seq.unwrap_or(0),
+                            reason.as_deref().unwrap_or("no reason")
+                        ),
+                    )
+                    .await
+                {
+                    Ok(n) if n > 0 => {
+                        tracing::info!("Bundle {bundle_id} rejected: failed {n} remaining item(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::error!("Bundle {bundle_id} cascade fail failed: {e}")
+                    }
+                }
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "data": schedule })),
+            )
+        }
         Err(e) => {
             let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
                 StatusCode::NOT_FOUND

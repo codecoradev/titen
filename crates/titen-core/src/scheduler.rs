@@ -125,6 +125,20 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
         }
     }
 
+    // Thread-bundle Phase 2: promote bundle members whose ROOT item (seq 0)
+    // is due. Members 1..n enter as 'bundle_waiting' and only become
+    // 'pending' once the previous item publishes — this keeps the chain
+    // ordered while everything shares the existing schedules machinery.
+    if let Err(e) = store.promote_due_bundle_roots().await {
+        error!("Failed to promote due bundle roots: {e}");
+    }
+    // Reconcile: promote any waiting member whose predecessor published,
+    // regardless of how publication happened (covers lost promote hooks,
+    // hook errors, and crashes between publish and promote).
+    if let Err(e) = store.reconcile_bundle_promotions().await {
+        error!("Failed to reconcile bundle promotions: {e}");
+    }
+
     let due_schedules = match store.get_due_schedules().await {
         Ok(s) => s,
         Err(e) => {
@@ -169,6 +183,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                         Some(&format!("Account not found: {e}")),
                     )
                     .await;
+                cascade_fail_bundle(store, &schedule, &format!("account not found: {e}")).await;
                 continue;
             }
         };
@@ -182,6 +197,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             let _ = store
                 .update_schedule_status(&schedule.id, "failed", None, Some("Account is inactive"))
                 .await;
+            cascade_fail_bundle(store, &schedule, "account is inactive").await;
             continue;
         }
 
@@ -260,11 +276,49 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             schedule.location_id.as_deref(),
             schedule.reply_to_id.as_deref(),
         );
-        let reply_to = req
+        let mut reply_to = req
             .reply_to_id
             .take()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
+        // Bundle chain markers ("bundle:<bundle_id>:<seq>") resolve to the
+        // real Threads post id of the referenced bundle member.
+        if let Some(marker) = reply_to.clone() {
+            if marker.starts_with("bundle:") {
+                match resolve_bundle_marker(store, &marker).await {
+                    Ok(Some(Some(target_id))) => {
+                        reply_to = Some(target_id);
+                    }
+                    // Target failed or not yet published / malformed marker:
+                    // fail this item cleanly instead of sending a literal
+                    // marker to Threads.
+                    Ok(Some(None)) | Ok(None) => {
+                        // Ok(None): malformed marker — permanent problem,
+                        // fail the item instead of publishing garbage.
+                        let msg = format!("bundle reply target unavailable: {marker}");
+                        let _ = store
+                            .update_schedule_status(&schedule.id, "failed", None, Some(&msg))
+                            .await;
+                        cascade_fail_bundle(store, &schedule, &msg).await;
+                        continue;
+                    }
+                    Err(e) => {
+                        // Transient store error (lock timeout, pool
+                        // exhaustion): NOT fatal — reset to pending so the
+                        // next tick retries the lookup instead of destroying
+                        // publishable content.
+                        warn!(
+                            "Bundle marker lookup errored for schedule {} — retrying next tick: {e}",
+                            schedule.id
+                        );
+                        let _ = store
+                            .update_schedule_status(&schedule.id, "pending", None, None)
+                            .await;
+                        continue;
+                    }
+                }
+            }
+        }
         req.reply_to_id = reply_to.clone();
 
         let result = match crate::publisher::publish(client, &account, &req).await {
@@ -324,6 +378,18 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     .update_schedule_status(&schedule.id, "published", Some(&result_str), None)
                     .await;
 
+                // Thread-bundle: promote the next waiting member of this bundle.
+                if let Some(ref bundle_id) = schedule.bundle_id {
+                    let seq = schedule.bundle_seq.unwrap_or(0);
+                    match store.promote_next_bundle_item(bundle_id, seq).await {
+                        Ok(n) if n > 0 => {
+                            info!("Bundle {bundle_id}: promoted {n} item(s) after seq {seq}");
+                        }
+                        Ok(_) => {}
+                        Err(e) => error!("Bundle {bundle_id} chain advance failed: {e}"),
+                    }
+                }
+
                 info!(
                     "Schedule {} published as post {} for @{}",
                     schedule.id, post_id, account.username
@@ -333,10 +399,92 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                 let _ = store
                     .update_schedule_status(&schedule.id, "failed", None, Some(&e))
                     .await;
+                // Thread-bundle: a failed chain item strands the rest — fail
+                // every remaining waiting member so nothing hangs forever.
+                if let Some(ref bundle_id) = schedule.bundle_id {
+                    match store
+                        .fail_remaining_bundle(
+                            bundle_id,
+                            &format!(
+                                "bundle chain stopped at seq {}: {e}",
+                                schedule.bundle_seq.unwrap_or(0)
+                            ),
+                        )
+                        .await
+                    {
+                        Ok(n) if n > 0 => {
+                            warn!(
+                                "Bundle {bundle_id}: failed {n} remaining item(s) after chain break"
+                            );
+                        }
+                        Ok(_) => {}
+                        Err(e2) => error!("Bundle {bundle_id} cascade fail failed: {e2}"),
+                    }
+                }
                 error!("Schedule {} failed: {e}", schedule.id);
             }
         }
     }
 
     Ok(())
+}
+
+/// Fail every remaining waiting member of a bundle when one of its members
+/// fails outside the publish-result path (account missing/inactive, HITL
+/// reject, etc.). No-op for non-bundle schedules.
+async fn cascade_fail_bundle(store: &Store, schedule: &crate::models::Schedule, reason: &str) {
+    if let Some(ref bundle_id) = schedule.bundle_id {
+        match store
+            .fail_remaining_bundle(bundle_id, &format!("bundle chain stopped: {reason}"))
+            .await
+        {
+            Ok(n) if n > 0 => {
+                warn!("Bundle {bundle_id}: failed {n} remaining item(s) — {reason}");
+            }
+            Ok(_) => {}
+            Err(e) => error!("Bundle {bundle_id} cascade fail failed: {e}"),
+        }
+    }
+}
+
+/// Resolve a `bundle:<bundle_id>:<seq>` reply marker to the referenced
+/// member's published Threads post id.
+/// Returns:
+/// - `Ok(Some(Some(post_id)))` — referenced member published; proceed.
+/// - `Ok(Some(None))` — referenced member failed/cancelled; its reply can
+///   never exist, so the caller should fail this item permanently.
+/// - `Ok(None)` — malformed marker; permanent, fail the item.
+/// - `Err(e)` — transient store error; the caller should retry next tick
+///   instead of destroying scheduled content.
+async fn resolve_bundle_marker(
+    store: &Store,
+    marker: &str,
+) -> crate::Result<Option<Option<String>>> {
+    // Malformed markers and missing members are PERMANENT (client-supplied
+    // input) -> Ok(None): the caller fails the item. Only store errors are
+    // Err: transient, the caller retries next tick.
+    let rest = match marker.strip_prefix("bundle:") {
+        Some(r) => r,
+        None => return Ok(None), // unreachable — caller pre-gates on prefix
+    };
+    let (bundle_id, seq_str) = match rest.rsplit_once(':') {
+        Some(pair) => pair,
+        None => return Ok(None),
+    };
+    let seq: i64 = match seq_str.parse() {
+        Ok(s) => s,
+        Err(_) => return Ok(None),
+    };
+    let members = store.get_bundle_schedules(bundle_id).await?;
+    let target = match members.iter().find(|s| s.bundle_seq == Some(seq)) {
+        Some(t) => t,
+        // Referenced member does not exist (deleted bundle, bad index):
+        // permanent — its post id can never appear.
+        None => return Ok(None),
+    };
+    match target.status.as_str() {
+        "published" => Ok(Some(target.result_post_id.clone())),
+        "failed" | "cancelled" | "rejected" => Ok(Some(None)),
+        _ => Ok(Some(None)),
+    }
 }
