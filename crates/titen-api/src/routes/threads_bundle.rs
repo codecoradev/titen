@@ -110,6 +110,21 @@ pub async fn create_thread_bundle(
                 );
             }
         }
+        // alt_text: not plumbed through the schedule path yet — reject
+        // explicitly instead of silently discarding accessibility text.
+        if item
+            .alt_text
+            .as_deref()
+            .map(str::trim)
+            .map(str::len)
+            .unwrap_or(0)
+            > 0
+        {
+            return bad(
+                &format!("item {i}: alt_text is not yet supported on bundles; omit it for now"),
+                "ALT_TEXT_UNSUPPORTED",
+            );
+        }
     }
 
     // Resolve mode + timestamp
