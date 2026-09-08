@@ -177,6 +177,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                         Some(&format!("Account not found: {e}")),
                     )
                     .await;
+                cascade_fail_bundle(store, &schedule, &format!("account not found: {e}")).await;
                 continue;
             }
         };
@@ -190,6 +191,7 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             let _ = store
                 .update_schedule_status(&schedule.id, "failed", None, Some("Account is inactive"))
                 .await;
+            cascade_fail_bundle(store, &schedule, "account is inactive").await;
             continue;
         }
 
@@ -388,6 +390,24 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
     }
 
     Ok(())
+}
+
+/// Fail every remaining waiting member of a bundle when one of its members
+/// fails outside the publish-result path (account missing/inactive, HITL
+/// reject, etc.). No-op for non-bundle schedules.
+async fn cascade_fail_bundle(store: &Store, schedule: &crate::models::Schedule, reason: &str) {
+    if let Some(ref bundle_id) = schedule.bundle_id {
+        match store
+            .fail_remaining_bundle(bundle_id, &format!("bundle chain stopped: {reason}"))
+            .await
+        {
+            Ok(n) if n > 0 => {
+                warn!("Bundle {bundle_id}: failed {n} remaining item(s) — {reason}");
+            }
+            Ok(_) => {}
+            Err(e) => error!("Bundle {bundle_id} cascade fail failed: {e}"),
+        }
+    }
 }
 
 /// Resolve a `bundle:<bundle_id>:<seq>` reply marker to the referenced

@@ -197,41 +197,34 @@ pub async fn create_thread_bundle(
         }
 
         let id = Uuid::now_v7().to_string();
-        // Response reflects the FINAL per-item status (non-roots are flipped
-        // to bundle_waiting right after the loop).
-        let reported_status = if i == 0 {
-            root_status.to_string()
-        } else {
-            "bundle_waiting".to_string()
-        };
         match state.store.create_schedule(&id, &cs).await {
-            Ok(schedule) => created.push(serde_json::json!({
-                "id": schedule.id,
-                "seq": i,
-                "status": reported_status,
-                "db_status": schedule.status,
-            })),
+            Ok(schedule) => {
+                // create_schedule only writes 'draft'/'pending'. Non-root
+                // items must be 'bundle_waiting': fix THIS row up immediately,
+                // scoped to its id (a brand-new row created moments ago with
+                // scheduled_at in the future cannot be claimed by a concurrent
+                // tick, and the update touches nothing else — no bulk flip,
+                // no root restore, no race).
+                if i > 0 {
+                    if let Err(e) = state
+                        .store
+                        .update_schedule_status(&id, "bundle_waiting", None, None)
+                        .await
+                    {
+                        failures.push(serde_json::json!({
+                            "seq": i,
+                            "error": format!("failed to set bundle_waiting: {e}"),
+                        }));
+                        continue;
+                    }
+                }
+                created.push(serde_json::json!({
+                    "id": schedule.id,
+                    "seq": i,
+                    "status": if i == 0 { root_status } else { "bundle_waiting" },
+                }))
+            }
             Err(e) => failures.push(serde_json::json!({ "seq": i, "error": e.to_string() })),
-        }
-    }
-
-    // Race note: create_schedule forces 'draft'/'pending' internally by
-    // auto_approve. Non-root items must be bundle_waiting — patch them now.
-    if root_status != "bundle_waiting" {
-        let _ = state
-            .store
-            .set_bundle_status(&bundle_id, "draft", "bundle_waiting")
-            .await;
-        let _ = state
-            .store
-            .set_bundle_status(&bundle_id, "pending", "bundle_waiting")
-            .await;
-        // Restore the root to its intended status.
-        if let Some(root) = created.first() {
-            let _ = state
-                .store
-                .update_schedule_status(root["id"].as_str().unwrap_or(""), root_status, None, None)
-                .await;
         }
     }
 

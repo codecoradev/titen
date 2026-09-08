@@ -439,6 +439,31 @@ pub async fn reject_schedule(
     body: Option<Json<RejectBody>>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let reason = body.and_then(|b| b.reason.clone());
+    // Thread-bundle: rejecting one member strands the rest of the chain —
+    // fail the remaining waiting members so the bundle resolves cleanly.
+    if let Ok(schedule) = state.store.get_schedule(&id).await {
+        if schedule.bundle_id.is_some() {
+            if let Ok(n) = state
+                .store
+                .fail_remaining_bundle(
+                    schedule.bundle_id.as_deref().unwrap_or(""),
+                    &format!(
+                        "bundle chain rejected at seq {}: {}",
+                        schedule.bundle_seq.unwrap_or(0),
+                        reason.as_deref().unwrap_or("no reason")
+                    ),
+                )
+                .await
+            {
+                if n > 0 {
+                    tracing::info!(
+                        "Bundle {} rejected: failed {n} remaining item(s)",
+                        schedule.bundle_id.as_deref().unwrap_or("")
+                    );
+                }
+            }
+        }
+    }
     match state.store.reject_schedule(&id, reason.as_deref()).await {
         Ok(schedule) => (
             StatusCode::OK,
