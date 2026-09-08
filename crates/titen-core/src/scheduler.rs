@@ -291,7 +291,12 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     }
                     // Target failed or not yet published: fail this item
                     // cleanly instead of sending a literal marker to Threads.
-                    Some(None) => {
+                    Some(None) | None => {
+                        // Some(None): target failed or not yet published.
+                        // None: marker present but lookup failed (bad seq,
+                        // store error, missing member) — either way the
+                        // marker can never resolve to a real post id, so
+                        // fail the item instead of publishing garbage.
                         let msg = format!("bundle reply target unavailable: {marker}");
                         let _ = store
                             .update_schedule_status(&schedule.id, "failed", None, Some(&msg))
@@ -299,7 +304,6 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                         cascade_fail_bundle(store, &schedule, &msg).await;
                         continue;
                     }
-                    None => {}
                 }
             }
         }

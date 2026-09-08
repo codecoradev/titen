@@ -439,36 +439,39 @@ pub async fn reject_schedule(
     body: Option<Json<RejectBody>>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let reason = body.and_then(|b| b.reason.clone());
-    // Thread-bundle: rejecting one member strands the rest of the chain —
-    // fail the remaining waiting members so the bundle resolves cleanly.
-    if let Ok(schedule) = state.store.get_schedule(&id).await {
-        if schedule.bundle_id.is_some() {
-            if let Ok(n) = state
-                .store
-                .fail_remaining_bundle(
-                    schedule.bundle_id.as_deref().unwrap_or(""),
-                    &format!(
-                        "bundle chain rejected at seq {}: {}",
-                        schedule.bundle_seq.unwrap_or(0),
-                        reason.as_deref().unwrap_or("no reason")
-                    ),
-                )
-                .await
-            {
-                if n > 0 {
-                    tracing::info!(
-                        "Bundle {} rejected: failed {n} remaining item(s)",
-                        schedule.bundle_id.as_deref().unwrap_or("")
-                    );
+    match state.store.reject_schedule(&id, reason.as_deref()).await {
+        Ok(schedule) => {
+            // Thread-bundle: rejecting one member strands the rest of the
+            // chain. The cascade runs only after reject succeeds (reject
+            // itself fails for non-rejectable states like published), so an
+            // invalid request cannot destroy scheduled content.
+            if let Some(ref bundle_id) = schedule.bundle_id {
+                match state
+                    .store
+                    .fail_remaining_bundle(
+                        bundle_id,
+                        &format!(
+                            "bundle chain rejected at seq {}: {}",
+                            schedule.bundle_seq.unwrap_or(0),
+                            reason.as_deref().unwrap_or("no reason")
+                        ),
+                    )
+                    .await
+                {
+                    Ok(n) if n > 0 => {
+                        tracing::info!("Bundle {bundle_id} rejected: failed {n} remaining item(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::error!("Bundle {bundle_id} cascade fail failed: {e}")
+                    }
                 }
             }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "data": schedule })),
+            )
         }
-    }
-    match state.store.reject_schedule(&id, reason.as_deref()).await {
-        Ok(schedule) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "data": schedule })),
-        ),
         Err(e) => {
             let code = if matches!(e, titen_core::TitenError::ScheduleNotFound(_)) {
                 StatusCode::NOT_FOUND

@@ -228,7 +228,7 @@ pub async fn create_thread_bundle(
                                 &format!("bundle creation aborted at seq {i}"),
                             )
                             .await;
-                        continue;
+                        break;
                     }
                 }
                 created.push(serde_json::json!({
