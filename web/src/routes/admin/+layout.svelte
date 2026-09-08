@@ -26,6 +26,7 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 	// Global account switcher: akun aktif dipakai sebagai default filter
 	// di Schedules/Posts/Calendar (halaman tetap bisa override).
 	let accounts = $state<Account[]>([]);
+	let accountsLoaded = $state(false);
 	let activeAccountId = $state<string>(
 		typeof localStorage !== 'undefined'
 			? localStorage.getItem('titen.activeAccount') || 'all'
@@ -42,12 +43,14 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 	}
 
 	$effect(() => {
-		if (!authed || accounts.length > 0) return;
+		if (!authed || accountsLoaded) return;
 		(async () => {
 			try {
 				accounts = (await listAccounts()) ?? [];
 			} catch {
-				/* non-fatal */
+				/* non-fatal — switcher stays empty */
+			} finally {
+				accountsLoaded = true; // guard against re-fetch loops
 			}
 		})();
 	});
