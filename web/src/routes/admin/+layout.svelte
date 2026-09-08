@@ -11,7 +11,8 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 	import '../../app.css';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
-	import { checkSession, logout } from '$lib/api';
+	import { checkSession, logout, listAccounts } from '$lib/api';
+	import type { Account } from '$lib/types';
 	import { fetchTimezone, getTimezone } from '$lib/tz';
 	import { goto } from '$app/navigation';
 
@@ -21,6 +22,35 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 	let authed = $state(false);
 	let appVersion = $state('');
 	let tzLabel = $state('');
+
+	// Global account switcher: akun aktif dipakai sebagai default filter
+	// di Schedules/Posts/Calendar (halaman tetap bisa override).
+	let accounts = $state<Account[]>([]);
+	let activeAccountId = $state<string>(
+		typeof localStorage !== 'undefined'
+			? localStorage.getItem('titen.activeAccount') || 'all'
+			: 'all'
+	);
+
+	function setActiveAccount(id: string) {
+		activeAccountId = id;
+		try {
+			localStorage.setItem('titen.activeAccount', id);
+		} catch {
+			/* private mode — ignore */
+		}
+	}
+
+	$effect(() => {
+		if (!authed || accounts.length > 0) return;
+		(async () => {
+			try {
+				accounts = (await listAccounts()) ?? [];
+			} catch {
+				/* non-fatal */
+			}
+		})();
+	});
 
 	$effect(() => {
 		if (authed) return;
@@ -158,6 +188,28 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 </div>
 
 <style>
+	.account-switcher {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-block-end: var(--space-sm);
+	}
+
+	.switcher-label {
+		font-size: var(--text-xs);
+		color: var(--color-muted);
+	}
+
+	.switcher-select {
+		width: 100%;
+		padding: 0.375rem 0.5rem;
+		background: var(--surface-raised);
+		border: var(--rule-default);
+		border-radius: var(--radius-md);
+		color: var(--color-ink);
+		font-size: var(--text-sm);
+	}
+
 	.mobile-menu-btn {
 		display: none;
 		position: fixed;
