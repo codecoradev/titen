@@ -127,6 +127,10 @@ pub struct Schedule {
     /// When set, the scheduler publishes this schedule as a reply to that
     /// Threads post ID instead of a root-level post (TEXT only). See #232.
     pub reply_to_id: Option<String>,
+    /// Thread bundle: rows sharing a bundle_id execute in bundle_seq order.
+    pub bundle_id: Option<String>,
+    pub bundle_seq: Option<i64>,
+    pub bundle_total: Option<i64>,
     /// Free-form origin identifier ("cmo-agent", "ci-pipeline", ...) set via
     /// the ingest endpoint (#242). NULL for dashboard-created schedules.
     pub source: Option<String>,
@@ -151,6 +155,49 @@ pub struct CreateSchedule {
     /// Publish as a reply to this Threads post ID (TEXT media type only).
     #[serde(default)]
     pub reply_to_id: Option<String>,
+    /// Thread-bundle membership (set by /api/threads expansion, not by
+    /// clients directly).
+    #[serde(default)]
+    pub bundle_id: Option<String>,
+    #[serde(default)]
+    pub bundle_seq: Option<i64>,
+    #[serde(default)]
+    pub bundle_total: Option<i64>,
+}
+
+/// One entry inside a thread bundle (`POST /api/threads`).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BundleItem {
+    /// `TEXT`, `IMAGE`, `VIDEO`, or `CAROUSEL`. Defaults to TEXT.
+    #[serde(default)]
+    pub media_type: Option<String>,
+    #[serde(default)]
+    pub caption: Option<String>,
+    /// IMAGE/VIDEO: single URL. CAROUSEL: 2–20 URLs.
+    #[serde(default)]
+    pub media_urls: Option<Vec<String>>,
+    #[serde(default)]
+    pub alt_text: Option<String>,
+    /// Reply target: an integer = the 0-based index of a previous item in
+    /// this bundle (0 = root post); a string = an existing Threads post ID.
+    #[serde(default)]
+    pub reply_to: Option<serde_json::Value>,
+}
+
+/// `POST /api/threads` — a thread bundle: one root post plus optional
+/// chained replies. Without `scheduled_at` everything publishes immediately;
+/// with it, one schedule slot executes the whole chain in order.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateThreadBundle {
+    pub account_id: String,
+    /// ISO 8601 / RFC 3339 timestamp. Optional — absent = publish now.
+    #[serde(default)]
+    pub scheduled_at: Option<String>,
+    /// Skip HITL review (schedule mode only). Default: false.
+    #[serde(default)]
+    pub auto_approve: bool,
+    /// 1..=20 items; item 0 is the root post.
+    pub posts: Vec<BundleItem>,
 }
 
 /// Request body for the agent/CI ingest endpoint (#242).

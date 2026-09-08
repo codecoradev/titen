@@ -125,6 +125,14 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
         }
     }
 
+    // Thread-bundle Phase 2: promote bundle members whose ROOT item (seq 0)
+    // is due. Members 1..n enter as 'bundle_waiting' and only become
+    // 'pending' once the previous item publishes — this keeps the chain
+    // ordered while everything shares the existing schedules machinery.
+    if let Err(e) = store.promote_due_bundle_roots().await {
+        error!("Failed to promote due bundle roots: {e}");
+    }
+
     let due_schedules = match store.get_due_schedules().await {
         Ok(s) => s,
         Err(e) => {
@@ -260,11 +268,18 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
             schedule.location_id.as_deref(),
             schedule.reply_to_id.as_deref(),
         );
-        let reply_to = req
+        let mut reply_to = req
             .reply_to_id
             .take()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
+        // Bundle chain markers ("bundle:<bundle_id>:<seq>") resolve to the
+        // real Threads post id of the referenced bundle member.
+        if let Some(marker) = reply_to.clone() {
+            if let Some(Some(target_id)) = resolve_bundle_marker(store, &marker).await {
+                reply_to = Some(target_id);
+            }
+        }
         req.reply_to_id = reply_to.clone();
 
         let result = match crate::publisher::publish(client, &account, &req).await {
@@ -324,6 +339,18 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                     .update_schedule_status(&schedule.id, "published", Some(&result_str), None)
                     .await;
 
+                // Thread-bundle: promote the next waiting member of this bundle.
+                if let Some(ref bundle_id) = schedule.bundle_id {
+                    let seq = schedule.bundle_seq.unwrap_or(0);
+                    match store.promote_next_bundle_item(bundle_id, seq).await {
+                        Ok(n) if n > 0 => {
+                            info!("Bundle {bundle_id}: promoted {n} item(s) after seq {seq}");
+                        }
+                        Ok(_) => {}
+                        Err(e) => error!("Bundle {bundle_id} chain advance failed: {e}"),
+                    }
+                }
+
                 info!(
                     "Schedule {} published as post {} for @{}",
                     schedule.id, post_id, account.username
@@ -333,10 +360,52 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                 let _ = store
                     .update_schedule_status(&schedule.id, "failed", None, Some(&e))
                     .await;
+                // Thread-bundle: a failed chain item strands the rest — fail
+                // every remaining waiting member so nothing hangs forever.
+                if let Some(ref bundle_id) = schedule.bundle_id {
+                    match store
+                        .fail_remaining_bundle(
+                            bundle_id,
+                            &format!(
+                                "bundle chain stopped at seq {}: {e}",
+                                schedule.bundle_seq.unwrap_or(0)
+                            ),
+                        )
+                        .await
+                    {
+                        Ok(n) if n > 0 => {
+                            warn!(
+                                "Bundle {bundle_id}: failed {n} remaining item(s) after chain break"
+                            );
+                        }
+                        Ok(_) => {}
+                        Err(e2) => error!("Bundle {bundle_id} cascade fail failed: {e2}"),
+                    }
+                }
                 error!("Schedule {} failed: {e}", schedule.id);
             }
         }
     }
 
     Ok(())
+}
+
+/// Resolve a `bundle:<bundle_id>:<seq>` reply marker to the referenced
+/// member's published Threads post id.
+/// Returns:
+/// - `Some(Some(post_id))` — referenced member published; proceed.
+/// - `Some(None)` — referenced member failed; the caller should fail this
+///   item (its reply target can never exist).
+/// - `None` — not a bundle marker.
+async fn resolve_bundle_marker(store: &Store, marker: &str) -> Option<Option<String>> {
+    let rest = marker.strip_prefix("bundle:")?;
+    let (bundle_id, seq_str) = rest.rsplit_once(':')?;
+    let seq: i64 = seq_str.parse().ok()?;
+    let members = store.get_bundle_schedules(bundle_id).await.ok()?;
+    let target = members.iter().find(|s| s.bundle_seq == Some(seq))?;
+    match target.status.as_str() {
+        "published" => Some(target.result_post_id.clone()),
+        "failed" | "cancelled" | "rejected" => Some(None),
+        _ => Some(None),
+    }
 }

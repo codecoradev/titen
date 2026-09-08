@@ -382,6 +382,14 @@ pub async fn serve(
         )
         .route("/api/posts/{id}/insights", get(routes::posts::get_insights))
         .route(
+            "/api/threads",
+            post(routes::threads_bundle::create_thread_bundle),
+        )
+        .route(
+            "/api/threads/{bundle_id}",
+            get(routes::threads_bundle::get_thread_bundle),
+        )
+        .route(
             "/api/schedules",
             get(routes::schedules::list_schedules).post(routes::schedules::create_schedule),
         )

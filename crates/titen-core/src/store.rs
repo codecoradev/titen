@@ -442,6 +442,21 @@ impl Store {
             }
         }
 
+        // 017 — thread bundles: bundle_id/bundle_seq/bundle_total columns
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/017_thread_bundles.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                    return Err(TitenError::DatabaseError(format!(
+                        "migration 017 failed: {msg}"
+                    )));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -992,8 +1007,8 @@ impl Store {
         };
 
         sqlx::query(
-            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, source)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO schedules (id, account_id, media_type, caption, text_attachment, media_urls, scheduled_at, status, location_id, reply_to_id, source, bundle_id, bundle_seq, bundle_total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(&input.account_id)
@@ -1006,10 +1021,98 @@ impl Store {
         .bind(&input.location_id)
         .bind(&input.reply_to_id)
         .bind(source)
+        .bind(&input.bundle_id)
+        .bind(input.bundle_seq)
+        .bind(input.bundle_total)
         .execute(&self.pool)
         .await?;
 
         self.get_schedule(id).await
+    }
+
+    /// All bundle members of one bundle, ordered by seq (thread-bundle Phase 2).
+    pub async fn get_bundle_schedules(&self, bundle_id: &str) -> Result<Vec<Schedule>> {
+        sqlx::query_as::<_, Schedule>(
+            "SELECT * FROM schedules \
+             WHERE bundle_id = ? \
+             ORDER BY bundle_seq ASC",
+        )
+        .bind(bundle_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Into::into)
+    }
+
+    /// Bulk status update for a bundle (approve/reject all members at once).
+    /// Returns the number of rows transitioned draft -> target status.
+    pub async fn set_bundle_status(&self, bundle_id: &str, from: &str, to: &str) -> Result<u64> {
+        let result =
+            sqlx::query("UPDATE schedules SET status = ? WHERE bundle_id = ? AND status = ?")
+                .bind(to)
+                .bind(bundle_id)
+                .bind(from)
+                .execute(&self.pool)
+                .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Count bundle members still pending/published-root for partial tracking.
+    pub async fn count_bundle_status(&self, bundle_id: &str, status: &str) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM schedules WHERE bundle_id = ? AND status = ?")
+                .bind(bundle_id)
+                .bind(status)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row.0)
+    }
+
+    /// Promote due bundle roots: seq-0 rows of a bundle whose root
+    /// scheduled_at has passed move bundle_waiting -> pending so the normal
+    /// due-schedule path claims them. Idempotent.
+    pub async fn promote_due_bundle_roots(&self) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE schedules SET status = 'pending' \
+             WHERE status = 'bundle_waiting' \
+               AND bundle_seq = 0 \
+               AND datetime(scheduled_at) <= datetime('now')",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Chain advance: when bundle member `seq` publishes, promote the next
+    /// waiting member(s) whose reply chain resolves to an item at or before
+    /// `seq`. Member k replies to seq k-1 by design (bundle_reply_to is the
+    /// *index*); a reply to an external post id (not an index) is promoted
+    /// immediately after the root publishes.
+    pub async fn promote_next_bundle_item(&self, bundle_id: &str, seq: i64) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE schedules SET status = 'pending' \
+             WHERE bundle_id = ? \
+               AND status = 'bundle_waiting' \
+               AND bundle_seq = ? + 1",
+        )
+        .bind(bundle_id)
+        .bind(seq)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Fail every remaining waiting member of a bundle (root failed — the
+    /// chain can never start).
+    pub async fn fail_remaining_bundle(&self, bundle_id: &str, error: &str) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE schedules SET status = 'failed', error = ? \
+             WHERE bundle_id = ? AND status = 'bundle_waiting'",
+        )
+        .bind(error)
+        .bind(bundle_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
     }
 
     pub async fn get_schedule(&self, id: &str) -> Result<Schedule> {
