@@ -22,6 +22,7 @@ pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod models;
+pub mod publisher;
 pub mod scheduler;
 pub mod sentiment;
 pub mod storage;

@@ -216,6 +216,7 @@ async fn comment_insert_fetched_at_is_canonical() {
                 image_urls: None,
                 media_ids: None,
                 alt_text: None,
+                reply_to_id: None,
             },
         )
         .await

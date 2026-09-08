@@ -52,6 +52,7 @@ async fn create_test_post(store: &Store, id: &str, account_id: &str, caption: &s
         image_urls: None,
         media_ids: None,
         alt_text: None,
+        reply_to_id: None,
     };
     store
         .create_post(id, &input)

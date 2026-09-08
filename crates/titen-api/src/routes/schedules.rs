@@ -166,16 +166,6 @@ pub async fn create_schedule(
                 })),
             );
         }
-        let media_type = input.media_type.as_deref().unwrap_or("TEXT");
-        if media_type != "TEXT" {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": format!("reply_to_id requires media_type TEXT, got {media_type}"),
-                    "code": "INVALID_REPLY_TO_ID"
-                })),
-            );
-        }
     }
 
     let id = Uuid::now_v7().to_string();
@@ -229,15 +219,14 @@ pub async fn patch_schedule(
             return caption_too_long(c);
         }
     }
-    // #232: reply schedules are TEXT-only. If both fields are provided here we
-    // can validate cheaply; otherwise the scheduler guard catches the rest
-    // (fails the schedule with a clear error instead of publishing a root post).
-    if let (Some(r), Some(mt)) = (input.reply_to_id.as_deref(), input.media_type.as_deref()) {
-        if !r.trim().is_empty() && mt != "TEXT" {
+    // #232: reply target must be non-empty when provided. Media type is free:
+    // Threads accepts reply_to_id on any container (Phase 1 removed TEXT-only).
+    if let Some(r) = input.reply_to_id.as_deref() {
+        if r.trim().is_empty() {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
-                    "error": format!("reply_to_id requires media_type TEXT, got {mt}"),
+                    "error": "reply_to_id must be a non-empty Threads post ID",
                     "code": "INVALID_REPLY_TO_ID"
                 })),
             );
@@ -577,16 +566,6 @@ pub async fn ingest_schedule(
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
                     "error": "reply_to_id must be a non-empty Threads post ID",
-                    "code": "INVALID_REPLY_TO_ID"
-                })),
-            );
-        }
-        let media_type = create.media_type.as_deref().unwrap_or("TEXT");
-        if media_type != "TEXT" {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": format!("reply_to_id requires media_type TEXT, got {media_type}"),
                     "code": "INVALID_REPLY_TO_ID"
                 })),
             );

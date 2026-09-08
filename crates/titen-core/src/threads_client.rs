@@ -555,6 +555,7 @@ impl ThreadsClient {
         account: &crate::models::Account,
         caption: &str,
         location_id: Option<&str>,
+        reply_to_id: Option<&str>,
     ) -> Result<String> {
         let params = ContainerParams {
             media_type: "TEXT".to_string(),
@@ -564,7 +565,7 @@ impl ThreadsClient {
             topic_tag: None,
             link_attachment: None,
             gif_attachment: None,
-            reply_to_id: None,
+            reply_to_id: reply_to_id.map(|s| s.to_string()),
             reply_control: None,
             is_carousel_item: None,
             enable_reply_approvals: None,
@@ -585,8 +586,9 @@ impl ThreadsClient {
         image_url: &str,
         _alt_text: Option<&str>,
         location_id: Option<&str>,
+        reply_to_id: Option<&str>,
     ) -> Result<String> {
-        let container_id = if let Some(loc) = location_id {
+        let container_id = if location_id.is_some() || reply_to_id.is_some() {
             let params = ContainerParams {
                 media_type: "IMAGE".to_string(),
                 text: caption.map(|c| c.to_string()),
@@ -595,12 +597,12 @@ impl ThreadsClient {
                 topic_tag: None,
                 link_attachment: None,
                 gif_attachment: None,
-                reply_to_id: None,
+                reply_to_id: reply_to_id.map(|s| s.to_string()),
                 reply_control: None,
                 is_carousel_item: None,
                 enable_reply_approvals: None,
                 children: None,
-                location_id: Some(loc.to_string()),
+                location_id: location_id.map(|s| s.to_string()),
             };
             self.create_container_full(account, &params).await?
         } else {
@@ -623,8 +625,9 @@ impl ThreadsClient {
         caption: Option<&str>,
         video_url: &str,
         location_id: Option<&str>,
+        reply_to_id: Option<&str>,
     ) -> Result<String> {
-        let container_id = if let Some(loc) = location_id {
+        let container_id = if location_id.is_some() || reply_to_id.is_some() {
             let params = ContainerParams {
                 media_type: "VIDEO".to_string(),
                 text: caption.map(|c| c.to_string()),
@@ -633,12 +636,12 @@ impl ThreadsClient {
                 topic_tag: None,
                 link_attachment: None,
                 gif_attachment: None,
-                reply_to_id: None,
+                reply_to_id: reply_to_id.map(|s| s.to_string()),
                 reply_control: None,
                 is_carousel_item: None,
                 enable_reply_approvals: None,
                 children: None,
-                location_id: Some(loc.to_string()),
+                location_id: location_id.map(|s| s.to_string()),
             };
             self.create_container_full(account, &params).await?
         } else {
@@ -708,6 +711,7 @@ impl ThreadsClient {
         account: &crate::models::Account,
         caption: Option<&str>,
         children_ids: &[String],
+        reply_to_id: Option<&str>,
     ) -> Result<String> {
         if children_ids.len() < 2 {
             return Err(crate::error::TitenError::InvalidRequest(
@@ -735,7 +739,7 @@ impl ThreadsClient {
             topic_tag: None,
             link_attachment: None,
             gif_attachment: None,
-            reply_to_id: None,
+            reply_to_id: reply_to_id.map(|s| s.to_string()),
             reply_control: None,
             is_carousel_item: None,
             enable_reply_approvals: None,

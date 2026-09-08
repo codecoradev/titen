@@ -97,6 +97,9 @@ pub struct CreatePost {
     /// Allows users to select from uploaded media instead of pasting URLs.
     pub media_ids: Option<Vec<String>>,
     pub alt_text: Option<String>,
+    /// Publish as a reply to this existing Threads post ID (any media type).
+    #[serde(default)]
+    pub reply_to_id: Option<String>,
 }
 
 // ─── Schedule ─────────────────────────────────────────────

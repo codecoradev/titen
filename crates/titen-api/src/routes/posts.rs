@@ -280,86 +280,38 @@ pub async fn create_post(
         }
     }
 
-    // Publish via Threads API
-    let caption = effective_input.caption.as_deref().unwrap_or("");
-    let threads_post_id = match effective_input.media_type.as_deref().unwrap_or("TEXT") {
-        "TEXT" => {
-            state
-                .threads_client
-                .publish_text(&account, caption, None)
-                .await
-        }
-        "IMAGE" => {
-            let url = effective_input.image_url.as_deref().unwrap_or("");
-            if url.is_empty() {
-                Err(titen_core::TitenError::InvalidRequest(
-                    "image_url is required for IMAGE posts".to_string(),
-                ))
-            } else {
-                state
-                    .threads_client
-                    .publish_image(
-                        &account,
-                        Some(caption),
-                        url,
-                        effective_input.alt_text.as_deref(),
-                        None,
-                    )
-                    .await
-            }
-        }
-        "VIDEO" => {
-            let url = effective_input.video_url.as_deref().unwrap_or("");
-            if url.is_empty() {
-                Err(titen_core::TitenError::InvalidRequest(
-                    "video_url is required for VIDEO posts".to_string(),
-                ))
-            } else {
-                state
-                    .threads_client
-                    .publish_video(&account, Some(caption), url, None)
-                    .await
-            }
-        }
-        "CAROUSEL" => {
-            // Validation already done above — safe to unwrap
-            let urls = effective_input.image_urls.as_ref().unwrap();
-            let mut children_ids = Vec::with_capacity(urls.len());
-            let mut children_failed = None;
-            for url in urls {
-                match state
-                    .threads_client
-                    .create_carousel_item(&account, "IMAGE", Some(url.as_str()), None, None)
-                    .await
-                {
-                    Ok(id) => children_ids.push(id),
-                    Err(e) => {
-                        tracing::error!(
-                            "Partial carousel failure after {n} children. \
-                             Orphaned children IDs (manual cleanup needed): {children_ids:?}",
-                            n = children_ids.len()
-                        );
-                        children_failed = Some(e.to_string());
-                        break;
-                    }
-                }
-            }
-            match children_failed {
-                Some(e) => Err(titen_core::TitenError::InvalidRequest(format!(
-                    "Failed to create carousel item: {e}"
-                ))),
-                None => {
-                    state
-                        .threads_client
-                        .publish_carousel(&account, Some(caption), &children_ids)
-                        .await
-                }
-            }
-        }
-        media => Err(titen_core::TitenError::InvalidRequest(format!(
-            "Unsupported media type: {media}"
-        ))),
+    // Publish via the shared Publisher (same core the scheduler uses)
+    // Media URL selection is media-type-specific so a stray field can never
+    // feed the wrong URL to a container (CodeCora finding on PR #251).
+    let media_type_str = effective_input
+        .media_type
+        .clone()
+        .unwrap_or_else(|| "TEXT".to_string());
+    let media_urls: Vec<String> = match media_type_str.as_str() {
+        "IMAGE" => effective_input.image_url.clone().into_iter().collect(),
+        "VIDEO" => effective_input.video_url.clone().into_iter().collect(),
+        "CAROUSEL" => effective_input.image_urls.clone().unwrap_or_default(),
+        _ => Vec::new(),
     };
+
+    let reply_to_id = effective_input
+        .reply_to_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let req = titen_core::publisher::PublishRequest {
+        media_type: media_type_str,
+        caption: effective_input.caption.clone(),
+        media_urls,
+        alt_text: effective_input.alt_text.clone(),
+        location_id: None,
+        reply_to_id,
+    };
+
+    let threads_post_id =
+        titen_core::publisher::publish(&state.threads_client, &account, &req).await;
 
     match threads_post_id {
         Ok(post_id) => {
