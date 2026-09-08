@@ -211,10 +211,23 @@ pub async fn create_thread_bundle(
                         .update_schedule_status(&id, "bundle_waiting", None, None)
                         .await
                     {
-                        failures.push(serde_json::json!({
-                            "seq": i,
-                            "error": format!("failed to set bundle_waiting: {e}"),
-                        }));
+                        let msg = format!("failed to set bundle_waiting: {e}");
+                        // This row is stuck as draft/pending and would
+                        // duplicate the chain — mark it failed explicitly.
+                        let _ = state
+                            .store
+                            .update_schedule_status(&id, "failed", None, Some(&msg))
+                            .await;
+                        failures.push(serde_json::json!({ "seq": i, "error": msg }));
+                        // A gap at i strands everything after it (promotion is
+                        // seq-1 -> seq): stop and fail the waiting members.
+                        let _ = state
+                            .store
+                            .fail_remaining_bundle(
+                                &bundle_id,
+                                &format!("bundle creation aborted at seq {i}"),
+                            )
+                            .await;
                         continue;
                     }
                 }
@@ -224,7 +237,19 @@ pub async fn create_thread_bundle(
                     "status": if i == 0 { root_status } else { "bundle_waiting" },
                 }))
             }
-            Err(e) => failures.push(serde_json::json!({ "seq": i, "error": e.to_string() })),
+            Err(e) => {
+                failures.push(serde_json::json!({ "seq": i, "error": e.to_string() }));
+                // A gap at i would strand every later item: stop creating and
+                // fail the waiting members created so far.
+                let _ = state
+                    .store
+                    .fail_remaining_bundle(
+                        &bundle_id,
+                        &format!("bundle creation aborted at seq {i}: {e}"),
+                    )
+                    .await;
+                break;
+            }
         }
     }
 
@@ -253,6 +278,10 @@ pub async fn get_thread_bundle(
     axum::extract::Path(bundle_id): axum::extract::Path<String>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.store.get_bundle_schedules(&bundle_id).await {
+        Ok(items) if items.is_empty() => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "bundle not found", "code": "BUNDLE_NOT_FOUND" })),
+        ),
         Ok(items) => {
             let published = state
                 .store
@@ -288,9 +317,10 @@ pub async fn get_thread_bundle(
                 })),
             )
         }
+        // DB error is a server fault — 500, not 404.
         Err(e) => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e.to_string(), "code": "BUNDLE_NOT_FOUND" })),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string(), "code": "INTERNAL" })),
         ),
     }
 }

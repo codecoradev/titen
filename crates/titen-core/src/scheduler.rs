@@ -132,6 +132,12 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
     if let Err(e) = store.promote_due_bundle_roots().await {
         error!("Failed to promote due bundle roots: {e}");
     }
+    // Reconcile: promote any waiting member whose predecessor published,
+    // regardless of how publication happened (covers lost promote hooks,
+    // hook errors, and crashes between publish and promote).
+    if let Err(e) = store.reconcile_bundle_promotions().await {
+        error!("Failed to reconcile bundle promotions: {e}");
+    }
 
     let due_schedules = match store.get_due_schedules().await {
         Ok(s) => s,
@@ -278,8 +284,23 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
         // Bundle chain markers ("bundle:<bundle_id>:<seq>") resolve to the
         // real Threads post id of the referenced bundle member.
         if let Some(marker) = reply_to.clone() {
-            if let Some(Some(target_id)) = resolve_bundle_marker(store, &marker).await {
-                reply_to = Some(target_id);
+            if marker.starts_with("bundle:") {
+                match resolve_bundle_marker(store, &marker).await {
+                    Some(Some(target_id)) => {
+                        reply_to = Some(target_id);
+                    }
+                    // Target failed or not yet published: fail this item
+                    // cleanly instead of sending a literal marker to Threads.
+                    Some(None) => {
+                        let msg = format!("bundle reply target unavailable: {marker}");
+                        let _ = store
+                            .update_schedule_status(&schedule.id, "failed", None, Some(&msg))
+                            .await;
+                        cascade_fail_bundle(store, &schedule, &msg).await;
+                        continue;
+                    }
+                    None => {}
+                }
             }
         }
         req.reply_to_id = reply_to.clone();

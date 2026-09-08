@@ -1101,6 +1101,26 @@ impl Store {
         Ok(result.rows_affected())
     }
 
+    /// Reconcile bundle chains: promote waiting members whose predecessor
+    /// (seq-1) is published. Self-healing — covers lost promote hooks,
+    /// hook errors, and crashes between publish and promote. Idempotent.
+    pub async fn reconcile_bundle_promotions(&self) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE schedules SET status = 'pending' \
+             WHERE status = 'bundle_waiting' \
+               AND bundle_seq > 0 \
+               AND EXISTS ( \
+                 SELECT 1 FROM schedules prev \
+                 WHERE prev.bundle_id = schedules.bundle_id \
+                   AND prev.bundle_seq = schedules.bundle_seq - 1 \
+                   AND prev.status = 'published' \
+               )",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Fail every remaining waiting member of a bundle (root failed — the
     /// chain can never start).
     pub async fn fail_remaining_bundle(&self, bundle_id: &str, error: &str) -> Result<u64> {
