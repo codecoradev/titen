@@ -254,6 +254,29 @@ export const createSchedule = (data: {
 		body: JSON.stringify(data),
 	});
 
+export const createThreadBundle = (data: {
+	account_id: string;
+	scheduled_at?: string;
+	auto_approve?: boolean;
+	posts: Array<{
+		media_type?: string;
+		caption?: string;
+		media_urls?: string[];
+		reply_to?: number | string;
+	}>;
+}): Promise<{
+	data: {
+		bundle_id: string;
+		items: Array<{ id: string; seq: number; status: string }>;
+		failures: unknown[];
+		mode: string;
+	};
+}> =>
+	request('/threads', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+
 export const updateSchedule = (id: string, data: {
 	scheduled_at?: string;
 	status?: string;
