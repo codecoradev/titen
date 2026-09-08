@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-08
+
+### Added
+
+- **Thread bundles — one object, root + chained replies (#252)** — `POST /api/threads` accepts 1–20 items: item 0 is the root post, later items reply to an earlier item by index (`reply_to: 0`) or to any existing Threads post id. Without `scheduled_at` everything publishes immediately; with it, the bundle occupies one calendar slot and the scheduler runs the chain in order (promote next member on success, fail remaining on chain break, reconcile pass self-heals lost promotions). Replies support attachments: `reply_to_id` composes with IMAGE/VIDEO/CAROUSEL (#251).
+- **Unified Publisher core (#251)** — instant posts, scheduled posts, and bundles share one `titen_core::publisher` dispatch (single media-type validation, carousel handling, reply composition).
+- **Global account switcher in the admin sidebar (#254)** — pick an account once; Schedules/Posts/Calendar default their filters to it (persisted in localStorage, `titen:account-changed` event).
+- **Thread bundle composer UI (#253)** — bundle mode in the schedule modal: root + reply items, each with media type, caption, and image URL.
+
+### Changed
+
+- **Caption guard tightened from 500 to 499 characters** across all write paths (schedules, posts, MCP, web UI). Exactly 500 is rejected with `CAPTION_TOO_LONG` — after the 2026-09-08 truncation incident, a caption that only fits at exactly 500 can no longer absorb merged links past the real Threads limit.
+- **`scheduled_at` validation** on schedule create/update/patch/ingest: unparseable values are rejected with `400 INVALID_SCHEDULED_AT` instead of sitting in the queue forever.
+
+### Fixed
+
+- **TEXT/IMAGE/VIDEO publishing raced container processing (#248)** — publishing an `IN_PROGRESS` container fails with OAuthException #24/#100; all publish paths now poll to `FINISHED` (shared `wait_for_container()`).
+- **Scheduled replies raced the same way (#251)** — `create_reply` now polls to `FINISHED` before publishing.
+
 ### Added
 
 - **Unified Publisher core (thread-bundle Phase 1)** — all publish paths (instant posts, scheduled posts, and the upcoming bundle executor) share one `titen_core::publisher` module: a single media-type dispatch, a single validation surface, a single carousel flow.
