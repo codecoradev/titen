@@ -460,22 +460,28 @@ async fn resolve_bundle_marker(
     store: &Store,
     marker: &str,
 ) -> crate::Result<Option<Option<String>>> {
-    let rest = marker
-        .strip_prefix("bundle:")
-        .ok_or_else(|| crate::TitenError::InvalidRequest("not a bundle marker".to_string()))?;
-    let (bundle_id, seq_str) = rest
-        .rsplit_once(':')
-        .ok_or_else(|| crate::TitenError::InvalidRequest("malformed bundle marker".to_string()))?;
-    let seq: i64 = seq_str.parse().map_err(|_| {
-        crate::TitenError::InvalidRequest("malformed bundle marker seq".to_string())
-    })?;
+    // Malformed markers and missing members are PERMANENT (client-supplied
+    // input) -> Ok(None): the caller fails the item. Only store errors are
+    // Err: transient, the caller retries next tick.
+    let rest = match marker.strip_prefix("bundle:") {
+        Some(r) => r,
+        None => return Ok(None), // unreachable — caller pre-gates on prefix
+    };
+    let (bundle_id, seq_str) = match rest.rsplit_once(':') {
+        Some(pair) => pair,
+        None => return Ok(None),
+    };
+    let seq: i64 = match seq_str.parse() {
+        Ok(s) => s,
+        Err(_) => return Ok(None),
+    };
     let members = store.get_bundle_schedules(bundle_id).await?;
-    let target = members
-        .iter()
-        .find(|s| s.bundle_seq == Some(seq))
-        .ok_or_else(|| {
-            crate::TitenError::InvalidRequest(format!("bundle member {bundle_id}:{seq} not found"))
-        })?;
+    let target = match members.iter().find(|s| s.bundle_seq == Some(seq)) {
+        Some(t) => t,
+        // Referenced member does not exist (deleted bundle, bad index):
+        // permanent — its post id can never appear.
+        None => return Ok(None),
+    };
     match target.status.as_str() {
         "published" => Ok(Some(target.result_post_id.clone())),
         "failed" | "cancelled" | "rejected" => Ok(Some(None)),
