@@ -8,6 +8,7 @@
 	import {
 		listSchedulesPaged,
 		createSchedule,
+		createThreadBundle,
 		deleteSchedule,
 		patchSchedule,
 		approveSchedule,
@@ -202,6 +203,8 @@
 
 	function openCreateModal() {
 		modalAccountId = accounts.length > 0 ? accounts[0].id : '';
+		bundleMode = false;
+		bundleItems = [{ mediaType: 'TEXT', caption: '', mediaUrl: '' }];
 		modalScheduledAt = '';
 		modalPublishNow = false;
 		modalCaption = '';
@@ -227,11 +230,83 @@
 		}
 	}
 
+	// ── Bundle mode state (thread bundles) ──
+	let bundleMode = $state(false);
+	type BundleItemDraft = {
+		mediaType: string;
+		caption: string;
+		mediaUrl: string;
+	};
+	let bundleItems = $state<Array<BundleItemDraft>>([
+		{ mediaType: 'TEXT', caption: '', mediaUrl: '' }
+	]);
+
+	function addBundleItem() {
+		if (bundleItems.length >= 10) {
+			toast('Bundle is limited to 10 items', 'error');
+			return;
+		}
+		bundleItems = [...bundleItems, { mediaType: 'TEXT', caption: '', mediaUrl: '' }];
+	}
+
+	function removeBundleItem(idx: number) {
+		bundleItems = bundleItems.filter((_, k) => k !== idx);
+	}
+
+
 	async function handleCreate() {
 		if (!modalAccountId || (!modalPublishNow && !modalScheduledAt)) {
 			toast('Account and scheduled time are required', 'error');
 			return;
 		}
+
+		// ── Bundle mode: root + chained replies via POST /api/threads ──
+		if (bundleMode) {
+			const items = bundleItems
+				.map((it, idx) => {
+					const out: Record<string, unknown> = {};
+					const mt = it.mediaType || 'TEXT';
+					if (mt !== 'TEXT' || idx > 0) out.media_type = mt;
+					if (idx === 0) out.media_type = mt;
+					out.caption = it.caption;
+					if (mt !== 'TEXT') {
+						const urls = [it.mediaUrl.trim()].filter(Boolean);
+						if (urls.length === 0) return null;
+						out.media_urls = urls;
+					}
+					if (idx > 0) out.reply_to = 0; // chained to root by default
+					return Object.keys(out).length > 0 ? out : null;
+				})
+				.filter(Boolean);
+			if (items.length === 0) {
+				toast('Add at least one item', 'error');
+				return;
+			}
+			creating = true;
+			try {
+				const payload: Record<string, unknown> = {
+					account_id: modalAccountId,
+					posts: items
+				};
+				if (!modalPublishNow && modalScheduledAt) {
+					payload.scheduled_at = new Date(modalScheduledAt).toISOString();
+				}
+				payload.auto_approve = modalPublishNow || undefined;
+				const res = await createThreadBundle(payload as any);
+				toast(
+					`Thread bundle created (${res.data.items.length} items, ${res.data.mode})`,
+					'success'
+				);
+				closeCreateModal();
+				await loadData();
+			} catch (e: any) {
+				toast(e.message || 'Failed to create thread bundle', 'error');
+			} finally {
+				creating = false;
+			}
+			return;
+		}
+
 
 		// Validate media URLs based on type
 		let mediaType = 'TEXT';
@@ -856,6 +931,56 @@
 				{/if}
 
 				<div class="form-group">
+					<label class="form-label">
+						<label class="switch" style="display:inline-flex;align-items:center;gap:0.5rem;font-weight:normal;">
+							<Switch bind:checked={bundleMode} />
+							<span>Thread bundle mode (root + replies in one object)</span>
+						</label>
+					</label>
+				</div>
+
+				{#if bundleMode}
+					<div class="form-group">
+						<label class="form-label">Bundle items ({bundleItems.length})</label>
+						{#each bundleItems as item, idx}
+							<div class="bundle-item" style="border:1px solid var(--color-border);border-radius:6px;padding:0.75rem;margin-bottom:0.5rem;">
+								<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+									<strong style="font-size:0.85rem;">
+										{idx === 0 ? 'Root post' : `Reply → root post`}
+									</strong>
+									{#if idx > 0}
+										<Button variant="ghost" size="sm" onclick={() => removeBundleItem(idx)} type="button">✕</Button>
+									{/if}
+								</div>
+								<select class="form-input" bind:value={item.mediaType} style="margin-bottom:0.5rem;">
+									<option value="TEXT">TEXT</option>
+									<option value="IMAGE">IMAGE</option>
+								</select>
+								<textarea
+									class="form-input"
+									rows="2"
+									placeholder={idx === 0 ? 'Root post caption…' : 'Reply caption…'}
+									maxlength={499}
+									bind:value={item.caption}
+									style="margin-bottom:0.5rem;"
+								></textarea>
+								{#if item.mediaType === 'IMAGE'}
+									<input
+										class="form-input"
+										placeholder="Image URL (https://…)"
+										bind:value={item.mediaUrl}
+									/>
+								{/if}
+							</div>
+						{/each}
+						{#if bundleItems.length < 10}
+							<Button variant="outline" size="sm" onclick={addBundleItem} type="button">+ Add reply</Button>
+						{/if}
+					</div>
+				{/if}
+
+				{#if !bundleMode}
+				<div class="form-group">
 					<label class="form-label" for="modal-caption">
 						Caption
 						<span class="char-count" class:over={modalCaption.length > 499}>
@@ -871,6 +996,7 @@
 						class="form-input"
 					/>
 				</div>
+				{/if}
 			</div>
 
 			<div class="confirm-actions">
@@ -881,7 +1007,7 @@
 					onclick={handleCreate}
 					disabled={creating}
 				>
-					{creating ? 'Creating…' : 'Create as Draft'}
+					{creating ? 'Creating…' : bundleMode ? 'Create Bundle' : 'Create as Draft'}
 				</Button>
 			</div>
 	</Dialog.Content>
