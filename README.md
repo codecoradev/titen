@@ -414,7 +414,7 @@ The platform enforces these per-account daily limits:
 | Posts | 250/day |
 | Replies | 1,000/day |
 | Deletes | 100/day |
-| Caption length | 500 chars |
+| Caption length | 499 chars (Titen guard; Threads accepts 500) |
 | `text_attachment` length | 10,000 chars |
 
 ## Scheduler Behavior

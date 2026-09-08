@@ -144,14 +144,14 @@ pub async fn create_post(
     State(state): State<AppState>,
     Json(input): Json<CreatePost>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    // #136: Validate caption length against Threads API limit (500 chars).
+    // #136: Validate caption length (499-char guard, see schedules::caption_too_long).
     if let Some(ref c) = input.caption {
-        if c.chars().count() > 500 {
+        if c.chars().count() > 499 {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
                     "error": format!(
-                        "Caption exceeds Threads API limit of 500 characters (got {})",
+                        "Caption exceeds the 499-character limit (got {}; Threads accepts at most 500)",
                         c.chars().count()
                     ),
                     "code": "CAPTION_TOO_LONG"

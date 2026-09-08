@@ -38,6 +38,121 @@ async fn create_schedule() {
 }
 
 #[tokio::test]
+async fn create_schedule_accepts_499_char_caption() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "x".repeat(499),
+                "scheduled_at": "2099-06-15T12:00:00Z"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+}
+
+#[tokio::test]
+async fn create_schedule_rejects_500_char_caption() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    // Titen enforces a 499-char guard: exactly 500 is already rejected so a
+    // merged caption+link can never push past the Threads limit unseen.
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "x".repeat(500),
+                "scheduled_at": "2099-06-15T12:00:00Z"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "CAPTION_TOO_LONG");
+}
+
+#[tokio::test]
+async fn create_schedule_rejects_unparseable_scheduled_at() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "hello",
+                "scheduled_at": "sometime next week"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 400);
+    let body = body_to_json(resp).await;
+    assert_eq!(body["code"], "INVALID_SCHEDULED_AT");
+}
+
+#[tokio::test]
+async fn create_schedule_accepts_offset_timestamps() {
+    let pool = test_pool().await;
+    let state = test_state(pool.clone());
+    let app = test_app(state);
+
+    let account = create_test_account(&app, &pool).await;
+    let account_id = account["id"].as_str().unwrap();
+
+    // +07:00 offsets (WIB) are the common authoring format — must parse.
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/schedules")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_string(&json!({
+                "account_id": account_id,
+                "media_type": "TEXT",
+                "caption": "hello",
+                "scheduled_at": "2099-06-15T12:00:00+07:00"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let resp = send(req, &app).await;
+    assert_eq!(resp.status(), 201);
+}
+
+#[tokio::test]
 async fn list_schedules() {
     let pool = test_pool().await;
     let state = test_state(pool.clone());

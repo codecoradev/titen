@@ -184,7 +184,7 @@
 			bind:value={replyText}
 			placeholder="Type your reply..."
 			rows={4}
-			maxlength={500}
+			maxlength={499}
 			class="reply-textarea"
 		/>
 		<div class="reply-actions">

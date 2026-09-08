@@ -858,8 +858,8 @@
 				<div class="form-group">
 					<label class="form-label" for="modal-caption">
 						Caption
-						<span class="char-count" class:over={modalCaption.length > 500}>
-							{modalCaption.length}/500
+						<span class="char-count" class:over={modalCaption.length > 499}>
+							{modalCaption.length}/499
 						</span>
 					</label>
 					<Textarea
@@ -867,7 +867,7 @@
 						bind:value={modalCaption}
 						placeholder="Write your post caption..."
 						rows={4}
-						maxlength={500}
+						maxlength={499}
 						class="form-input"
 					/>
 				</div>
@@ -911,8 +911,8 @@
 				<div class="form-group">
 					<label class="form-label" for="edit-caption">
 						Caption
-						<span class="char-count" class:over={editCaption.length > 500}>
-							{editCaption.length}/500
+						<span class="char-count" class:over={editCaption.length > 499}>
+							{editCaption.length}/499
 						</span>
 					</label>
 					<Textarea
@@ -920,7 +920,7 @@
 						bind:value={editCaption}
 						placeholder="Write your post caption..."
 						rows={4}
-						maxlength={500}
+						maxlength={499}
 						class="form-input"
 					/>
 				</div>

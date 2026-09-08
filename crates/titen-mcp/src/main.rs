@@ -551,10 +551,10 @@ fn handle_tool_call(
             let caption = args.get("caption").and_then(|v| v.as_str()).unwrap_or("");
 
             // #136: Validate caption length against Threads API limit.
-            if caption.chars().count() > 500 {
+            if caption.chars().count() > 499 {
                 return Ok(json!({
                     "error": format!(
-                        "Caption exceeds Threads API limit of 500 characters (got {})",
+                        "Caption exceeds the 499-character limit (got {}; Threads accepts at most 500)",
                         caption.chars().count()
                     ),
                     "code": "CAPTION_TOO_LONG"
@@ -603,10 +603,10 @@ fn handle_tool_call(
                 .unwrap_or("");
 
             // #136: Validate caption length against Threads API limit.
-            if caption.chars().count() > 500 {
+            if caption.chars().count() > 499 {
                 return Ok(json!({
                     "error": format!(
-                        "Caption exceeds Threads API limit of 500 characters (got {})",
+                        "Caption exceeds the 499-character limit (got {}; Threads accepts at most 500)",
                         caption.chars().count()
                     ),
                     "code": "CAPTION_TOO_LONG"

@@ -985,6 +985,9 @@ impl ThreadsClient {
         };
 
         let container_id = self.create_container_full(account, &params).await?;
+        // Replies race the same async container processing as top-level posts
+        // (#248 class) — poll to FINISHED before publishing.
+        self.wait_for_container(account, &container_id, 30).await?;
         let reply_id = self.publish_container(account, &container_id).await?;
         Ok(reply_id)
     }
