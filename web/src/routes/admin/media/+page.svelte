@@ -285,7 +285,7 @@
 								<Button
 									variant="ghost"
 									size="sm"
-									onclick={() => copyUrl(item.s3_url)}
+									onclick={() => copyUrl(item.s3_url ?? '')}
 									title="Copy URL"
 								>
 									<Copy class="size-4" />
@@ -365,7 +365,7 @@
 						{previewItem.content_type} · {formatSize(previewItem.size_bytes)}
 					</p>
 				</div>
-				<Button size="sm" variant="outline" onclick={() => copyUrl(previewItem!.s3_url)}>
+				<Button size="sm" variant="outline" onclick={() => copyUrl(previewItem!.s3_url ?? '')}>
 					Copy URL
 				</Button>
 			</div>
