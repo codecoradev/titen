@@ -30,6 +30,7 @@ pub mod store;
 pub mod threads_client;
 pub mod time;
 pub mod trend;
+pub mod user_id_resolution;
 
 pub use crypto::Cipher;
 pub use error::{Result, TitenError};
