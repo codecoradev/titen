@@ -180,3 +180,71 @@ async fn different_idless_comments_are_not_collapsed() {
         .expect("count");
     assert_eq!(count.0, 2, "distinct texts must stay distinct rows");
 }
+
+#[tokio::test]
+async fn same_text_from_different_authors_stays_distinct() {
+    let pool = pool().await;
+    let store = titen_core::Store::new(pool.clone());
+
+    // Meta omits id AND author for both — but authors were known on earlier
+    // fetches. Identical text from different users must NOT collapse.
+    store
+        .insert_comment("c1", "post-1", None, Some("alice"), None, "Great post!")
+        .await
+        .expect("alice row");
+    store
+        .insert_comment("c2", "post-1", None, Some("bob"), None, "Great post!")
+        .await
+        .expect("bob row");
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM comments WHERE post_id = 'post-1'")
+        .fetch_one(&pool)
+        .await
+        .expect("count");
+    assert_eq!(count.0, 2, "same text + different authors = distinct rows");
+}
+
+#[tokio::test]
+async fn backfill_never_grafts_onto_another_authors_row() {
+    let pool = pool().await;
+    let store = titen_core::Store::new(pool.clone());
+
+    // alice's id-less comment…
+    let alice = store
+        .insert_comment(
+            "c1",
+            "post-1",
+            None,
+            Some("alice"),
+            None,
+            "How does supersede work?",
+        )
+        .await
+        .expect("alice row");
+
+    // …then the SAME text arrives attributed to taufikabayy (a different
+    // person who coincidentally wrote the same words). It must become its
+    // own row, NOT graft the id onto alice's row.
+    let other = store
+        .insert_comment(
+            "c2",
+            "post-1",
+            Some("tc-x"),
+            Some("taufikabayy"),
+            Some("user_9"),
+            "How does supersede work?",
+        )
+        .await
+        .expect("taufik row");
+
+    assert_ne!(alice.id, other.id);
+    assert_eq!(
+        alice.threads_comment_id, None,
+        "alice's row must stay untouched"
+    );
+    assert_eq!(other.threads_comment_id.as_deref(), Some("tc-x"));
+
+    let alice_after = store.get_comment(&alice.id).await.expect("reload");
+    assert_eq!(alice_after.author_username.as_deref(), Some("alice"));
+    assert_eq!(alice_after.threads_comment_id, None);
+}

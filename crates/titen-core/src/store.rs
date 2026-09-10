@@ -1539,25 +1539,47 @@ impl Store {
         text: &str,
     ) -> Result<Comment> {
         let existing: Option<Comment> = if let Some(tcid) = threads_comment_id {
-            // Exact id match first; else an id-less row with identical text
-            // (attribution backfill onto a legacy row).
-            sqlx::query_as::<_, Comment>(
-                "SELECT * FROM comments \
-                 WHERE post_id = ?1 AND (threads_comment_id = ?2 OR (threads_comment_id IS NULL AND text = ?3)) \
-                 ORDER BY (threads_comment_id IS NOT NULL) DESC LIMIT 1",
+            // Exact id match first.
+            let exact = sqlx::query_as::<_, Comment>(
+                "SELECT * FROM comments WHERE post_id = ?1 AND threads_comment_id = ?2 LIMIT 1",
             )
             .bind(post_id)
             .bind(tcid)
-            .bind(text)
             .fetch_optional(&self.pool)
-            .await?
+            .await?;
+            if exact.is_some() {
+                exact
+            } else {
+                // Attribution backfill (#261): a legacy id-less row with the
+                // same text may be enriched with the incoming id/author.
+                // Restricted to same-author or still-anonymous rows so an
+                // unrelated commenter's row can never absorb the id, and the
+                // most recently fetched candidate wins.
+                sqlx::query_as::<_, Comment>(
+                    "SELECT * FROM comments \
+                     WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL \
+                       AND (author_username IS ?3 OR author_username IS NULL) \
+                     ORDER BY (author_username IS NULL) ASC, fetched_at DESC LIMIT 1",
+                )
+                .bind(post_id)
+                .bind(text)
+                .bind(author_username)
+                .fetch_optional(&self.pool)
+                .await?
+            }
         } else {
+            // Id-less incoming (Meta omitted id/from): dedup only against
+            // id-less rows with the same text AND the same (possibly absent)
+            // author — two different users posting identical text stay
+            // distinct rows.
             sqlx::query_as::<_, Comment>(
                 "SELECT * FROM comments \
-                 WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL",
+                 WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL \
+                   AND author_username IS ?3",
             )
             .bind(post_id)
             .bind(text)
+            .bind(author_username)
             .fetch_optional(&self.pool)
             .await?
         };
