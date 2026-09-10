@@ -1,9 +1,16 @@
-use crate::error::Result;
+use crate::error::{Result, TitenError};
 use crate::store::Store;
 use crate::threads_client::ThreadsClient;
 use std::sync::Arc;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
+
+/// #257: how many publish attempts a schedule gets before it is marked
+/// permanently `failed`. 2 = initial attempt + one retry.
+const MAX_PUBLISH_ATTEMPTS: i64 = 2;
+
+/// #257: seconds to wait before the transient-error retry becomes eligible.
+const RETRY_DELAY_SECS: i64 = 600;
 
 /// Scheduler that ticks every N seconds to check for due schedules
 pub struct TitenScheduler {
@@ -396,9 +403,36 @@ async fn process_due_schedules(store: &Store, client: &ThreadsClient) -> Result<
                 );
             }
             Err(e) => {
-                let _ = store
-                    .update_schedule_status(&schedule.id, "failed", None, Some(&e))
-                    .await;
+                // #257: bounded retry for TRANSIENT Threads API failures.
+                // Production data (2026-09-08 + 2026-09-10 carousel child
+                // creation, OAuthException #1) shows Meta-side hiccups kill a
+                // slot permanently while the identical content republishes
+                // fine later. One retry after 10 minutes, then give up.
+                let attempt = schedule.attempt_count + 1;
+                if attempt <= MAX_PUBLISH_ATTEMPTS
+                    && TitenError::is_transient_message(&e)
+                    && schedule.bundle_id.is_none()
+                {
+                    let delay = RETRY_DELAY_SECS;
+                    warn!(
+                        "Schedule {} hit transient error (attempt {attempt}/{MAX_PUBLISH_ATTEMPTS}) — retrying in {delay}s: {e}",
+                        schedule.id
+                    );
+                    if let Err(defer_err) = store
+                        .defer_failed_schedule(&schedule.id, attempt, delay, &e)
+                        .await
+                    {
+                        // Deferral failed — fall through to permanent failure
+                        // so the slot never loops on a broken row.
+                        error!(
+                            "Schedule {} defer_failed_schedule failed: {defer_err}",
+                            schedule.id
+                        );
+                        let _ = store.fail_schedule_final(&schedule.id, attempt, &e).await;
+                    }
+                } else {
+                    let _ = store.fail_schedule_final(&schedule.id, attempt, &e).await;
+                }
                 // Thread-bundle: a failed chain item strands the rest — fail
                 // every remaining waiting member so nothing hangs forever.
                 if let Some(ref bundle_id) = schedule.bundle_id {
