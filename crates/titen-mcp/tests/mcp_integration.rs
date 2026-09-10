@@ -310,6 +310,7 @@ async fn test_insert_and_list_comment() {
         .insert_comment(
             "comment-1",
             "post-1",
+            None,
             Some("commenter"),
             Some("user_456"),
             "Great post!",

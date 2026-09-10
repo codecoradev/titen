@@ -223,7 +223,7 @@ async fn comment_insert_fetched_at_is_canonical() {
         .expect("create post");
 
     store
-        .insert_comment("cmt-t1", &post.id, Some("tester"), None, "nice")
+        .insert_comment("cmt-t1", &post.id, None, Some("tester"), None, "nice")
         .await
         .expect("insert comment");
 

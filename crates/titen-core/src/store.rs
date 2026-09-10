@@ -1519,24 +1519,109 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// Insert a fetched comment, with dedup (#261).
+    ///
+    /// Natural key: `threads_comment_id` when Meta returns one. Meta's
+    /// standard-access `/replies` may omit `id`/`from` for third-party
+    /// commenters — in that case dedup falls back to `(post_id, text)` among
+    /// rows that also lack a Threads id, so re-fetches no longer duplicate
+    /// rows. When an id-less row later gets attributed (backfill case), the
+    /// existing row is updated in place: threads_comment_id/author fields are
+    /// filled via COALESCE, fetched_at is bumped, and the row id (plus its
+    /// sentiment/reply state) is preserved.
     pub async fn insert_comment(
         &self,
         id: &str,
         post_id: &str,
+        threads_comment_id: Option<&str>,
         author_username: Option<&str>,
         author_user_id: Option<&str>,
         text: &str,
     ) -> Result<Comment> {
+        let existing: Option<Comment> = if let Some(tcid) = threads_comment_id {
+            // Exact id match first.
+            let exact = sqlx::query_as::<_, Comment>(
+                "SELECT * FROM comments WHERE post_id = ?1 AND threads_comment_id = ?2 LIMIT 1",
+            )
+            .bind(post_id)
+            .bind(tcid)
+            .fetch_optional(&self.pool)
+            .await?;
+            if exact.is_some() {
+                exact
+            } else {
+                // Attribution backfill (#261): a legacy id-less row with the
+                // same text may be enriched with the incoming id/author.
+                // Restricted to same-author or still-anonymous rows so an
+                // unrelated commenter's row can never absorb the id, and the
+                // most recently fetched candidate wins.
+                sqlx::query_as::<_, Comment>(
+                    "SELECT * FROM comments \
+                     WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL \
+                       AND (author_username IS ?3 OR author_username IS NULL) \
+                     ORDER BY (author_username IS NULL) ASC, fetched_at DESC LIMIT 1",
+                )
+                .bind(post_id)
+                .bind(text)
+                .bind(author_username)
+                .fetch_optional(&self.pool)
+                .await?
+            }
+        } else {
+            // Id-less incoming (Meta omitted id/from): dedup only against
+            // id-less rows with the same text AND the same (possibly absent)
+            // author — two different users posting identical text stay
+            // distinct rows.
+            sqlx::query_as::<_, Comment>(
+                "SELECT * FROM comments \
+                 WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL \
+                   AND author_username IS ?3",
+            )
+            .bind(post_id)
+            .bind(text)
+            .bind(author_username)
+            .fetch_optional(&self.pool)
+            .await?
+        };
+
         // Explicit canonical fetched_at so the row never depends on the
         // space-format schema default, which breaks RFC3339 comparisons.
         let fetched_at = chrono::Utc::now()
             .format(crate::time::CANONICAL_FMT)
             .to_string();
+
+        if let Some(prev) = existing {
+            // Refresh attribution + freshness; keep the original row id,
+            // sentiment, and reply state.
+            sqlx::query(
+                "UPDATE comments SET \
+                    threads_comment_id = COALESCE(?1, threads_comment_id), \
+                    author_username = COALESCE(?2, author_username), \
+                    author_user_id = COALESCE(?3, author_user_id), \
+                    fetched_at = ?4 \
+                 WHERE id = ?5",
+            )
+            .bind(threads_comment_id)
+            .bind(author_username)
+            .bind(author_user_id)
+            .bind(&fetched_at)
+            .bind(&prev.id)
+            .execute(&self.pool)
+            .await?;
+
+            return sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE id = ?")
+                .bind(&prev.id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(Into::into);
+        }
+
         sqlx::query(
-            "INSERT INTO comments (id, post_id, author_username, author_user_id, text, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO comments (id, post_id, threads_comment_id, author_username, author_user_id, text, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(post_id)
+        .bind(threads_comment_id)
         .bind(author_username)
         .bind(author_user_id)
         .bind(text)
