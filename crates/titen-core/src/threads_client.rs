@@ -3,6 +3,7 @@ use crate::models::{
     CommentData, ContainerStatus, InsightMetric, PublishingLimit, UserInsightMetric, UserProfile,
 };
 use crate::store::Store;
+use crate::user_id_resolution::is_user_id_usable;
 use reqwest::Client;
 use tracing::{info, warn};
 
@@ -33,6 +34,45 @@ impl ThreadsClient {
                 Client::new()
             });
         Self { http, store }
+    }
+
+    /// Return the account with a guaranteed-usable `user_id` (#265).
+    ///
+    /// Cheap when healthy (in-memory check only). When the id is missing or
+    /// malformed, resolves via `GET /me`, persists the correction to the DB,
+    /// and returns the healed account. Callers that build
+    /// `/v1.0/{user_id}/...` URLs should route through this instead of using
+    /// `account.user_id` directly. Design & rationale: `user_id_resolution`.
+    pub async fn ensure_resolved_user_id(
+        &self,
+        account: &crate::models::Account,
+    ) -> Result<crate::models::Account> {
+        if is_user_id_usable(&account.user_id) {
+            return Ok(account.clone());
+        }
+
+        // Do NOT log the stored value — in the observed failure mode it IS
+        // the raw access token (mirrored into the user_id slot).
+        warn!(
+            "Account @{} has unusable user_id ({} chars, non-numeric) — self-healing via /me",
+            account.username,
+            account.user_id.len()
+        );
+        let (user_id, _username) = self.resolve_account(&account.access_token).await?;
+
+        sqlx::query("UPDATE accounts SET user_id = ?1, updated_at = datetime('now') WHERE id = ?2")
+            .bind(&user_id)
+            .bind(&account.id)
+            .execute(self.store.pool())
+            .await?;
+
+        let mut healed = account.clone();
+        healed.user_id = user_id;
+        info!(
+            "Account @{} self-healed: user_id set to {}",
+            healed.username, healed.user_id
+        );
+        Ok(healed)
     }
 
     // ─── Internal Helpers ─────────────────────────────────────
@@ -384,6 +424,8 @@ impl ThreadsClient {
             body["video_url"] = serde_json::json!(url);
         }
 
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!("{THREADS_GRAPH_API}/v1.0/{}/threads", account.user_id);
         let resp = self.threads_post(&url, &body).await?;
 
@@ -446,6 +488,8 @@ impl ThreadsClient {
             body["location_id"] = serde_json::json!(loc_id);
         }
 
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!("{THREADS_GRAPH_API}/v1.0/{}/threads", account.user_id);
         let resp = self.threads_post(&url, &body).await?;
 
@@ -470,6 +514,8 @@ impl ThreadsClient {
         account: &crate::models::Account,
         creation_id: &str,
     ) -> Result<String> {
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!(
             "{THREADS_GRAPH_API}/v1.0/{}/threads_publish",
             account.user_id
@@ -845,6 +891,8 @@ impl ThreadsClient {
         metrics: Option<&str>,
     ) -> Result<Vec<InsightMetric>> {
         let fields = metrics.unwrap_or("likes,replies,reposts,quotes,views,shares");
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!(
             "{THREADS_GRAPH_API}/v1.0/{threads_post_id}/insights?metric={fields}&access_token={}",
             account.access_token
@@ -1078,6 +1126,8 @@ impl ThreadsClient {
         &self,
         account: &crate::models::Account,
     ) -> Result<PublishingLimit> {
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!(
             "{THREADS_GRAPH_API}/v1.0/{}/threads_publishing_limit?access_token={}",
             account.user_id, account.access_token
@@ -1268,6 +1318,8 @@ impl ThreadsClient {
         limit: Option<u32>,
     ) -> Result<Vec<serde_json::Value>> {
         let limit_val = limit.unwrap_or(25);
+        // #265: self-heal a NULL/malformed user_id before building the URL.
+        let account = &self.ensure_resolved_user_id(account).await?;
         let url = format!(
             "{THREADS_GRAPH_API}/v1.0/{}/threads?where=MENTION&fields=id,text,username,timestamp,media_type,permalink&limit={limit_val}&access_token={}",
             account.user_id, account.access_token

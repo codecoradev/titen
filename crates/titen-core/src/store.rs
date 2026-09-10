@@ -34,6 +34,12 @@ pub struct Store {
 }
 
 impl Store {
+    /// Read-only access to the underlying pool (used by cross-module
+    /// persistence helpers, e.g. user_id self-healing in the threads client).
+    pub fn pool(&self) -> &sqlx::SqlitePool {
+        &self.pool
+    }
+
     /// Create a store with encryption enabled.
     ///
     /// The cipher is loaded from `TITEN_ENCRYPTION_KEY` env var.
