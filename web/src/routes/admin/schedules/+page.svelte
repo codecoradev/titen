@@ -24,6 +24,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
+import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
 
@@ -41,6 +42,17 @@
 
 	// Detail modal
 	let detailSchedule = $state<Schedule | null>(null);
+
+	// Full-screen image preview (click any thumbnail)
+	let lightboxUrl = $state<string | null>(null);
+	let lightboxAlt = $state('Media preview');
+	function openLightbox(url: string, alt = 'Media preview') {
+		lightboxUrl = url;
+		lightboxAlt = alt;
+	}
+	function closeLightbox() {
+		lightboxUrl = null;
+	}
 
 	// View mode: table (default) or cards (Rungu moderation style).
 	// Init client-only (in $effect) to avoid SSR hydration mismatch.
@@ -656,13 +668,15 @@
 						{#if s.media_urls}
 							<div class="detail-media">
 								{#each parseMediaUrls(s.media_urls) as url}
+									<button type="button" class="thumb-btn" onclick={() => openLightbox(url, 'Schedule media preview')} aria-label="Open image preview">
 										<img
 											src={url}
 											alt="Media preview"
 											class="detail-thumb"
-										loading="lazy"
-										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
-									/>
+											loading="lazy"
+											onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+										/>
+									</button>
 								{/each}
 							</div>
 						{/if}
@@ -681,7 +695,8 @@
 					{#if key === 'content'}
 						<div class="caption-cell" title={s.caption || '—'}>
 							{#if s.media_urls}
-									{#each parseMediaUrls(s.media_urls).slice(0, 3) as url, i}
+								{#each parseMediaUrls(s.media_urls).slice(0, 3) as url, i}
+									<button type="button" class="thumb-btn" onclick={() => openLightbox(url, 'Schedule media preview')} aria-label="Open image preview">
 										<img
 											src={url}
 											alt="Preview"
@@ -689,11 +704,12 @@
 											loading="lazy"
 											onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
 										/>
-										{#if i === 2 && parseMediaUrls(s.media_urls).length > 3}
-											<span class="thumb-more">+{parseMediaUrls(s.media_urls).length - 3}</span>
-										{/if}
-									{/each}
-								{/if}
+									</button>
+									{#if i === 2 && parseMediaUrls(s.media_urls).length > 3}
+										<span class="thumb-more">+{parseMediaUrls(s.media_urls).length - 3}</span>
+									{/if}
+								{/each}
+							{/if}
 							<span>{truncate(s.caption || '—', 60)}</span>
 						</div>
 					{:else if key === 'account_id'}
@@ -747,12 +763,14 @@
 						{#if s.media_urls}
 							<div class="sched-card-media">
 								{#each parseMediaUrls(s.media_urls).slice(0, 4) as url}
-									<img
-										src={url}
-										alt="Media preview"
-										loading="lazy"
-										onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
-									/>
+									<button type="button" class="thumb-btn" onclick={() => openLightbox(url, 'Schedule media preview')} aria-label="Open image preview">
+										<img
+											src={url}
+											alt="Media preview"
+											loading="lazy"
+											onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; }}
+										/>
+									</button>
 								{/each}
 							</div>
 						{/if}
@@ -1118,6 +1136,8 @@
 	/>
 {/if}
 
+<MediaLightbox url={lightboxUrl} alt={lightboxAlt} onClose={closeLightbox} />
+
 <svelte:window onkeydown={(e) => {
 	if (e.key === 'Escape') {
 		if (detailSchedule) closeDetail();
@@ -1437,6 +1457,22 @@
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
+	}
+
+	/* Clickable thumbnail wrapper (lightbox trigger) — resets button chrome */
+	.thumb-btn {
+		display: inline-block;
+		padding: 0;
+		margin: 0;
+		border: none;
+		background: none;
+		cursor: zoom-in;
+		line-height: 0;
+	}
+	.thumb-btn:focus-visible {
+		outline: 2px solid var(--color-primary, #6366f1);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 
 	.row-thumb {
