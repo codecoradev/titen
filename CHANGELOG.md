@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-09-10
+
+### Fixed
+
+- **Comments pipeline: persist `threads_comment_id`, dedup re-fetches, in-place attribution backfill (#262, #261)** — the insert never wrote the id column, making reply-via-API permanently fail `NO_THREADS_ID`; re-fetches duplicated rows. Now: id-keyed dedup, author-aware text fallback for id-less comments (Meta's standard-access `/replies` omits `id`/`from` for third-party commenters — documented platform behavior), and legacy anonymous rows backfill in place when identity arrives. API + MCP fetch paths normalize Meta's empty-string ids.
+
 ## [0.9.3] - 2026-09-10
 
 ### Added
