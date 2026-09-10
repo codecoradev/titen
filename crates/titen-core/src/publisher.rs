@@ -148,21 +148,29 @@ pub async fn publish(
                 .await
         }
         "CAROUSEL" => {
-            let mut children_ids = Vec::with_capacity(req.media_urls.len());
-            for url in &req.media_urls {
+            let total = req.media_urls.len();
+            let mut children_ids = Vec::with_capacity(total);
+            for (i, url) in req.media_urls.iter().enumerate() {
                 match client
                     .create_carousel_item(account, "IMAGE", Some(url.as_str()), None, None)
                     .await
                 {
                     Ok(id) => children_ids.push(id),
                     Err(e) => {
+                        let idx = i + 1;
+                        let ok = children_ids.len();
+                        // #257: surface WHICH child failed, the offending URL,
+                        // and which child containers already exist. Without
+                        // this every carousel failure looks identical and
+                        // production incidents (2026-09-08, 2026-09-10) require
+                        // guesswork about the failure point.
                         tracing::error!(
-                            "Partial carousel failure after {n} children. \
-                             Orphaned children IDs (manual cleanup needed): {children_ids:?}",
-                            n = children_ids.len()
+                            "Partial carousel failure at child {idx}/{total} after {ok} ok. \
+                             Orphaned children IDs (manual cleanup needed): {children_ids:?}"
                         );
                         return Err(TitenError::InvalidRequest(format!(
-                            "Failed to create carousel item: {e}"
+                            "Failed to create carousel item {idx}/{total} ({url}): {e}. \
+                             {ok} child container(s) already created: {children_ids:?}"
                         )));
                     }
                 }

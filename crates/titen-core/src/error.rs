@@ -65,6 +65,43 @@ impl From<reqwest::Error> for TitenError {
     }
 }
 
+impl TitenError {
+    /// Heuristic: does this error message look like a TRANSIENT Threads API
+    /// failure worth a bounded scheduler retry (#257)?
+    ///
+    /// Message-based (not enum-based) because transient errors arrive wrapped:
+    /// the publisher wraps carousel child-container failures into
+    /// `InvalidRequest("Failed to create carousel item: Threads API error: …")`,
+    /// so the OAuthException code only survives in the rendered text.
+    ///
+    /// Transient: OAuthException #1 (Meta catch-all "unknown error" — observed
+    /// killing carousel child creation on 2026-09-08 and 2026-09-10 while TEXT
+    /// and IMAGE kept publishing), OAuthException #24 ("resource does not
+    /// exist" — observed transient on 2026-08-25), and server-side HTTP
+    /// statuses (429/5xx).
+    /// Permanent: #100 (invalid parameter — our payload is wrong), #190
+    /// (auth/token), validation and caption errors.
+    pub fn is_transient_message(msg: &str) -> bool {
+        if msg.contains("[OAuthException #1]") || msg.contains("[OAuthException #24]") {
+            return true;
+        }
+        // Server-side HTTP failures surfaced by the threads_post/threads_get
+        // helpers as "(HTTP <status>)" in the message.
+        for status in [
+            "(HTTP 429",
+            "(HTTP 500",
+            "(HTTP 502",
+            "(HTTP 503",
+            "(HTTP 504",
+        ] {
+            if msg.contains(status) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 pub type Result<T> = std::result::Result<T, TitenError>;
 
 #[cfg(test)]
@@ -79,6 +116,54 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("Account not found"));
         assert!(msg.contains("user123"));
+    }
+
+    // ─── #257 transient-error classifier ──────────────────
+
+    #[test]
+    fn transient_oauth_exception_1() {
+        let msg = "Failed to create carousel item 1/5 (https://x/slide-1.jpg): \
+                   Threads API error: An unknown error occurred [OAuthException #1] \
+                   (HTTP 400 Bad Request)";
+        assert!(TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn transient_oauth_exception_24() {
+        let msg = "Threads API error: The requested resource does not exist [OAuthException #24] \
+             (HTTP 400 Bad Request)";
+        assert!(TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn transient_http_500() {
+        let msg = "Publish failed: Threads API error: (HTTP 500 Internal Server Error)";
+        assert!(TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn transient_http_429() {
+        let msg = "Threads API error: rate limited (HTTP 429 Too Many Requests)";
+        assert!(TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn permanent_oauth_exception_100() {
+        let msg = "Threads API error: Invalid parameter [OAuthException #100] \
+                   (HTTP 400 Bad Request)";
+        assert!(!TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn permanent_validation_error() {
+        let msg = "image_url is required for IMAGE posts";
+        assert!(!TitenError::is_transient_message(msg));
+    }
+
+    #[test]
+    fn permanent_caption_error() {
+        let msg = "caption exceeds the 499-character limit (CAPTION_TOO_LONG)";
+        assert!(!TitenError::is_transient_message(msg));
     }
 
     #[test]

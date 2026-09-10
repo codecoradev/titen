@@ -134,6 +134,14 @@ pub struct Schedule {
     /// Free-form origin identifier ("cmo-agent", "ci-pipeline", ...) set via
     /// the ingest endpoint (#242). NULL for dashboard-created schedules.
     pub source: Option<String>,
+    /// Number of publish attempts made by the scheduler (#257 retry).
+    /// 0 for rows created before migration 018 / non-scheduler paths.
+    #[serde(default)]
+    pub attempt_count: i64,
+    /// Retry eligibility timestamp (RFC3339 UTC). NULL = eligibility follows
+    /// `scheduled_at` (original behavior). Set by the scheduler when a
+    /// transient publish failure is deferred 10 minutes (#257).
+    pub next_due_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

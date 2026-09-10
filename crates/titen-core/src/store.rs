@@ -457,6 +457,21 @@ impl Store {
             }
         }
 
+        // 018 — transient-error retry: attempt_count + next_due_at columns (#257)
+        for stmt in split_sql_statements(include_str!(
+            "../../titen-api/migrations/018_schedule_retry.sql"
+        )) {
+            let result = sqlx::query(&stmt).execute(&self.pool).await;
+            if let Err(e) = result {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(TitenError::DatabaseError(format!(
+                        "migration 018 failed: {msg}"
+                    )));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -964,15 +979,74 @@ impl Store {
         //
         // Fix: use datetime(scheduled_at) to parse ISO 8601 → comparable format,
         // then compare against datetime('now').
+        //
+        // #257: when a transient failure deferred this schedule, next_due_at is
+        // set and overrides scheduled_at as the eligibility gate — otherwise a
+        // retry would fire on the very next tick (10min backoff would never hold).
         sqlx::query_as::<_, Schedule>(
             "SELECT * FROM schedules \
              WHERE status = 'pending' \
-               AND datetime(scheduled_at) <= datetime('now') \
+               AND (CASE \
+                     WHEN next_due_at IS NOT NULL THEN datetime(next_due_at) <= datetime('now') \
+                     ELSE datetime(scheduled_at) <= datetime('now') \
+                    END) \
              ORDER BY scheduled_at ASC",
         )
         .fetch_all(&self.pool)
         .await
         .map_err(Into::into)
+    }
+
+    /// Defer a schedule that just hit a transient publish error (#257).
+    ///
+    /// Resets the row to `pending` with a +`delay_secs` eligibility gate and
+    /// increments `attempt_count`. The caller decides retryability first —
+    /// this method unconditionally defers, so it must only be called when
+    /// `attempt_count` is still under the cap. `error` is stored on the row
+    /// (surfaced in the dashboard) with a `[retry N]` marker.
+    pub async fn defer_failed_schedule(
+        &self,
+        id: &str,
+        attempt: i64,
+        delay_secs: i64,
+        error: &str,
+    ) -> Result<()> {
+        let marker = format!("[retry {attempt}] {error}");
+        sqlx::query(
+            "UPDATE schedules \
+             SET status = 'pending', \
+                 attempt_count = ?, \
+                 next_due_at = datetime('now', ?), \
+                 error = ?, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind(attempt)
+        .bind(format!("+{delay_secs} seconds"))
+        .bind(marker)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Record a final (non-retryable) publish failure (#257).
+    /// Persists `attempt_count` so the dashboard shows how many tries were made.
+    pub async fn fail_schedule_final(&self, id: &str, attempt: i64, error: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE schedules \
+             SET status = 'failed', \
+                 attempt_count = ?, \
+                 error = ?, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind(attempt)
+        .bind(error)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     pub async fn create_schedule(&self, id: &str, input: &CreateSchedule) -> Result<Schedule> {
