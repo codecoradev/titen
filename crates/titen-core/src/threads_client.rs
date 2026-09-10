@@ -51,9 +51,12 @@ impl ThreadsClient {
             return Ok(account.clone());
         }
 
+        // Do NOT log the stored value — in the observed failure mode it IS
+        // the raw access token (mirrored into the user_id slot).
         warn!(
-            "Account @{} has unusable user_id ({:?}) — self-healing via /me",
-            account.username, account.user_id
+            "Account @{} has unusable user_id ({} chars, non-numeric) — self-healing via /me",
+            account.username,
+            account.user_id.len()
         );
         let (user_id, _username) = self.resolve_account(&account.access_token).await?;
 

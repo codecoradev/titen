@@ -38,9 +38,10 @@ mod tests {
     #[test]
     fn raw_token_as_id_is_not_usable() {
         // The observed production failure mode: the token stored in the
-        // user_id slot (ajianaz account, 2026-09-10).
+        // user_id slot (ajianaz account, 2026-09-10). Synthetic value with
+        // the same shape — a real token must never be embedded in tests.
         assert!(!is_user_id_usable(
-            "THAASBUF8ygJdBYmJZAb0RfMFFQemdLQjNueG44RS1EWVJFMm9mbzBmVlVaalJETV94TkNk"
+            "THXXSYNT0HET1CEXAMPL3TOKEN0PLACEH0LD3RVALUE0ONLY0FOR0TESTS0XX"
         ));
     }
 
