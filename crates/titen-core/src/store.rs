@@ -1519,24 +1519,87 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// Insert a fetched comment, with dedup (#261).
+    ///
+    /// Natural key: `threads_comment_id` when Meta returns one. Meta's
+    /// standard-access `/replies` may omit `id`/`from` for third-party
+    /// commenters — in that case dedup falls back to `(post_id, text)` among
+    /// rows that also lack a Threads id, so re-fetches no longer duplicate
+    /// rows. When an id-less row later gets attributed (backfill case), the
+    /// existing row is updated in place: threads_comment_id/author fields are
+    /// filled via COALESCE, fetched_at is bumped, and the row id (plus its
+    /// sentiment/reply state) is preserved.
     pub async fn insert_comment(
         &self,
         id: &str,
         post_id: &str,
+        threads_comment_id: Option<&str>,
         author_username: Option<&str>,
         author_user_id: Option<&str>,
         text: &str,
     ) -> Result<Comment> {
+        let existing: Option<Comment> = if let Some(tcid) = threads_comment_id {
+            // Exact id match first; else an id-less row with identical text
+            // (attribution backfill onto a legacy row).
+            sqlx::query_as::<_, Comment>(
+                "SELECT * FROM comments \
+                 WHERE post_id = ?1 AND (threads_comment_id = ?2 OR (threads_comment_id IS NULL AND text = ?3)) \
+                 ORDER BY (threads_comment_id IS NOT NULL) DESC LIMIT 1",
+            )
+            .bind(post_id)
+            .bind(tcid)
+            .bind(text)
+            .fetch_optional(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, Comment>(
+                "SELECT * FROM comments \
+                 WHERE post_id = ?1 AND text = ?2 AND threads_comment_id IS NULL",
+            )
+            .bind(post_id)
+            .bind(text)
+            .fetch_optional(&self.pool)
+            .await?
+        };
+
         // Explicit canonical fetched_at so the row never depends on the
         // space-format schema default, which breaks RFC3339 comparisons.
         let fetched_at = chrono::Utc::now()
             .format(crate::time::CANONICAL_FMT)
             .to_string();
+
+        if let Some(prev) = existing {
+            // Refresh attribution + freshness; keep the original row id,
+            // sentiment, and reply state.
+            sqlx::query(
+                "UPDATE comments SET \
+                    threads_comment_id = COALESCE(?1, threads_comment_id), \
+                    author_username = COALESCE(?2, author_username), \
+                    author_user_id = COALESCE(?3, author_user_id), \
+                    fetched_at = ?4 \
+                 WHERE id = ?5",
+            )
+            .bind(threads_comment_id)
+            .bind(author_username)
+            .bind(author_user_id)
+            .bind(&fetched_at)
+            .bind(&prev.id)
+            .execute(&self.pool)
+            .await?;
+
+            return sqlx::query_as::<_, Comment>("SELECT * FROM comments WHERE id = ?")
+                .bind(&prev.id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(Into::into);
+        }
+
         sqlx::query(
-            "INSERT INTO comments (id, post_id, author_username, author_user_id, text, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO comments (id, post_id, threads_comment_id, author_username, author_user_id, text, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(post_id)
+        .bind(threads_comment_id)
         .bind(author_username)
         .bind(author_user_id)
         .bind(text)

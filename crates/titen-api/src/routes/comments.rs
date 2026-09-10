@@ -90,11 +90,14 @@ pub async fn fetch_comments(
     let mut stored = Vec::new();
     for cd in &comment_data {
         let id = Uuid::now_v7().to_string();
+        // Meta returns "" for missing ids under standard access — treat as None.
+        let tcid = Some(cd.threads_comment_id.as_str()).filter(|s| !s.is_empty());
         match state
             .store
             .insert_comment(
                 &id,
                 &post_id,
+                tcid,
                 cd.author_username.as_deref(),
                 cd.author_user_id.as_deref(),
                 &cd.text,
