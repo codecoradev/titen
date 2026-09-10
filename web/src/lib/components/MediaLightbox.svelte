@@ -14,20 +14,16 @@
 
 	let { url, alt = 'Media preview', onClose }: Props = $props();
 
-	let wasOpen = $state(false);
-
+	// Lock body scroll while the lightbox is open. No state writes inside the
+	// effect — writing tracked state here would re-trigger the effect and run
+	// the cleanup, undoing the lock immediately (CodeCora scan alert #221).
 	$effect(() => {
-		if (url && !wasOpen) {
-			wasOpen = true;
-			const prev = document.body.style.overflow;
-			document.body.style.overflow = 'hidden';
-			return () => {
-				document.body.style.overflow = prev;
-			};
-		}
-		if (!url && wasOpen) {
-			wasOpen = false;
-		}
+		if (!url) return;
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = prev;
+		};
 	});
 </script>
 
