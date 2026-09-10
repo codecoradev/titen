@@ -1,6 +1,7 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { formatDateTime } from '$lib/tz';
 	import { approveSchedule, rejectSchedule, deleteSchedule, parseMediaUrls } from '$lib/api';
@@ -19,6 +20,7 @@
 	let rejectReason = $state('');
 	let acting = $state(false);
 	let showDeleteConfirm = $state(false);
+	let lightboxUrl = $state<string | null>(null);
 
 	// Parse media URLs (backend stores JSON-encoded array; legacy rows may be comma-separated)
 	let mediaUrls: string[] = $derived(parseMediaUrls(schedule.media_urls));
@@ -146,7 +148,9 @@
 					<div class="media-grid">
 						{#each mediaUrls as url}
 							<div class="media-thumb">
-								<img src={url} alt="Media preview" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
+								<button type="button" class="thumb-btn" onclick={() => (lightboxUrl = url)} aria-label="Open image preview">
+									<img src={url} alt="Media preview" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
+								</button>
 							</div>
 						{/each}
 					</div>
@@ -222,6 +226,8 @@
 	</Dialog.Content>
 </Dialog.Root>
 
+<MediaLightbox url={lightboxUrl} alt="Media preview" onClose={() => (lightboxUrl = null)} />
+
 <ConfirmDialog
 	open={showDeleteConfirm}
 	title="Delete Schedule"
@@ -264,6 +270,22 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xs);
+	}
+
+	/* Clickable thumbnail wrapper (lightbox trigger) — resets button chrome */
+	.thumb-btn {
+		display: inline-block;
+		padding: 0;
+		margin: 0;
+		border: none;
+		background: none;
+		cursor: zoom-in;
+		line-height: 0;
+	}
+	.thumb-btn:focus-visible {
+		outline: 2px solid var(--color-primary, #6366f1);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 
 	.detail-caption {

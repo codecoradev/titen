@@ -1,6 +1,7 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	import { formatDateTime } from '$lib/tz';
 	import { getPostInsights, getAnalyticsTrend } from '$lib/api';
 	import { toast } from '$lib/toast.svelte';
@@ -17,6 +18,7 @@
 	let trend = $state<AnalyticsTrend[]>([]);
 	let loadingInsights = $state(false);
 	let loadingTrend = $state(false);
+	let lightboxUrl = $state<string | null>(null);
 
 	// Parse media URLs from carousel_children JSON
 	let mediaUrls: string[] = $derived.by(() => {
@@ -127,7 +129,9 @@
 					<div class="media-grid">
 						{#each mediaUrls as url}
 							<div class="media-thumb">
-								<img src={url} alt="Media" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
+								<button type="button" class="thumb-btn" onclick={() => (lightboxUrl = url)} aria-label="Open image preview">
+									<img src={url} alt="Media" loading="lazy" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.opacity = '0'; t.style.minHeight = '80px'; t.alt = 'Failed to load image'; }} />
+								</button>
 							</div>
 						{/each}
 					</div>
@@ -211,6 +215,8 @@
 	</Dialog.Content>
 </Dialog.Root>
 
+<MediaLightbox url={lightboxUrl} alt="Media preview" onClose={() => (lightboxUrl = null)} />
+
 <style>
 	.detail-row {
 		display: flex;
@@ -248,6 +254,22 @@
 
 	.permalink-link:hover {
 		text-decoration: underline;
+	}
+
+	/* Clickable thumbnail wrapper (lightbox trigger) — resets button chrome */
+	.thumb-btn {
+		display: inline-block;
+		padding: 0;
+		margin: 0;
+		border: none;
+		background: none;
+		cursor: zoom-in;
+		line-height: 0;
+	}
+	.thumb-btn:focus-visible {
+		outline: 2px solid var(--color-primary, #6366f1);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
 
 	.detail-section {
