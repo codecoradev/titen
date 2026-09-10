@@ -5,6 +5,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { listAccounts, createAccount, deleteAccount, refreshToken, getOAuthConfig, getThreadsProfile, createOAuthState } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import { formatDate as formatDateTz } from '$lib/tz';
@@ -332,27 +333,27 @@
 			<form onsubmit={(e) => { e.preventDefault(); handleAddAccount(); }}>
 				<div class="form-group mb-sm">
 					<label class="form-label" for="user_id">User ID <span class="text-hint">(optional)</span></label>
-					<input id="user_id" class="form-input" type="text" bind:value={formUserId} placeholder="e.g. 1234567890" disabled={submitting} />
+					<Input id="user_id" type="text" bind:value={formUserId} placeholder="e.g. 1234567890" disabled={submitting} />
 				</div>
 				<div class="form-group mb-sm">
 					<label class="form-label" for="username">Username <span class="text-hint">(optional)</span></label>
-					<input id="username" class="form-input" type="text" bind:value={formUsername} placeholder="e.g. @username" disabled={submitting} />
+					<Input id="username" type="text" bind:value={formUsername} placeholder="e.g. @username" disabled={submitting} />
 				</div>
 				<div class="form-group mb-sm">
 					<label class="form-label" for="access_token">Access Token</label>
-					<input id="access_token" class="form-input" type="password" bind:value={formAccessToken} placeholder="Long-lived access token" disabled={submitting} />
+					<Input id="access_token" type="password" bind:value={formAccessToken} placeholder="Long-lived access token" disabled={submitting} />
 				</div>
 				<div class="form-group mb-sm">
 					<label class="form-label" for="expires_at">Expires At <span class="text-hint">(optional)</span></label>
-					<input id="expires_at" class="form-input" type="datetime-local" bind:value={formExpiresAt} disabled={submitting} />
+					<Input id="expires_at" type="datetime-local" bind:value={formExpiresAt} disabled={submitting} />
 				</div>
 				<div class="form-group mb-sm">
 					<label class="form-label" for="app_id">App ID <span class="text-hint">(optional)</span></label>
-					<input id="app_id" class="form-input" type="text" bind:value={formAppId} placeholder="Facebook App ID" disabled={submitting} />
+					<Input id="app_id" type="text" bind:value={formAppId} placeholder="Facebook App ID" disabled={submitting} />
 				</div>
 				<div class="form-group mb-md">
 					<label class="form-label" for="app_secret">App Secret <span class="text-hint">(optional)</span></label>
-					<input id="app_secret" class="form-input" type="password" bind:value={formAppSecret} placeholder="Facebook App Secret" disabled={submitting} />
+					<Input id="app_secret" type="password" bind:value={formAppSecret} placeholder="Facebook App Secret" disabled={submitting} />
 				</div>
 				<div class="confirm-actions">
 					<Button type="button" variant="outline" size="sm" onclick={() => (showAddModal = false)}>Cancel</Button>

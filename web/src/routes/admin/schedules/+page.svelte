@@ -24,6 +24,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
+	import { Input } from '$lib/components/ui/input';
 import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 
 	type StatusFilter = 'all' | 'draft' | 'pending' | 'processing' | 'published' | 'failed' | 'rejected';
@@ -522,16 +523,15 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	<!-- Filters -->
 	<div class="filter-bar">
 		<div class="filter-top">
-			<div class="form-group filter-search">
-				<label class="form-label" for="filter-search">Search</label>
-				<input
-					id="filter-search"
-					class="form-input"
-					type="search"
-					placeholder="Search caption…"
-					bind:value={filterSearch}
-				/>
-			</div>
+				<div class="form-group filter-search">
+					<label class="form-label" for="filter-search">Search</label>
+					<Input
+						id="filter-search"
+						type="search"
+						placeholder="Search caption…"
+						bind:value={filterSearch}
+					/>
+				</div>
 
 			{#if hasActiveFilters}
 				<Button variant="ghost" size="sm" class="filter-reset" onclick={resetFilters}>✕ Reset</Button>
@@ -618,25 +618,23 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 				</Select.Root>
 			</div>
 
-			<div class="form-group">
-				<label class="form-label" for="filter-from">From</label>
-				<input
-					id="filter-from"
-					class="form-input"
-					type="date"
-					bind:value={filterFrom}
-				/>
-			</div>
+				<div class="form-group">
+					<label class="form-label" for="filter-from">From</label>
+					<Input
+						id="filter-from"
+						type="date"
+						bind:value={filterFrom}
+					/>
+				</div>
 
-			<div class="form-group">
-				<label class="form-label" for="filter-to">To</label>
-				<input
-					id="filter-to"
-					class="form-input"
-					type="date"
-					bind:value={filterTo}
-				/>
-			</div>
+				<div class="form-group">
+					<label class="form-label" for="filter-to">To</label>
+					<Input
+						id="filter-to"
+						type="date"
+						bind:value={filterTo}
+					/>
+				</div>
 		</div>
 	</div>
 
@@ -861,8 +859,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 				<div class="form-row">
 					<div class="form-group flex-1">
 						<label class="form-label" for="modal-scheduled">Scheduled At <span class="required">*</span></label>
-						<input
-							class="form-input"
+						<Input
 							type="datetime-local"
 							id="modal-scheduled"
 							bind:value={modalScheduledAt}
@@ -903,8 +900,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 				{#if modalMediaType === 'IMAGE'}
 					<div class="form-group">
 						<label class="form-label" for="modal-image-url">Image URL <span class="required">*</span></label>
-						<input
-							class="form-input"
+						<Input
 							type="url"
 							id="modal-image-url"
 							bind:value={modalImageUrl}
@@ -916,14 +912,13 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 					<div class="form-group">
 						<label class="form-label">Carousel Image URLs <span class="required">*</span></label>
 						<span class="form-helper">2–20 image URLs. Each becomes a carousel slide.</span>
-						{#each modalCarouselUrls as _, idx}
-							<div class="carousel-url-row">
-								<input
-									class="form-input"
-									type="url"
-									placeholder={`Image ${idx + 1} URL`}
-									bind:value={modalCarouselUrls[idx]}
-								/>
+							{#each modalCarouselUrls as _, idx}
+								<div class="carousel-url-row">
+									<Input
+										type="url"
+										placeholder={`Image ${idx + 1} URL`}
+										bind:value={modalCarouselUrls[idx]}
+									/>
 								{#if modalCarouselUrls.length > 2}
 										<Button
 											variant="ghost"
@@ -970,21 +965,24 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 										<Button variant="ghost" size="sm" onclick={() => removeBundleItem(idx)} type="button">✕</Button>
 									{/if}
 								</div>
-								<select class="form-input" bind:value={item.mediaType} style="margin-bottom:0.5rem;">
-									<option value="TEXT">TEXT</option>
-									<option value="IMAGE">IMAGE</option>
-								</select>
-								<textarea
-									class="form-input"
-									rows="2"
+								<Select.Root type="single" bind:value={item.mediaType}>
+									<Select.Trigger class="mb-2">
+										{item.mediaType === 'IMAGE' ? 'IMAGE' : 'TEXT'}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="TEXT" label="TEXT">TEXT</Select.Item>
+										<Select.Item value="IMAGE" label="IMAGE">IMAGE</Select.Item>
+									</Select.Content>
+								</Select.Root>
+								<Textarea
+									rows={2}
 									placeholder={idx === 0 ? 'Root post caption…' : 'Reply caption…'}
 									maxlength={499}
 									bind:value={item.caption}
-									style="margin-bottom:0.5rem;"
-								></textarea>
+									class="mb-2"
+								/>
 								{#if item.mediaType === 'IMAGE'}
-									<input
-										class="form-input"
+									<Input
 										placeholder="Image URL (https://…)"
 										bind:value={item.mediaUrl}
 									/>
@@ -1011,7 +1009,6 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 						placeholder="Write your post caption..."
 						rows={4}
 						maxlength={499}
-						class="form-input"
 					/>
 				</div>
 				{/if}
@@ -1043,8 +1040,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 			<div class="modal-stack">
 				<div class="form-group">
 					<label class="form-label" for="edit-scheduled">Scheduled At</label>
-					<input
-						class="form-input"
+					<Input
 						type="datetime-local"
 						id="edit-scheduled"
 						bind:value={editScheduledAt}
@@ -1065,7 +1061,6 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 						placeholder="Write your post caption..."
 						rows={4}
 						maxlength={499}
-						class="form-input"
 					/>
 				</div>
 			</div>
@@ -1097,7 +1092,6 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 								bind:value={rejectReason}
 								placeholder="Why is this schedule being rejected?"
 								rows={3}
-								class="form-input"
 							/>
 						</div>
 			</div>
@@ -1372,10 +1366,6 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 			grid-template-columns: repeat(2, 1fr);
 		}
 
-		.filter-fields .form-group:has(> input[type='date']) {
-			grid-column: span 1;
-		}
-
 		.view-toggle :global(button) {
 			flex: 0 0 auto;
 		}
@@ -1535,7 +1525,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 		align-items: center;
 		margin-bottom: 0.5rem;
 	}
-	.carousel-url-row .form-input {
+	.carousel-url-row :global(input) {
 		flex: 1;
 	}
 
