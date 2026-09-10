@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-10
+
+### Added
+
+- **Bounded scheduler retry for transient Threads API errors (#257)** — publish failures classified via message heuristics: transient (`OAuthException #1` Meta catch-all, `#24` resource-not-exist, HTTP 429/5xx) get one automatic retry 10 minutes later (schedule resets to `pending` with a `[retry N]` error marker); permanent errors (`#100` invalid parameter, `#190` auth, validation) fail immediately. Bundle members are excluded — a chain that breaks fails the whole chain. New `attempt_count` + `next_due_at` columns (migration 018): `next_due_at` overrides `scheduled_at` as the scheduler's eligibility gate, so the backoff actually holds.
+- **Carousel failure enrichment (#257)** — child-container failures now report WHICH slide failed (`3/5`), the offending URL, and the orphaned child container IDs instead of an identical message for every failure. `attempt_count` persisted on final failure for audit.
+
+- **Click-to-zoom lightbox on all media thumbnails (#256)** — full-screen preview on schedules (table rows, expanded detail, cards view), schedule detail modal, and post detail modal. Close via X / Escape / backdrop, body scroll locked while open. (The media library page already had its own preview.)
+
+### Fixed
+
+- **Body scroll-lock self-undo in the lightbox (#256)** — a `$effect` that wrote tracked state re-triggered itself and immediately ran its cleanup, restoring background scroll while the preview was open (caught by CodeCora code scanning).
+
 ## [0.9.2] - 2026-09-08
 
 ### Added
