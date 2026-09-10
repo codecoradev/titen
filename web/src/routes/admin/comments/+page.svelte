@@ -9,6 +9,7 @@
 		replyToComment,
 	} from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
@@ -241,9 +242,8 @@
 		</Select.Root>
 	</div>
 	<div class="filter-group filter-group--grow">
-		<input
-			type="text"
-			class="input input--sm"
+		<Input
+			type="search"
 			placeholder="Search comments..."
 			bind:value={searchQuery}
 		/>
