@@ -79,6 +79,7 @@ use titen_core::models::{
         crate::routes::comments::fetch_comments,
         crate::routes::comments::get_sentiment,
         crate::routes::comments::update_reply_status,
+        crate::routes::comments::delete_comment,
         crate::routes::comments::reply_to_comment,
         // Analytics
         crate::routes::analytics::list_analytics,

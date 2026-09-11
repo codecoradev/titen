@@ -430,7 +430,7 @@ pub async fn serve(
         )
         .route(
             "/api/comments/{id}",
-            patch(routes::comments::update_reply_status),
+            patch(routes::comments::update_reply_status).delete(routes::comments::delete_comment),
         )
         .route(
             "/api/comments/{id}/reply",

@@ -59,6 +59,11 @@ pub fn test_app(state: AppState) -> Router {
             get(routes::threads_bundle::get_thread_bundle),
         )
         .route(
+            "/api/comments/{id}",
+            axum::routing::patch(routes::comments::update_reply_status)
+                .delete(routes::comments::delete_comment),
+        )
+        .route(
             "/api/accounts/{id}",
             put(routes::accounts::update_account).delete(routes::accounts::delete_account),
         )
@@ -99,6 +104,8 @@ pub async fn send(req: axum::http::Request<Body>, app: &Router) -> axum::http::R
 
 /// Helper: create a test account via the Store directly (avoids Threads API calls).
 /// Returns the account JSON from the list endpoint.
+// Shared across test binaries; not every binary uses it.
+#[allow(dead_code)]
 pub async fn create_test_account(app: &Router, pool: &SqlitePool) -> Value {
     let store = Store::new(pool.clone());
     let input = titen_core::models::CreateAccount {

@@ -1664,6 +1664,22 @@ impl Store {
             })
     }
 
+    /// Delete a comment row from the local store (admin cleanup, #267).
+    ///
+    /// DB-local by design: this never calls the Threads API. Deleting someone
+    /// else's comment on Threads is not possible via the Graph API anyway;
+    /// moderation there is covered by the hide/unhide endpoints.
+    pub async fn delete_comment(&self, id: &str) -> Result<()> {
+        let result = sqlx::query("DELETE FROM comments WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(TitenError::CommentNotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
     /// Update comment reply status and optionally store reply text.
     pub async fn update_comment_reply(
         &self,

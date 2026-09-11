@@ -248,3 +248,32 @@ async fn backfill_never_grafts_onto_another_authors_row() {
     assert_eq!(alice_after.author_username.as_deref(), Some("alice"));
     assert_eq!(alice_after.threads_comment_id, None);
 }
+
+#[tokio::test]
+async fn delete_comment_removes_row() {
+    let pool = pool().await;
+    let store = titen_core::Store::new(pool.clone());
+
+    store
+        .insert_comment("c-del", "post-1", Some("tc-d"), Some("alice"), None, "bye")
+        .await
+        .expect("seed");
+
+    store.delete_comment("c-del").await.expect("delete");
+    assert!(store.get_comment("c-del").await.is_err());
+}
+
+#[tokio::test]
+async fn delete_missing_comment_is_not_found() {
+    let pool = pool().await;
+    let store = titen_core::Store::new(pool.clone());
+
+    let err = store
+        .delete_comment("does-not-exist")
+        .await
+        .expect_err("must be CommentNotFound");
+    assert!(
+        err.to_string().contains("not found"),
+        "unexpected error: {err}"
+    );
+}
