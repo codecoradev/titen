@@ -478,6 +478,13 @@ impl Store {
             }
         }
 
+        // 019 (Rust side) — purge id-less comment rows superseded by an
+        // attributed twin (pre-#262 residue, #266). Idempotent.
+        let purged = self.cleanup_superseded_comments().await?;
+        if purged > 0 {
+            tracing::info!("Purged {purged} superseded id-less comment row(s)");
+        }
+
         Ok(())
     }
 
@@ -1662,6 +1669,39 @@ impl Store {
                 sqlx::Error::RowNotFound => TitenError::CommentNotFound(id.to_string()),
                 other => other.into(),
             })
+    }
+
+    /// Purge legacy id-less comment rows that are superseded by an attributed
+    /// twin (same post + text) — residue from pre-#262 fetches that the
+    /// backfill path can never reconcile, because once the attributed twin
+    /// exists every future fetch takes the exact-id match branch (#266).
+    ///
+    /// Guards mirror #261's safety rules:
+    /// - never touch rows carrying reply workflow state (`reply_status`
+    ///   other than `'new'`, `replied_at`, or `reply_text`);
+    /// - an attributed twin supersedes an id-less row only when the twin's
+    ///   author matches the row's author, or the row is anonymous.
+    ///
+    /// Idempotent; returns the number of rows deleted.
+    pub async fn cleanup_superseded_comments(&self) -> Result<u64> {
+        let result = sqlx::query(
+            "DELETE FROM comments \
+             WHERE threads_comment_id IS NULL \
+               AND reply_status = 'new' \
+               AND replied_at IS NULL \
+               AND reply_text IS NULL \
+               AND EXISTS ( \
+                 SELECT 1 FROM comments c2 \
+                 WHERE c2.post_id = comments.post_id \
+                   AND c2.text = comments.text \
+                   AND c2.threads_comment_id IS NOT NULL \
+                   AND (c2.author_username = comments.author_username \
+                        OR comments.author_username IS NULL) \
+               )",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
     }
 
     /// Delete a comment row from the local store (admin cleanup, #267).
