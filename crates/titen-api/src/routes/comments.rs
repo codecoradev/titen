@@ -400,3 +400,48 @@ pub async fn reply_to_comment(
         )),
     }
 }
+
+/// Delete a comment row from the local store (admin cleanup, #267).
+///
+/// DB-local by design — this endpoint never calls the Threads API.
+#[utoipa::path(
+    delete,
+    path = "/api/comments/{id}",
+    tag = "comments",
+    params(
+        ("id" = String, Path, description = "Comment ID"),
+    ),
+    responses(
+        (status = 204, description = "Comment deleted"),
+        (status = 404, description = "Comment not found", body = serde_json::Value),
+    ),
+    security(("api_key" = [])),
+)]
+pub async fn delete_comment(
+    State(state): State<AppState>,
+    Path(comment_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    match state.store.delete_comment(&comment_id).await {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("not found") {
+                Err((
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "error": msg,
+                        "code": "COMMENT_NOT_FOUND"
+                    })),
+                ))
+            } else {
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": msg,
+                        "code": "DELETE_FAILED"
+                    })),
+                ))
+            }
+        }
+    }
+}
