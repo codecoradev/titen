@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	import { formatDateTime } from '$lib/tz';
@@ -210,7 +211,7 @@
 
 		<!-- Footer -->
 		<div class="detail-footer">
-			<button class="btn-secondary" onclick={onClose}>Close</button>
+			<Button variant="outline" onclick={onClose}>Close</Button>
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
@@ -267,7 +268,7 @@
 		line-height: 0;
 	}
 	.thumb-btn:focus-visible {
-		outline: 2px solid var(--color-primary, #6366f1);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 		border-radius: var(--radius-sm);
 	}

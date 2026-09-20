@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -209,19 +210,19 @@
 		<!-- Footer actions -->
 		<div class="detail-footer">
 			{#if schedule.status === 'draft'}
-				<button class="btn-success" onclick={handleApprove} disabled={acting}>
+				<Button variant="default" class="bg-[var(--color-success)]" onclick={handleApprove} disabled={acting}>
 					{acting ? '...' : 'Approve'}
-				</button>
-				<button class="btn-danger" onclick={handleReject} disabled={acting}>
+				</Button>
+				<Button variant="destructive" onclick={handleReject} disabled={acting}>
 					{acting ? '...' : showRejectInput ? 'Confirm reject' : 'Reject'}
-				</button>
+				</Button>
 			{/if}
 			{#if ['draft', 'rejected', 'failed'].includes(schedule.status)}
-				<button class="btn-ghost" onclick={() => (showDeleteConfirm = true)} disabled={acting}>
+				<Button variant="ghost" onclick={() => (showDeleteConfirm = true)} disabled={acting}>
 					Delete
-				</button>
+				</Button>
 			{/if}
-			<button class="btn-secondary" onclick={onClose}>Close</button>
+			<Button variant="outline" onclick={onClose}>Close</Button>
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
@@ -283,7 +284,7 @@
 		line-height: 0;
 	}
 	.thumb-btn:focus-visible {
-		outline: 2px solid var(--color-primary, #6366f1);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 		border-radius: var(--radius-sm);
 	}

@@ -387,7 +387,7 @@
 	.account-avatar {
 		width: 40px;
 		height: 40px;
-		border-radius: var(--radius-full);
+		border-radius: var(--radius-pill);
 		object-fit: cover;
 		flex-shrink: 0;
 	}

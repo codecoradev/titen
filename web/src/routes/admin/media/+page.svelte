@@ -360,7 +360,7 @@
 			</div>
 			<div class="mt-3 flex items-center justify-between gap-4 px-2 pb-1">
 				<div class="min-w-0">
-					<p class="truncate text-sm font-medium">{previewItem.filename}</p>
+					<p class="truncate text-sm font-medium" title={previewItem.filename}>{previewItem.filename}</p>
 					<p class="text-xs text-muted-foreground">
 						{previewItem.content_type} · {formatSize(previewItem.size_bytes)}
 					</p>

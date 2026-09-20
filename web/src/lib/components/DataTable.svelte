@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	interface Column {
 		key: string;
@@ -110,24 +111,29 @@
 			</Table.Body>
 		</Table.Root>
 	{:else if rows.length === 0}
-		<div class="empty-state">
-			<p class="empty-state-title">{emptyTitle}</p>
-			{#if emptyDesc}
-				<p class="empty-state-desc">{emptyDesc}</p>
-			{/if}
-		</div>
+		<EmptyState title={emptyTitle} description={emptyDesc} />
 	{:else}
 		<Table.Root>
 			<Table.Header>
 				<Table.Row>
 					{#each allColumns as col}
 						<Table.Head
-							class={[col.sortable ? 'cursor-pointer select-none' : '', colClass(col)].filter(Boolean).join(' ')}
-							onclick={() => col.sortable && toggleSort(col.key)}
+							class={[col.sortable ? 'sort-th' : '', colClass(col)].filter(Boolean).join(' ')}
+							aria-sort={col.sortable ? (sortKey === col.key ? (sortAsc ? 'ascending' : 'descending') : 'none') : undefined}
 						>
-							{col.label}
-							{#if col.sortable && sortKey === col.key}
-								<span class="ml-1 text-xs">{sortAsc ? '↑' : '↓'}</span>
+							{#if col.sortable}
+								<button
+									class="th-sort-btn"
+									onclick={() => toggleSort(col.key)}
+									title="Sort by {col.label}"
+								>
+									{col.label}
+									{#if sortKey === col.key}
+										<span class="ml-1 text-xs" aria-hidden="true">{sortAsc ? '↑' : '↓'}</span>
+									{/if}
+								</button>
+							{:else}
+								{col.label}
 							{/if}
 						</Table.Head>
 					{/each}
@@ -202,7 +208,24 @@
 	}
 
 	:global(.row-detail td) {
-		background: var(--color-bg-subtle, rgba(0, 0, 0, 0.025));
+		background: var(--color-bg-subtle);
 		border-top: none;
+	}
+
+	/* Sortable header: native button for keyboard access (Enter/Space),
+	   styled to visually merge with the th (#275). */
+	.th-sort-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		background: none;
+		border: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		letter-spacing: inherit;
+		text-transform: inherit;
+		color: inherit;
+		cursor: pointer;
 	}
 </style>
