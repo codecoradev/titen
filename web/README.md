@@ -1,42 +1,30 @@
-# sv
+# Titen Web Dashboard
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit 5 + shadcn-svelte + Tailwind v4 frontend for the Titen Threads API manager (proxied to the Rust API by `src/hooks.server.ts`).
 
-## Creating a project
+## Design System
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **[design/TOKENS.md](./design/TOKENS.md)** — design-token spec (Hallmark/Cobalt, OKLCH, hue 260). The single source of truth for color, spacing, type, radii, motion, and z-index.
+- **[design/COMPONENT-STANDARDS.md](./design/COMPONENT-STANDARDS.md)** — canonical components (shadcn primitives + shared components) and the contracts every page must follow (toast, loading, empty, destructive actions, icons, focus/motion).
 
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.16.4 create --template minimal --types ts --no-install .
-```
+Rules in short: consume semantic token aliases (no hex, no palette classes, no fallbacks), use shadcn `Button`/`Field`/`Dialog` (the legacy `.btn-*`/`.form-*` layer is removed), render feedback via the live-region toast, skeletons for any wait >150ms, shared `EmptyState` for zero states, two-stage confirmation for publish-triggering (HITL) actions.
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+bun install
+bun run dev -- --open
 ```
 
 ## Building
 
-To create a production version of your app:
-
 ```sh
-npm run build
+bun run build
+bun run preview
 ```
 
-You can preview the production build with `npm run preview`.
+Type checking:
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```sh
+npx svelte-check --threshold error
+```
