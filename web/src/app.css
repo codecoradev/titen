@@ -979,6 +979,16 @@ textarea.form-input {
 .toast--error   { border-left: 3px solid var(--color-error); }
 .toast--info    { border-left: 3px solid var(--color-info); }
 
+/* Non-color cue per toast type (icon mirrors the border color) */
+.toast-icon {
+	flex-shrink: 0;
+	width: 1rem;
+	height: 1rem;
+}
+.toast--success .toast-icon { color: var(--color-success); }
+.toast--error   .toast-icon { color: var(--color-error); }
+.toast--info    .toast-icon { color: var(--color-info); }
+
 /* ── Tabular numbers for data ── */
 .tabular-nums {
 	font-variant-numeric: tabular-nums;

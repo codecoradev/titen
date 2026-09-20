@@ -8,6 +8,9 @@ import MessageSquare from '@lucide/svelte/icons/message-square';
 import ChartLine from '@lucide/svelte/icons/chart-line';
 import ImageIcon from '@lucide/svelte/icons/image';
 import SettingsIcon from '@lucide/svelte/icons/settings';
+import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
+import XCircle from '@lucide/svelte/icons/x-circle';
+import Info from '@lucide/svelte/icons/info';
 	import '../../app.css';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
@@ -181,10 +184,17 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 	</div>
 </div>
 
-<!-- Toast container -->
-<div class="toast-container">
+<!-- Toast container — polite live region; errors assert as role=alert -->
+<div class="toast-container" role="status" aria-live="polite">
 	{#each getToasts().toasts as t (t.id)}
-		<div class="toast toast--{t.type}">
+		<div class="toast toast--{t.type}" role={t.type === 'error' ? 'alert' : undefined}>
+			{#if t.type === 'success'}
+				<CheckCircle2 class="toast-icon" aria-hidden="true" />
+			{:else if t.type === 'error'}
+				<XCircle class="toast-icon" aria-hidden="true" />
+			{:else}
+				<Info class="toast-icon" aria-hidden="true" />
+			{/if}
 			{t.message}
 		</div>
 	{/each}
