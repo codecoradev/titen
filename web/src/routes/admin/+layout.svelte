@@ -11,11 +11,12 @@ import SettingsIcon from '@lucide/svelte/icons/settings';
 import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
 import XCircle from '@lucide/svelte/icons/x-circle';
 import Info from '@lucide/svelte/icons/info';
+import AtSign from '@lucide/svelte/icons/at-sign';
+import Clock from '@lucide/svelte/icons/clock';
 	import '../../app.css';
 	import { getToasts } from '$lib/toast.svelte';
 	import { page } from '$app/state';
-	import { checkSession, logout, listAccounts } from '$lib/api';
-	import type { Account } from '$lib/types';
+	import { checkSession, logout } from '$lib/api';
 	import { fetchTimezone, getTimezone } from '$lib/tz';
 	import { goto } from '$app/navigation';
 
@@ -26,36 +27,18 @@ import Info from '@lucide/svelte/icons/info';
 	let appVersion = $state('');
 	let tzLabel = $state('');
 
-	// Global account switcher: akun aktif dipakai sebagai default filter
-	// di Schedules/Posts/Calendar (halaman tetap bisa override).
-	let accounts = $state<Account[]>([]);
-	let accountsLoaded = $state(false);
-	let activeAccountId = $state<string>(
-		typeof localStorage !== 'undefined'
-			? localStorage.getItem('titen.activeAccount') || 'all'
-			: 'all'
-	);
-
-	function setActiveAccount(id: string) {
-		activeAccountId = id;
-		try {
-			localStorage.setItem('titen.activeAccount', id);
-		} catch {
-			/* private mode — ignore */
-		}
+	// Mobile drawer: Escape closes; body scroll locked while open (#275)
+	function onWindowKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && sidebarOpen) closeSidebar();
 	}
 
 	$effect(() => {
-		if (!authed || accountsLoaded) return;
-		(async () => {
-			try {
-				accounts = (await listAccounts()) ?? [];
-			} catch {
-				/* non-fatal — switcher stays empty */
-			} finally {
-				accountsLoaded = true; // guard against re-fetch loops
-			}
-		})();
+		if (!sidebarOpen) return;
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = prev;
+		};
 	});
 
 	$effect(() => {
@@ -92,7 +75,7 @@ import Info from '@lucide/svelte/icons/info';
 		{ href: '/admin/schedules', label: 'Schedules', icon: CalendarClock },
 	{ href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
 		{ href: '/admin/comments', label: 'Comments', icon: MessageSquare },
-		{ href: '/admin/mentions', label: 'Mentions', icon: MessageSquare },
+		{ href: '/admin/mentions', label: 'Mentions', icon: AtSign },
 		{ href: '/admin/analytics', label: 'Analytics', icon: ChartLine },
 		{ href: '/admin/media', label: 'Media', icon: ImageIcon },
 		{ href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
@@ -115,6 +98,8 @@ import Info from '@lucide/svelte/icons/info';
 <svelte:head>
 	<title>Titen Admin</title>
 </svelte:head>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 
 
@@ -167,7 +152,7 @@ import Info from '@lucide/svelte/icons/info';
 			<button class="sidebar-logout" onclick={handleLogout}>Sign out</button>
 			<span class="sidebar-meta">
 				{#if appVersion}<span class="sidebar-version">v{appVersion}</span>{/if}
-				{#if tzLabel}<span class="sidebar-tz" title="Times shown in this timezone (server TZ env)">🕒 {tzLabel}</span>{/if}
+				{#if tzLabel}<span class="sidebar-tz" title="Times shown in this timezone (server TZ env)"><Clock class="sidebar-clock" aria-hidden="true" /> {tzLabel}</span>{/if}
 			</span>
 		</div>
 	</aside>
@@ -201,26 +186,9 @@ import Info from '@lucide/svelte/icons/info';
 </div>
 
 <style>
-	.account-switcher {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		margin-block-end: var(--space-sm);
-	}
-
-	.switcher-label {
-		font-size: var(--text-xs);
-		color: var(--color-muted);
-	}
-
-	.switcher-select {
-		width: 100%;
-		padding: 0.375rem 0.5rem;
-		background: var(--surface-raised);
-		border: var(--rule-default);
-		border-radius: var(--radius-md);
-		color: var(--color-ink);
-		font-size: var(--text-sm);
+	.sidebar-clock {
+		width: 0.75rem;
+		height: 0.75rem;
 	}
 
 	.mobile-menu-btn {
@@ -306,6 +274,9 @@ import Info from '@lucide/svelte/icons/info';
 	}
 
 	.sidebar-tz {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		font-size: var(--text-xs);
 		color: var(--color-muted);
 		font-family: var(--font-mono);
