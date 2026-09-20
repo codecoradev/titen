@@ -145,6 +145,31 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 	// Approve loading state
 	let approvingId = $state<string | null>(null);
 
+	// Two-stage approve: first click arms, second click within the window
+	// commits — protects the HITL gate from a single mis-click (#271).
+	let armedApproveId = $state<string | null>(null);
+	let armTimer: ReturnType<typeof setTimeout> | null = null;
+	const APPROVE_ARM_MS = 3000;
+
+	function requestApprove(schedule: Schedule) {
+		if (armedApproveId === schedule.id) {
+			handleApprove(schedule);
+			return;
+		}
+		disarmApprove();
+		armedApproveId = schedule.id;
+		armTimer = setTimeout(() => {
+			armedApproveId = null;
+			armTimer = null;
+		}, APPROVE_ARM_MS);
+	}
+
+	function disarmApprove() {
+		if (armTimer) clearTimeout(armTimer);
+		armTimer = null;
+		armedApproveId = null;
+	}
+
 	async function loadData() {
 		loading = true;
 		try {
@@ -420,6 +445,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 			toast(e.message || 'Failed to approve schedule', 'error');
 		} finally {
 			approvingId = null;
+			disarmApprove();
 		}
 	}
 
@@ -727,10 +753,12 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 							variant="default"
 							size="sm"
 							class="bg-[var(--color-success)]"
-							onclick={() => handleApprove(s)}
+							onclick={() => requestApprove(s)}
 							disabled={approvingId === s.id}
+							aria-pressed={armedApproveId === s.id}
+							title={armedApproveId === s.id ? 'Click again to confirm publish' : 'Approve — publishes to Threads when due'}
 						>
-							{approvingId === s.id ? '…' : 'Approve'}
+							{approvingId === s.id ? '…' : armedApproveId === s.id ? 'Confirm?' : 'Approve'}
 						</Button>
 						<Button variant="ghost" size="sm" onclick={() => openEditModal(s)} title="Edit">Edit</Button>
 						<Button variant="destructive" size="sm" onclick={() => openRejectModal(s)} title="Reject">Reject</Button>
@@ -787,10 +815,12 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 										variant="default"
 										size="sm"
 										class="bg-[var(--color-success)]"
-										onclick={() => handleApprove(s)}
+										onclick={() => requestApprove(s)}
 										disabled={approvingId === s.id}
+										aria-pressed={armedApproveId === s.id}
+										title={armedApproveId === s.id ? 'Click again to confirm publish' : 'Approve — publishes to Threads when due'}
 									>
-										{approvingId === s.id ? '…' : 'Approve'}
+										{approvingId === s.id ? '…' : armedApproveId === s.id ? 'Confirm?' : 'Approve'}
 									</Button>
 									<Button variant="ghost" size="sm" onclick={() => openEditModal(s)}>Edit</Button>
 									<Button variant="destructive" size="sm" onclick={() => openRejectModal(s)}>Reject</Button>
