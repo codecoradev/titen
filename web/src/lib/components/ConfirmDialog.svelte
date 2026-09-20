@@ -59,7 +59,7 @@
 		width: 100%;
 		margin-top: 0.75rem;
 		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--border, #ccc);
+		border: 1px solid var(--border);
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
 	}

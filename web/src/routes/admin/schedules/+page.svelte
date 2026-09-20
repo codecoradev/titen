@@ -1208,12 +1208,12 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 		flex-direction: column;
 		gap: var(--space-sm, 0.5rem);
 		padding: var(--space-md, 1rem);
-		border: 1px solid var(--color-border, #e2e8f0);
+		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md, 8px);
-		background: var(--color-bg, #fff);
+		background: var(--color-bg);
 	}
 	.sched-card.draft {
-		border-left: 3px solid var(--color-warning, #f59e0b);
+		border-left: 3px solid var(--color-warning);
 	}
 	.sched-card-head {
 		display: flex;
@@ -1460,7 +1460,7 @@ import MediaLightbox from '$lib/components/MediaLightbox.svelte';
 		line-height: 0;
 	}
 	.thumb-btn:focus-visible {
-		outline: 2px solid var(--color-primary, #6366f1);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 		border-radius: var(--radius-sm);
 	}

@@ -72,6 +72,9 @@
 	--color-warning-border: oklch(80% 0.10 85);
 	--color-warning-text: var(--color-warning-ink);
 	--color-muted-bg: var(--color-paper-3);
+	/* ── Subtle surface + accent wash (row tints, avatar placeholder) ── */
+	--color-bg-subtle: var(--color-paper-3);
+	--color-accent-subtle: oklch(60% 0.15 260 / 0.15);
 	--color-success-bg: var(--color-success-dim);
 
 	/* ── shadcn component palette ── */

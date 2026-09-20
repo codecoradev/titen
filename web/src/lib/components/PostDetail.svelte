@@ -267,7 +267,7 @@
 		line-height: 0;
 	}
 	.thumb-btn:focus-visible {
-		outline: 2px solid var(--color-primary, #6366f1);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 		border-radius: var(--radius-sm);
 	}
