@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import * as Table from '$lib/components/ui/table';
 	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	interface Column {
 		key: string;
@@ -110,12 +111,7 @@
 			</Table.Body>
 		</Table.Root>
 	{:else if rows.length === 0}
-		<div class="empty-state">
-			<p class="empty-state-title">{emptyTitle}</p>
-			{#if emptyDesc}
-				<p class="empty-state-desc">{emptyDesc}</p>
-			{/if}
-		</div>
+		<EmptyState title={emptyTitle} description={emptyDesc} />
 	{:else}
 		<Table.Root>
 			<Table.Header>

@@ -12,6 +12,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { getTimezone } from '$lib/tz';
 	import { truncate } from '$lib/format';
+	import Skeleton from '$lib/components/ui/skeleton/skeleton.svelte';
 
 	type ViewMode = 'week' | 'month';
 
@@ -339,7 +340,14 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="calendar-loading">Loading calendar…</div>
+		<div class="cal-skeleton" aria-hidden="true">
+			{#each Array(35) as _, i (i)}
+				<div class="cal-skeleton-cell">
+					<Skeleton class="h-3 w-3/4" />
+					<Skeleton class="h-3 w-1/2" />
+				</div>
+			{/each}
+		</div>
 	{/if}
 </div>
 
@@ -534,13 +542,20 @@
 		overflow-wrap: anywhere;
 	}
 
-	.calendar-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
+	.cal-skeleton {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: var(--space-xs);
 		min-height: 40vh;
-		color: var(--color-muted);
-		font-size: var(--text-sm);
+	}
+
+	.cal-skeleton-cell {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		padding: var(--space-xs);
+		border: var(--rule-default);
+		border-radius: var(--radius-md);
 	}
 
 	@media (max-width: 640px) {
