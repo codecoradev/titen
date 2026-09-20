@@ -316,7 +316,7 @@
 						{#each recentPosts as post}
 							<li class="compact-row">
 								<div class="compact-content">
-									<span class="truncate">{post.caption || '(no caption)'}</span>
+									<span class="truncate" title={post.caption || '(no caption)'}>{post.caption || '(no caption)'}</span>
 								</div>
 								<div class="compact-meta">
 									<StatusBadge status={post.status} />
@@ -342,7 +342,7 @@
 						{#each upcoming.slice(0, 5) as schedule}
 							<li class="compact-row">
 								<div class="compact-content">
-									<span class="truncate">{schedule.caption || '(no caption)'}</span>
+									<span class="truncate" title={schedule.caption || '(no caption)'}>{schedule.caption || '(no caption)'}</span>
 								</div>
 								<div class="compact-meta">
 									<StatusBadge status={schedule.status} />
