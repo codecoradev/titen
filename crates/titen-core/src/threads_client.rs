@@ -187,9 +187,20 @@ impl ThreadsClient {
             .get("access_token")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                crate::error::TitenError::ThreadsApiError(
-                    "No access_token in exchange response".to_string(),
-                )
+                // Surface Meta's error body instead of a generic message:
+                // without this, the actual failure reason (invalid secret,
+                // expired code, permission scope, etc.) is discarded and the
+                // UI only shows "No access_token in exchange response".
+                let meta_err = resp.get("error").map(|e| e.to_string()).unwrap_or_default();
+                if meta_err.is_empty() {
+                    crate::error::TitenError::ThreadsApiError(format!(
+                        "No access_token in exchange response (HTTP body: {resp})"
+                    ))
+                } else {
+                    crate::error::TitenError::ThreadsApiError(format!(
+                        "No access_token in exchange response: Meta error: {meta_err}"
+                    ))
+                }
             })?
             .to_string();
 
